@@ -10,7 +10,7 @@ import { blocked } from "../src/movement";
 import { ZONE_MARGIN } from "../src/spaces";
 import { createCore } from "@silver-tongue/core";
 import { readFileSync, existsSync } from "node:fs";
-import { ASSETS } from "./helpers";
+import { ASSETS, fakeAudio } from "./helpers";
 
 const CONTENT = fileURLToPath(new URL("../../../content", import.meta.url));
 const { course: built, errors } = buildCourse(CONTENT, "zh-china-en");
@@ -54,7 +54,8 @@ describe("world3d game (real course)", () => {
     const ui = fakeUi();
     const saves: unknown[] = [];
     const core = createCore(course, state, { now, rng: () => 0.42 });
-    const game = createGame({ course, core, now, save: (s) => (saves.push(s), true), onChange: ui.onChange, onEvent: ui.onEvent });
+    const audio = fakeAudio();
+    const game = createGame({ course, core, now, save: (s) => (saves.push(s), true), onChange: ui.onChange, onEvent: ui.onEvent, audio });
     expect(game.model.mode).toBe("explore");
 
     game.enterPlace("noodle_shop");
@@ -99,6 +100,17 @@ describe("world3d game (real course)", () => {
     expect(last.feed.some((f) => f.kind === "walletChanged" && f.tone === "good")).toBe(true);
     expect(last.events.some((e) => e.type === "sceneEnded")).toBe(true);
     expect(saves.length).toBeGreaterThan(0);
+    // Every line was said (the scenes' lines and replies reached the audio out)...
+    expect(audio.plays.length).toBeGreaterThan(4);
+    expect(last.hud.sound).toBe("on");
+    // ...and the sound toggle: soundSet flips the HUD chip in the model the UI renders, and is saved.
+    game.setSound(false);
+    expect(ui.events.at(-1)).toEqual({ type: "soundSet", on: false });
+    expect(ui.models.at(-1)!.hud.sound).toBe("off");
+    expect((saves.at(-1) as { sound?: boolean }).sound).toBe(false);
+    game.setSound(true);
+    expect(ui.events.at(-1)).toEqual({ type: "soundSet", on: true });
+    expect(ui.models.at(-1)!.hud.sound).toBe("on");
   });
 
   it("a fresh game asks for a name, then Old Wang's first scene plays on the street", () => {

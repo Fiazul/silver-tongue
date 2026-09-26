@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { newGame, type Input, type WordRecord } from "@silver-tongue/core";
 import { INPUT_AFFORDANCES, type Game } from "../src/game";
-import { course, makeGame, playScene } from "./helpers";
+import { course, fakeAudio, makeGame, playScene } from "./helpers";
 
 const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
 /**
@@ -67,6 +67,12 @@ describe("parity with the TUI", () => {
     g.enterPlace("room");
     g.sleep();
     accepted(g);
+    // Sound: core keeps setSound out of the log, so it's reached when state.sound follows it.
+    const c = makeGame(newGame(course), undefined, fakeAudio());
+    c.game.setSound(false);
+    expect(c.game.core.state.sound).toBe(false);
+    expect(c.game.model.events.at(-1)).toEqual({ type: "soundSet", on: false });
+    reached.add("setSound");
     // Tiles: every word known once and then missed, so replies are built from tiles.
     const T = 1_000_000;
     const lapsed: WordRecord = { right: 1, wrong: 1, streak: 0, helps: 0, lapsed: true, firstSeen: T, lastSeen: T };

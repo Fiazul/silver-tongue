@@ -18,7 +18,12 @@ const FALLBACK: Record<string, string> = {
   "word-help": "Word help",
   "word-help-on": "Tap a word to look it up",
   "sentence": "Whole sentence",
-  "replay": "Replay audio",
+  "replay": "Say it again",
+  "play": "Play",
+  "sound-menu-on": "Sound: on",
+  "sound-menu-off": "Sound: off",
+  "sound-menu-none": "Sound: no audio here",
+  "sound-toggle": "Turn sound on or off",
   "name-go": "Start",
   "slots-left": "{n} left today",
   day: "Day {n}",
@@ -83,6 +88,9 @@ export const TEXT_3D: Record<string, string> = {
     "The old man pats the bench beside him and points at himself. He seems to have decided you need lessons: he says something, you answer. Stuck? Tap a word in his bubble to look it up, or the “…” button to see what the whole sentence means.",
   "tiles-title": "Your reply: tap the words in order, then Say it.",
   "reject-no-pick": "Tap one of the replies.",
+  // the TUI's bottom-right "♪ [m]": the HUD's sound chip, tapped to turn it on or off
+  "sound-on": "♪",
+  "sound-off": "♪ off",
 };
 
 const fill = (text: string, args: Record<string, string | number>) => text.replace(/\{(\w+)\}/g, (_, k: string) => String(args[k] ?? `{${k}}`));

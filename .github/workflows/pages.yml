@@ -3,6 +3,7 @@ name: pages
 # them to GitHub Pages on every push to main: the TUI at the site root, the 3D game under
 # /world3d/ (every world3d URL is relative, so a fork's <user>.github.io/silver-tongue/world3d/
 # works too). world3d's GLBs are vendored in packages/world3d/assets: no external asset library.
+# world3d loads its audio clips from ../audio/, the TUI's copy at the site root (tui-web's build).
 # Needs Pages turned on for the repository with "GitHub Actions" as the source.
 
 on:

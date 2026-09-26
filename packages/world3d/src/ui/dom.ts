@@ -9,13 +9,3 @@ export function el<K extends keyof HTMLElementTagNameMap>(
   node.append(...kids);
   return node;
 }
-
-/** Plays a line's audio clip if the course has one; no clips exist yet, so usually a no-op. */
-export function playAudio(id: string | undefined, base = "audio"): void {
-  if (!id) return;
-  try {
-    void new Audio(`${base}/${id}`).play().catch(() => {});
-  } catch {
-    // no audio support: nothing to do
-  }
-}

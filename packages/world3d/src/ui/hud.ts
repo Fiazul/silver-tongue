@@ -1,4 +1,5 @@
-// HUD: day, wallet, slots left today, rank, where you are, the parcel you carry; under it the objective line.
+// HUD: day, wallet, slots left today, rank, where you are, the parcel you carry, the sound chip
+// (tap: on / off, as the TUI's [m]); under it the objective line.
 import type { Hud } from "../game";
 import type { Objective } from "../objective";
 import type { Strings } from "../strings";
@@ -12,7 +13,11 @@ export class HudView {
   private last = "";
   private lastObjective = "";
 
-  constructor(private s: Strings) {
+  constructor(
+    private s: Strings,
+    private t: (id: string) => string,
+    private onSound: (on: boolean) => void,
+  ) {
     this.node.append(this.chips, this.objective);
   }
 
@@ -34,6 +39,7 @@ export class HudView {
         ...(h.errand
           ? [el("span", { className: "chip errand" }, ...both(this.s("errand-chip", { place: h.errand.placeName }), this.s("errand-chip-short", { place: h.errand.placeName })))]
           : []),
+        this.soundChip(h.sound),
       );
     }
     const okey = JSON.stringify(o ?? null);
@@ -48,6 +54,19 @@ export class HudView {
       void this.objective.offsetWidth;
       this.objective.classList.add("new");
     }
+  }
+
+  /** ♪ / ♪ off: a button (the HUD is otherwise untappable); "no audio" is only a label. */
+  private soundChip(sound: Hud["sound"]): HTMLElement {
+    const text = this.t(`sound-${sound}`);
+    if (sound === "none") return el("span", { className: "chip sound none", textContent: text });
+    const b = el("button", { className: `chip sound ${sound}`, textContent: text, title: this.s("sound-toggle") });
+    b.setAttribute("aria-pressed", String(sound === "on"));
+    b.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this.onSound(sound !== "on");
+    });
+    return b;
   }
 
   walletRect(): DOMRect | null {

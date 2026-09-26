@@ -11,8 +11,11 @@ import {
   mentorAvailable,
   moneyBlocked,
   mulberry32,
+  personalize,
+  PLAYER_MARK,
   rankFor,
   sceneCost,
+  tilePieces,
   type Core,
   type Course,
   type GameEvent,
@@ -22,7 +25,7 @@ import {
   type WalletReason,
   type WordId,
 } from "@silver-tongue/core";
-import { makeText, notebookLines, type StyledLine, type Text } from "@silver-tongue/tui";
+import { makeText, notebookLines, type AudioOut, type Speech, type StyledLine, type Text } from "@silver-tongue/tui";
 import { WebSessions, type KeyValue, type Opened } from "@silver-tongue/tui-web/src/web-storage";
 import { route } from "./layout";
 import { objective, type Objective } from "./objective";
@@ -48,6 +51,8 @@ export interface Bubble {
   slow: boolean;
   /** words heard for the first time in this line (faint underline) */
   fresh: WordId[];
+  /** the clips that say it: the line's, or for a reaction this NPC's voice (course.reactionAudio) */
+  audio: string[];
 }
 
 /** `cost`: what the right reply spends (buying something, as the TUI's shop), shown with the replies. */
@@ -100,6 +105,8 @@ export interface Hud {
   placeName: string;
   /** the parcel being carried (core state.errand): where it goes. The status line's parcel marker. */
   errand: { to: string; placeName: string } | null;
+  /** the TUI's bottom-right ♪: sound on, turned off (state.sound false), or no audio here */
+  sound: "on" | "off" | "none";
 }
 
 export interface UiModel {
@@ -137,6 +144,9 @@ export interface Gloss {
   text: string;
   pron?: string;
   gloss: string;
+  /** the clips that say it (the popover's play button), and whether slowly */
+  audio: string[];
+  slow?: boolean;
 }
 
 export interface GameOptions {
@@ -150,6 +160,8 @@ export interface GameOptions {
   onChange?: (model: UiModel) => void;
   /** called for every event, after the model took it in (world effects: props, gestures) */
   onEvent?: (e: GameEvent) => void;
+  /** sound out (src/audio.ts); without it the game is silent and the HUD says "no audio" */
+  audio?: AudioOut;
 }
 
 export interface Game {
@@ -176,8 +188,16 @@ export interface Game {
   replyTiles(tiles: number[]): void;
   /** tiles mode escape hatch: an empty tile reply (a miss); two misses fall back to picking */
   giveUpTiles(): void;
+  /** looks a word up (logged as help) and says it */
   helpWord(word: WordId): Gloss | undefined;
+  /** the whole line's meaning, and says the line (the TUI's [s]) */
   sentence(line: RenderedLine): Gloss | undefined;
+  /** says the bubble again, slowly if it was a slow repeat (the TUI's [r]) */
+  replay(): void;
+  /** says these clips (a reply option's or a gloss's play button; the TUI's [p]) */
+  say(clips: string[] | undefined, slow?: boolean): void;
+  /** sound on or off (the TUI's [m]); nothing when there is no audio here */
+  setSound(on: boolean): void;
   sleep(): void;
   visitMentor(): void;
   setName(name: string): boolean;
@@ -200,6 +220,7 @@ export const INPUT_AFFORDANCES: Record<Input["type"], { tui: string; world3d: st
   visitMentor: { tui: "menu: Ask <mentor> about the language", world3d: "mentor button, or talk to the mentor", api: "visitMentor" },
   setName: { tui: "name prompt", world3d: "name dialog", api: "setName" },
   sleep: { tui: "menu: Sleep", world3d: "the bed at home (prompt / tap), or the Sleep button at home", api: "sleep" },
+  setSound: { tui: "[m] sound on / off", world3d: "the ♪ chip in the HUD, or Menu → Sound", api: "setSound" },
 };
 
 const EVENT_LOG = 200;
@@ -218,6 +239,18 @@ export function createGame(opts: GameOptions): Game {
   // Day summary bookkeeping (this session): wallet at the start of the day, wages and mix-ups since.
   let dayStartWallet = core.state.wallet;
   let today = { earned: 0, mixups: 0 };
+  // Sound, as app.ts: each call queues what people say, in order; one flush plays it.
+  let queue: Speech[] = [];
+  let tileReply: string[] = []; // the right reply's clips, said if the tiles match
+  const soundOn = () => !!opts.audio?.available && core.state.sound !== false;
+  const hear = (clips: string[] | undefined, slow = false) => {
+    if (clips?.length) queue.push(slow ? { clips, slow } : { clips });
+  };
+  /** Says everything queued, unless sound is off. */
+  const flush = () => {
+    if (queue.length && soundOn()) opts.audio!.play(queue);
+    queue = [];
+  };
 
   const model: UiModel = {
     mode: "explore",
@@ -255,6 +288,7 @@ export function createGame(opts: GameOptions): Game {
       place: st.place,
       placeName: t(`place-${st.place}`),
       errand: st.errand ? { to: st.errand.to, placeName: t(`place-${st.errand.to}`) } : null,
+      sound: !opts.audio?.available ? "none" : st.sound === false ? "off" : "on",
     };
   }
 
@@ -314,7 +348,8 @@ export function createGame(opts: GameOptions): Game {
           if (!resuming) narrate(e.type, `scene-${e.scene}-start`);
           break;
         case "lineSpoken":
-          model.bubble = { seq: ++seq, npc: e.npc, npcName: npcName(e.npc), line: e.line, kind: "line", slow: false, fresh: freshIn(e.line) };
+          model.bubble = { seq: ++seq, npc: e.npc, npcName: npcName(e.npc), line: e.line, kind: "line", slow: false, fresh: freshIn(e.line), audio: e.line.audio ?? [] };
+          hear(e.line.audio);
           break;
         case "replyOptions": {
           const cost = replyCost();
@@ -322,6 +357,8 @@ export function createGame(opts: GameOptions): Game {
           break;
         }
         case "actionPerformed":
+          // Tiles that make the right reply: the player's voice says it (a picked reply was queued by reply()).
+          if (model.reply?.mode === "tiles" && !e.tilesWrong) hear(tileReply);
           if (!e.tilesWrong && t.has(`action-${e.action.action}`)) feed(e.type, t(`action-${e.action.action}`, actionArgs(e.action)), "story");
           if (!e.matched) {
             if (model.scene) model.mixups = { seq: ++seq, npc: model.scene.npc };
@@ -329,11 +366,25 @@ export function createGame(opts: GameOptions): Game {
             else feed(e.type, t("mismatch"), "bad");
           }
           break;
-        case "npcReacted":
-          model.bubble = { seq: ++seq, npc: e.npc, npcName: npcName(e.npc), line: e.line, kind: "reaction", slow: false, fresh: freshIn(e.line) };
+        case "npcReacted": {
+          // Each NPC says a reaction in their own voice.
+          const audio = course.reactionAudio?.[e.reaction]?.[e.npc] ?? [];
+          model.bubble = { seq: ++seq, npc: e.npc, npcName: npcName(e.npc), line: e.line, kind: "reaction", slow: false, fresh: freshIn(e.line), audio };
+          hear(audio);
           break;
+        }
         case "lineRephrased":
-          model.bubble = { seq: ++seq, npc: e.npc, npcName: `${npcName(e.npc)} ${t("rephrased")}`, line: e.line, kind: "rephrase", slow: e.slow, fresh: freshIn(e.line) };
+          model.bubble = {
+            seq: ++seq,
+            npc: e.npc,
+            npcName: `${npcName(e.npc)} ${t("rephrased")}`,
+            line: e.line,
+            kind: "rephrase",
+            slow: e.slow,
+            fresh: freshIn(e.line),
+            audio: e.line.audio ?? [],
+          };
+          hear(e.line.audio, e.slow);
           break;
         case "walletChanged":
           feed(
@@ -405,6 +456,10 @@ export function createGame(opts: GameOptions): Game {
         case "inputRejected":
           feed(e.type, t(`reject-${e.reason}`), "bad");
           break;
+        case "soundSet":
+          // The HUD's ♪ chip reads state.sound (refresh below); turning it off stops what is playing.
+          if (!e.on) opts.audio?.stop();
+          break;
         default: {
           // A new GameEvent in core must be handled here: this stops the build until it is.
           const never: never = e;
@@ -427,6 +482,7 @@ export function createGame(opts: GameOptions): Game {
       dayStartWallet = wallet;
       today = { earned: 0, mixups: 0 };
     }
+    flush();
     refresh();
   }
 
@@ -520,18 +576,26 @@ export function createGame(opts: GameOptions): Game {
     const r = model.reply;
     if (r?.mode !== "pick" || !r.options[index]) return;
     feed("you", s("you-say", { text: r.options[index].text }), "you");
+    hear(r.options[index].audio);
     send({ type: "reply", choice: index });
   }
 
   function replyTiles(tiles: number[]) {
     const r = model.reply;
     if (r?.mode !== "tiles" || !tiles.length) return;
-    feed("you", s("you-say", { text: tiles.map((i) => r.tiles[i] ?? "").join("") }), "you");
+    // As app.ts: tiles that make the right reply are shown as the reply itself, punctuation and all.
+    const placed = tiles.map((i) => r.tiles[i] ?? "").join("");
+    const right = rightReply();
+    const name = core.state.player ?? "";
+    const match = !!right && tilePieces(right).map((x) => (x === PLAYER_MARK ? name : x)).join("") === placed;
+    feed("you", s("you-say", { text: match ? personalize(right!, name).text : placed }), "you");
+    tileReply = right?.audio ?? [];
     send({ type: "replyTiles", tiles });
   }
 
   function giveUpTiles() {
     if (model.reply?.mode !== "tiles") return;
+    tileReply = [];
     send({ type: "replyTiles", tiles: [] });
   }
 
@@ -539,15 +603,39 @@ export function createGame(opts: GameOptions): Game {
   function helpWord(word: WordId): Gloss | undefined {
     const w = course.words[word];
     if (!w) return undefined;
+    hear(w.audio);
     send({ type: "helpWord", word });
-    return { text: w.w, pron: w.pron, gloss: w.gloss };
+    return { text: w.w, pron: w.pron, gloss: w.gloss, audio: w.audio ?? [] };
   }
 
-  /** The whole line's meaning. Not logged as help: the words still have to be recognised. */
+  /** The whole line's meaning, said aloud. Not logged as help: the words still have to be recognised. */
   function sentence(line: RenderedLine): Gloss | undefined {
     if (!line.meaning) return undefined;
     const pron = line.tokens.flatMap((tk) => course.words[tk.word]?.pron ?? []).join(" ");
-    return { text: line.text, pron: pron || undefined, gloss: line.meaning };
+    // The bubble's line is said as the bubble says it (a reaction in the NPC's voice, a slow repeat slowly).
+    const b = model.bubble?.line === line ? model.bubble : null;
+    const audio = b ? b.audio : (line.audio ?? []);
+    const slow = !!b?.slow;
+    say(audio, slow);
+    return { text: line.text, pron: pron || undefined, gloss: line.meaning, audio, ...(slow ? { slow } : {}) };
+  }
+
+  function say(clips: string[] | undefined, slow = false) {
+    hear(clips, slow);
+    flush();
+  }
+
+  function setSound(on: boolean) {
+    if (!opts.audio?.available) return; // nothing to turn on or off here
+    if (!on) opts.audio.stop();
+    send({ type: "setSound", on });
+  }
+
+  /** The right reply for the exchange being played (its clips are said when the tiles match). */
+  function rightReply(): RenderedLine | undefined {
+    const run = core.state.run;
+    const ex = run && course.scenes.find((x) => x.id === run.scene)?.exchanges[run.exchange];
+    return run ? ex?.variants[comboKey(run.combo)]?.reply : undefined;
   }
 
   function setName(name: string): boolean {
@@ -586,6 +674,9 @@ export function createGame(opts: GameOptions): Game {
     giveUpTiles,
     helpWord,
     sentence,
+    replay: () => say(model.bubble?.audio, model.bubble?.slow),
+    say,
+    setSound,
     sleep: () => void send({ type: "sleep" }),
     visitMentor: () => void send({ type: "visitMentor" }),
     setName,
@@ -602,7 +693,14 @@ export function createGame(opts: GameOptions): Game {
 export function openSession(
   course: Course,
   kv: KeyValue,
-  opts: { now: () => number; fresh?: boolean; id?: string; onChange?: GameOptions["onChange"]; onEvent?: GameOptions["onEvent"] },
+  opts: {
+    now: () => number;
+    fresh?: boolean;
+    id?: string;
+    onChange?: GameOptions["onChange"];
+    onEvent?: GameOptions["onEvent"];
+    audio?: GameOptions["audio"];
+  },
 ): { game: Game; opened: Opened; sessions: WebSessions } {
   const sessions = new WebSessions(kv, course, opts.now);
   // A new game, a chosen one (the games list, an import), or the one played last.
@@ -616,6 +714,7 @@ export function openSession(
     save: opened.readOnly ? undefined : (st) => sessions.save(opened.id, st),
     onChange: opts.onChange,
     onEvent: opts.onEvent,
+    audio: opts.audio,
   });
   return { game, opened, sessions };
 }

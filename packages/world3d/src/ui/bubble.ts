@@ -1,15 +1,18 @@
 // Speech bubble over the speaking NPC's head. Hanzi only; tap a word for pinyin + gloss, tap
-// "…" for the whole sentence. The world projects the head_top anchor to the screen each frame.
+// "…" for the whole sentence (and hear it), ▶ to hear the line again. The line is said as it
+// appears (game.ts queues it). The world projects the head_top anchor to the screen each frame.
 import type { Course, RenderedLine, WordId } from "@silver-tongue/core";
 import type { Bubble } from "../game";
 import type { Strings } from "../strings";
-import { el, playAudio } from "./dom";
+import { el } from "./dom";
 import { lineNodes } from "./line";
 import { placeBubble, type Rect } from "./viewport";
 
 export interface BubbleHooks {
   onWord(word: WordId, at: HTMLElement): void;
   onSentence(line: RenderedLine, at: HTMLElement): void;
+  /** ▶: say the bubble again */
+  onReplay(): void;
 }
 
 export class BubbleView {
@@ -38,17 +41,16 @@ export class BubbleView {
       });
       tools.append(m);
     }
-    const replay = el("button", { className: "icon", title: this.s("replay"), textContent: "▶", disabled: !b.line.audio });
+    const replay = el("button", { className: "icon", title: this.s("replay"), textContent: "▶", disabled: !b.audio.length });
     replay.addEventListener("click", (e) => {
       e.stopPropagation();
-      playAudio(b.line.audio);
+      this.hooks.onReplay();
     });
     tools.append(replay);
     this.node.replaceChildren(el("div", { className: `bubble-name ${b.kind}`, textContent: b.npcName }), text, tools);
     this.node.classList.remove("pop");
     void this.node.offsetWidth; // restart the pop animation
     this.node.classList.add("pop");
-    playAudio(b.line.audio);
   }
 
   /**

@@ -1,11 +1,11 @@
-// Reply panel: 2-4 options in pick mode, each with a replay-audio button. Word help mode ("?")
+// Reply panel: 2-4 options in pick mode, each with a ▶ that says it (without picking it). Word help mode ("?")
 // turns taps on words into look-ups instead of picks, like the TUI's [w]. Tiles mode: tap the
 // tiles in order (the TUI's tile numbers), Undo (backspace), Say it (enter), or give up.
 import type { Course, WordId } from "@silver-tongue/core";
 import type { ReplyPanel } from "../game";
 import type { Strings } from "../strings";
 import type { Text } from "@silver-tongue/tui";
-import { el, playAudio } from "./dom";
+import { el } from "./dom";
 import { lineNodes } from "./line";
 
 export interface ReplyHooks {
@@ -13,6 +13,8 @@ export interface ReplyHooks {
   onTiles(tiles: number[]): void;
   onWord(word: WordId, at: HTMLElement): void;
   onGiveUp(): void;
+  /** an option's ▶ */
+  onHear(clips: string[] | undefined): void;
 }
 
 export class RepliesView {
@@ -77,10 +79,10 @@ export class RepliesView {
     const rows = r.options.map((o, i) => {
       const row = el("div", { className: "option", tabIndex: 0 });
       row.setAttribute("role", "button");
-      const replay = el("button", { className: "icon", title: this.s("replay"), textContent: "▶", disabled: !o.audio });
+      const replay = el("button", { className: "icon", title: this.s("play"), textContent: "▶", disabled: !o.audio?.length });
       replay.addEventListener("click", (e) => {
         e.stopPropagation();
-        playAudio(o.audio);
+        this.hooks.onHear(o.audio);
       });
       const text = el("span", { className: "option-text" }, ...lineNodes(o, this.course, { onWord: this.helpMode ? this.hooks.onWord : undefined }));
       row.append(el("span", { className: "key", textContent: String(i + 1) }), text, replay);

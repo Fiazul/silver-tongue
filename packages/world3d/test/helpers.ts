@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { expect } from "vitest";
 import { comboKey, createCore, tilePieces, type Core, type Course, type GameState, type Input } from "@silver-tongue/core";
 import { buildCourse } from "../../../tools/src/build-course";
+import type { AudioOut, Speech } from "@silver-tongue/tui";
 import { createGame, type Game } from "../src/game";
 import type { AssetIndex } from "../src/layout";
 
@@ -30,12 +31,31 @@ export function countingCore(core: Core): Core & { sent: Input[] } {
   };
 }
 
-export function makeGame(state: GameState, t0 = 1_000_000) {
+export function makeGame(state: GameState, t0 = 1_000_000, audio?: AudioOut) {
   let t = t0;
   const now = () => (t += 1000);
   const core = countingCore(createCore(course, state, { now, rng: () => 0.42 }));
-  const game = createGame({ course, core, now });
+  const game = createGame({ course, core, now, audio });
   return { game, core };
+}
+
+/** A fake AudioOut: records each play() (the lines, in order) and each stop(). */
+export function fakeAudio(available = true) {
+  const plays: Speech[][] = [];
+  let stops = 0;
+  return {
+    plays,
+    get stops() {
+      return stops;
+    },
+    available,
+    play(lines: Speech[]) {
+      plays.push(structuredClone(lines));
+    },
+    stop() {
+      stops++;
+    },
+  };
 }
 
 /** The pick-mode option index core expects: the option whose key is the run's combo. */

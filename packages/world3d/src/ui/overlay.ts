@@ -109,16 +109,18 @@ export class Overlay {
     this.hud?.node.remove();
     this.bubble?.node.remove();
     this.replies?.node.remove();
-    this.hud = new HudView(s);
+    this.hud = new HudView(s, t, (on) => game.setSound(on));
     this.bubble = new BubbleView(this.course, s, {
       onWord: (w, at) => this.lookUp(w, at),
       onSentence: (line, at) => this.sentence(line, at),
+      onReplay: () => game.replay(),
     });
     this.replies = new RepliesView(this.course, t, s, {
       onPick: (i) => game.reply(i),
       onTiles: (tiles) => game.replyTiles(tiles),
       onWord: (w, at) => this.lookUp(w, at),
       onGiveUp: () => game.giveUpTiles(),
+      onHear: (clips) => game.say(clips),
     });
     this.root.append(this.hud.node, this.bubble.node, this.replies.node);
     this.seenFeed = 0;
@@ -271,6 +273,15 @@ export class Overlay {
       ...(g.pron ? [el("div", { className: "g-pron", textContent: g.pron })] : []),
       el("div", { className: "g-gloss", textContent: g.gloss }),
     );
+    if (g.audio.length) {
+      // ▶: say the word (or sentence) again, as the TUI's [p]
+      const play = el("button", { className: "icon g-play", title: this.game.s("play"), textContent: "▶" });
+      play.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this.game.say(g.audio, g.slow);
+      });
+      this.gloss.append(play);
+    }
     this.gloss.classList.remove("hidden");
     const w = this.gloss.offsetWidth;
     const h = this.gloss.offsetHeight;
@@ -375,8 +386,20 @@ export class Overlay {
           this.menu.close();
           this.hooks.onNewGame();
         }),
+        sound(),
         button(s("help"), () => body.replaceChildren(el("p", { textContent: s("walk-hint") }), button(s("cancel"), home, "secondary"))),
       );
+    /** Sound on / off (setSound), as the HUD chip; relabels itself. */
+    const sound = () => {
+      const label = () => s(`sound-menu-${this.game.model.hud.sound}`);
+      const b = button(label(), () => {
+        const h = this.game.model.hud.sound;
+        if (h !== "none") this.game.setSound(h !== "on");
+        b.textContent = label();
+      }, "sound");
+      b.disabled = this.game.model.hud.sound === "none";
+      return b;
+    };
     const games = () => {
       const list = this.hooks.games();
       body.replaceChildren(
@@ -429,7 +452,7 @@ export class Overlay {
     input.focus();
   }
 
-  /** Keyboard: 1-9 pick a reply / scene / tile, N notebook, Esc closes, E uses the prompt. True if the key was used. */
+  /** Keyboard: 1-9 pick a reply / scene / tile, N notebook, M sound, R say again, Esc closes, E uses the prompt. True if the key was used. */
   key(e: KeyboardEvent): boolean {
     if (this.nameForm.open) return false;
     if (this.menu.open) return false; // its own inputs and buttons
@@ -454,6 +477,15 @@ export class Overlay {
     }
     if (e.key === "Escape") {
       this.gloss.classList.add("hidden");
+      return true;
+    }
+    // The TUI's sound keys: M sound on / off, R says the bubble again.
+    if (e.key.toLowerCase() === "m" && m.hud.sound !== "none") {
+      this.game.setSound(m.hud.sound !== "on");
+      return true;
+    }
+    if (e.key.toLowerCase() === "r" && m.bubble) {
+      this.game.replay();
       return true;
     }
     return this.replies.key(e.key);

@@ -40,6 +40,10 @@ button.icon { padding: 0.15em 0.5em; border-radius: 8px; font-size: 0.9rem; min-
 .chip.wallet.late { border-color: var(--bad); }
 .chip.slots.out { background: #f3d0c8; }
 .chip .short { display: none; }
+/* the sound chip: the one tappable thing in the HUD */
+.hud .chip.sound { pointer-events: auto !important; cursor: pointer; font: inherit; font-size: 0.9rem; color: inherit; }
+.chip.sound.off { opacity: 0.6; text-decoration: line-through; }
+.chip.sound.none { opacity: 0.6; }
 .chip.errand { background: #d6ecf2; font-weight: 700; }
 .chip.errand::before { content: "\25A3"; margin-right: 0.35em; } /* a parcel */
 @keyframes bump { 50% { transform: scale(1.25); } }
@@ -65,6 +69,7 @@ rt { font-size: 0.45em; color: var(--accent); }
 .g-word { font-size: 1.4rem; }
 .g-pron { color: #f6c26b; }
 .g-gloss { font-size: 0.95rem; }
+.gloss .g-play { margin-top: 0.35em; background: var(--paper); color: var(--ink); }
 
 /* reply panel */
 .replies { position: fixed; left: 50%; transform: translateX(-50%); bottom: max(10px, env(safe-area-inset-bottom)); width: min(96vw, 560px); background: rgba(255, 250, 240, 0.97); border: 2px solid var(--ink); border-radius: 16px; padding: 0.5em; box-shadow: var(--shadow); }

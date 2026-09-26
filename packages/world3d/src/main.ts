@@ -7,7 +7,7 @@ import * as THREE from "three";
 import type { Course } from "@silver-tongue/core";
 import { decodeSave, encodeSave, sessionLines } from "@silver-tongue/tui";
 import { fromLocalStorage, type KeyValue } from "@silver-tongue/tui-web/src/web-storage";
-import { unlockAudioOnFirstGesture } from "./audio";
+import { createAudioPlayer, unlockAudioOnGesture } from "./audio";
 import { CameraRig, outlineScale } from "./camera";
 import { PlayerCarry } from "./carry";
 import { openSession, type Game, type UiModel } from "./game";
@@ -23,6 +23,8 @@ import type { WebSessions } from "@silver-tongue/tui-web/src/web-storage";
 
 /** The built course, put in by build.mjs. */
 declare const __COURSE__: Course;
+/** Where the clips are, relative to the page (build.mjs): "../audio/" on Pages (the TUI's copy), "audio/" when bundled. */
+declare const __AUDIO_BASE__: string;
 const course = __COURSE__;
 const ASSETS = "./assets"; // relative: the page works under a subpath (GitHub Pages /world3d/)
 
@@ -50,7 +52,16 @@ const uiRoot = document.querySelector<HTMLElement>("#ui")!;
 // Phones: no pinch / double-tap zoom (iOS ignores user-scalable=no), no pull-to-refresh (page.css
 // touch-action / overscroll-behavior); the first gesture unlocks audio.
 for (const ev of ["gesturestart", "gesturechange", "dblclick"]) document.addEventListener(ev, (e) => e.preventDefault(), { passive: false });
-unlockAudioOnFirstGesture();
+// One audio player for the page (every game shares it), loading clips by URL as they are said.
+const audio = createAudioPlayer({
+  base: __AUDIO_BASE__,
+  audio: typeof Audio === "undefined" ? undefined : new Audio(),
+  wait: (ms, cb) => {
+    const h = setTimeout(cb, ms);
+    return { cancel: () => clearTimeout(h) };
+  },
+});
+unlockAudioOnGesture(audio);
 
 /** The safe-area insets (notch, home bar) in CSS px, read through a probe padded by env(safe-area-inset-*). */
 function safeInsets(): Insets {
@@ -189,11 +200,13 @@ async function main() {
     pendingUse = null;
     arriving = null;
     player.locked = false;
+    audio.stop();
     let ready = false; // the first render happens once the overlay has this game
     const opened = openSession(course, kv, {
       now: Date.now,
       fresh: opts.fresh,
       id: opts.id,
+      audio,
       onChange: (m) => {
         if (!ready) return;
         overlay.render(m);
