@@ -1,5 +1,5 @@
 // The one objective resolver: a short "what now" line for the HUD, derived from core state alone
-// (available scenes, mentor notes, slots left, rent). Pure, so tests can walk a day through it.
+// (available scenes, a parcel to deliver, mentor notes, slots left, rent). Pure, so tests can walk a day through it.
 import { availableSceneIds, type Course, type GameState } from "@silver-tongue/core";
 import type { Text } from "@silver-tongue/tui";
 import type { Strings } from "./strings";
@@ -49,6 +49,16 @@ export function objective(course: Course, st: GameState, t: Text, s: Strings, ne
   }
   if (st.slot >= w.slotsPerDay) {
     return { text: st.place === home ? s("obj-sleep-here") : s("obj-go-home", { place: placeName(home) }), sub };
+  }
+  // Carrying a parcel: its drop-off comes first (core offers it only at the parcel's place).
+  if (st.errand) {
+    const drop = availableSceneIds(course, st)
+      .map((id) => course.scenes.find((x) => x.id === id)!)
+      .find((x) => x.endsErrand && x.place === st.errand!.to);
+    if (drop) {
+      const args = { place: placeName(drop.place), npc: npcName(drop.npc), task: t(`scene-${drop.id}`) };
+      return { text: s(drop.place === st.place ? "obj-deliver-here" : "obj-deliver", args), sub, scene: drop.id };
+    }
   }
   const dist = hops(course, st.place);
   const scenes = availableSceneIds(course, st)

@@ -245,16 +245,18 @@ export class Overlay {
     }
   }
 
-  /** "+¥5" / "−¥2" floating up from the wallet chip. */
+  /** "+¥5" / "−¥2" floating up from the wallet chip; shopping and a delivery's wages say so under it. */
   private renderWalletFx(m: UiModel) {
     for (const fx of m.walletFx) {
       if (fx.seq <= this.seenFx) continue;
       this.seenFx = fx.seq;
       const r = this.hud.walletRect();
-      const node = el("div", {
-        className: `float ${fx.delta > 0 ? "good" : "bad"}`,
-        textContent: `${fx.delta > 0 ? "+" : "−"}${m.hud.currency}${Math.abs(fx.delta)}`,
-      });
+      const node = el(
+        "div",
+        { className: `float ${fx.delta > 0 ? "good" : "bad"} fx-${fx.reason}` },
+        el("span", { className: "fx-amount", textContent: `${fx.delta > 0 ? "+" : "−"}${m.hud.currency}${Math.abs(fx.delta)}` }),
+        ...(fx.label ? [el("span", { className: "fx-label", textContent: fx.label })] : []),
+      );
       node.style.left = `${r ? r.left + r.width / 2 : 80}px`;
       node.style.top = `${r ? r.bottom + 4 : 44}px`;
       this.floats.append(node);

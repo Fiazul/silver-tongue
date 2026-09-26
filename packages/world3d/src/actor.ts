@@ -41,6 +41,8 @@ export class CharacterActor {
   talking = false;
   /** holding a prop flagged `carry` (a box, a bag): the carry pose */
   carrying = false;
+  /** the prop on the grip bone, if any */
+  held: THREE.Object3D | null = null;
   /** seconds left of a shrug (mix-up) */
   private shrugT = 0;
   private shakeBone: THREE.Object3D | undefined;
@@ -104,8 +106,18 @@ export class CharacterActor {
     const grip = this.bone(GRIP_BONES[opts.hand ?? "right"]);
     if (!grip) return false;
     grip.add(prop);
+    this.held = prop;
     this.carrying = opts.carry === true;
     return true;
+  }
+
+  /** Puts down what `hold` gave it (the prop leaves the grip bone), back to the plain clips. */
+  release(): THREE.Object3D | null {
+    const prop = this.held;
+    this.held = null;
+    prop?.removeFromParent();
+    this.carrying = false;
+    return prop;
   }
 
   /** A mix-up: the rig's shrug clip if it has one, else talk plus a head shake. */

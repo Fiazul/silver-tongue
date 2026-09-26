@@ -95,11 +95,15 @@ describe.skipIf(!assetIndex)("interiors: enter and leave", () => {
   const L = new LayoutIndex(LAYOUT, assetIndex!);
 
   for (const [id, interior] of Object.entries(LAYOUT.interiors)) {
-    it(`${id}: street door -> fade -> inside at the entry -> open front -> street, clear of the door`, () => {
-      const { game, core } = makeGame(named());
-      const nav = new SpaceNav(L, "street");
-      const door = L.space(STREET).triggers.find((t) => t.kind === "door" && t.place === interior.place)!;
-      expect(door, `${id} has a street door`).toBeDefined();
+    it(`${id}: door outside -> fade -> inside at the entry -> way out -> outside, clear of the door`, () => {
+      // Start in the space its door is in (Main Street; Station Road for the tea house; the room for the stairwell).
+      const outer = L.outerSpace(id)!;
+      const outside = L.defaultPlaceOf(outer);
+      const { game, core } = makeGame({ ...named(), place: outside });
+      const nav = new SpaceNav(L, outside);
+      expect(nav.space).toBe(outer);
+      const door = L.space(outer).triggers.find((t) => t.kind === "door" && t.place === interior.place)!;
+      expect(door, `${id} has a door in ${outer}`).toBeDefined();
       const walk = (x: number, z: number, frames = 40) => {
         for (let i = 0; i < frames; i++) {
           const go = nav.step(1 / 60, x, z);
@@ -111,7 +115,7 @@ describe.skipIf(!assetIndex)("interiors: enter and leave", () => {
       };
       const into = walk(...centre(door.box));
       expect(core.state.place).toBe(interior.place);
-      expect(into).toMatchObject({ from: STREET, space: id });
+      expect(into).toMatchObject({ from: outer, space: id });
       expect(into!.stand).toEqual(L.entrySpawn(id));
       expect(nav.space).toBe(id);
       // standing at the entry doesn't bounce the player straight out
@@ -119,7 +123,7 @@ describe.skipIf(!assetIndex)("interiors: enter and leave", () => {
       expect(core.state.place).toBe(interior.place);
       const exit = L.space(id).triggers.find((t) => t.kind === "exit")!;
       const out = walk(...centre(exit.box));
-      expect(out).toMatchObject({ from: id, space: STREET });
+      expect(out).toMatchObject({ from: id, space: outer });
       expect(out!.stand).toEqual(L.exitSpawn(id));
       expect(core.state.place).toBe(exit.place);
       // out on the street past the door: no re-entry
@@ -159,6 +163,56 @@ describe.skipIf(!assetIndex)("interiors: enter and leave", () => {
   });
 });
 
+/**
+ * Walks to `place` the way a player would: through the triggers of each space in turn (a door, a
+ * zone, a way out), standing well inside each one until the zone tracker fires. Spaces are found
+ * by a search over the triggers (which space each one's place is shown in), so it crosses Main
+ * Street, Station Road, the rooms and the stairwell alike.
+ */
+function walker(L: LayoutIndex, game: ReturnType<typeof createGame>, nav: SpaceNav) {
+  const core = game.core;
+  /** the first trigger on the way from space `from` to space `to` */
+  const firstStep = (from: string, to: string) => {
+    const prev = new Map<string, { space: string; trigger: ReturnType<LayoutIndex["space"]>["triggers"][number] } | null>([[from, null]]);
+    const queue = [from];
+    while (queue.length) {
+      const cur = queue.shift()!;
+      for (const trigger of L.space(cur).triggers) {
+        const next = L.spaceOf(trigger.place);
+        if (prev.has(next)) continue;
+        prev.set(next, { space: cur, trigger });
+        if (next === to) {
+          let step = prev.get(next)!;
+          while (step.space !== from) step = prev.get(step.space)!;
+          return step.trigger;
+        }
+        queue.push(next);
+      }
+    }
+    throw new Error(`no way from ${from} to ${to}`);
+  };
+  const stand = (x: number, z: number) => {
+    for (let i = 0; i < 40; i++) {
+      const go = nav.step(1 / 60, x, z);
+      if (go) game.enterPlace(go);
+      nav.sync(core.state.place);
+    }
+  };
+  return (place: string) => {
+    for (let hop = 0; hop < 8 && core.state.place !== place; hop++) {
+      const target = L.spaceOf(place);
+      if (nav.space === target) {
+        const trig = L.space(nav.space).triggers.find((x) => x.place === place && x.kind !== "exit");
+        // a space's default place has no trigger: step off every trigger, onto its spawn
+        const at = trig ? centre(trig.box) : ([L.spawn(place).pos[0], L.spawn(place).pos[2]] as [number, number]);
+        stand(...at);
+      } else stand(...centre(firstStep(nav.space, target).box));
+    }
+    expect(core.state.place).toBe(place);
+    expect(nav.space).toBe(L.spaceOf(place));
+  };
+}
+
 describe.skipIf(!assetIndex)("a day played through: the objective line at every step", () => {
   const L = new LayoutIndex(LAYOUT, assetIndex!);
 
@@ -170,23 +224,7 @@ describe.skipIf(!assetIndex)("a day played through: the objective line at every 
     const nav = new SpaceNav(L, core.state.place);
     const task = (id: string) => t(`scene-${id}`);
     const rent = { currency: course.world.currency, rent: course.world.rentPerWeek };
-    /** walk into the place's door / zone on the street (or out of an interior first) */
-    const walkTo = (place: string) => {
-      if (nav.space !== STREET) {
-        const exit = L.space(nav.space).triggers.find((x) => x.kind === "exit")!;
-        game.enterPlace(exit.place);
-        nav.sync(core.state.place);
-      }
-      const trig = L.space(STREET).triggers.find((x) => x.place === place);
-      if (trig) {
-        for (let i = 0; i < 30; i++) {
-          const go = nav.step(1 / 60, ...centre(trig.box));
-          if (go) game.enterPlace(go);
-        }
-      } else game.enterPlace(place);
-      nav.sync(core.state.place);
-      expect(core.state.place).toBe(place);
-    };
+    const walkTo = walker(L, game, nav);
     const play = (npc: string) => {
       const n = game.model.events.length;
       const want = game.model.objective.scene;
@@ -237,6 +275,78 @@ describe.skipIf(!assetIndex)("a day played through: the objective line at every 
     expect(core.state.wallet).toBeGreaterThan(before);
     expect(game.model.walletFx.at(-1)!.delta).toBeGreaterThan(0);
     expect(core.state.scenesDone["noodle-shift"]).toBe(1);
+  });
+
+  it("an errand end to end (pick up from Miss Gao, carry it down Station Road, hand it over) and a shop purchase", () => {
+    // Miss Gao has told you about deliveries, and the shopkeeper knows you: the paid parts are open.
+    const { game, core } = makeGame(
+      { ...named(), wallet: 30, scenesDone: { "delivery-intro": 1, "shop-intro": 1 }, trust: { dispatcher: 1, shopkeeper: 1 } },
+      70_000_000,
+    );
+    const { s, t } = game;
+    const obj = () => game.model.objective.text;
+    const nav = new SpaceNav(L, core.state.place);
+    const walkTo = walker(L, game, nav);
+    const play = (npc: string) => {
+      const want = game.model.objective.scene;
+      game.talkTo(npc);
+      if (game.model.choices) game.choose(game.model.choices.items.findIndex((c) => c.input?.type === "startScene" && c.input.scene === want));
+      playScene(game);
+    };
+
+    // the pickup: Miss Gao's stall on Market Street's far pavement
+    walkTo("market");
+    expect(nav.space).toBe(STREET);
+    expect(game.model.hud.errand).toBeNull();
+    const n = game.model.events.length;
+    game.talkTo("dispatcher");
+    expect(core.state.run?.scene).toBe("delivery-pickup");
+    playScene(game);
+    const started = game.model.events.slice(n).find((e) => e.type === "errandStarted");
+    expect(started).toBeDefined();
+    const to = core.state.errand!.to;
+    expect(started).toEqual({ type: "errandStarted", to });
+    expect(course.world.places[to]).toBeDefined();
+    expect(game.model.feed.map((f) => f.text)).toContain(t("errand-started"));
+    // the HUD chip and the objective say where it goes
+    expect(game.model.hud.errand).toEqual({ to, placeName: t(`place-${to}`) });
+    const drop = course.scenes.find((x) => x.endsErrand && x.place === to)!;
+    expect(obj()).toBe(s("obj-deliver", { place: t(`place-${to}`), npc: game.npcName(drop.npc) }));
+    expect(game.model.objective.scene).toBe(drop.id);
+
+    // through the gate onto Station Road, into the drop-off's zone
+    walkTo(to);
+    expect(nav.space).toBe("station_road");
+    expect(obj()).toBe(s("obj-deliver-here", { npc: game.npcName(drop.npc) }));
+    const m = game.model.events.length;
+    const wallet = core.state.wallet;
+    play(drop.npc);
+    const after = game.model.events.slice(m);
+    expect(after).toContainEqual({ type: "errandEnded", to });
+    expect(core.state.errand).toBeUndefined();
+    expect(game.model.hud.errand).toBeNull();
+    expect(game.model.feed.map((f) => f.text)).toContain(t("errand-ended"));
+    // the wage floats, marked as a delivery
+    const wage = game.model.walletFx.find((fx) => fx.reason === "wages" && fx.label === s("fx-delivery"));
+    expect(wage?.delta).toBeGreaterThan(0);
+    expect(core.state.wallet).toBe(wallet + wage!.delta);
+
+    // back up Station Road, across Market Street and into the shop: a purchase
+    walkTo("shop");
+    expect(nav.space).toBe("shop");
+    game.talkTo("shopkeeper");
+    expect(core.state.run?.scene).toBe("shop-buy");
+    const cost = game.model.reply!.cost!;
+    expect(cost).toBeGreaterThanOrEqual(3); // the price slot, 3-5
+    expect(cost).toBeLessThanOrEqual(5);
+    const before = core.state.wallet;
+    playScene(game);
+    expect(core.state.wallet).toBe(before - cost);
+    const spent = game.model.walletFx.find((fx) => fx.reason === "shopping");
+    expect(spent).toMatchObject({ delta: -cost, label: t("reason-shopping") });
+    // and out again: the shop's open front leads back onto Market Street
+    walkTo("market");
+    expect(nav.space).toBe(STREET);
   });
 });
 

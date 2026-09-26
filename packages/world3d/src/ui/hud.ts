@@ -1,4 +1,4 @@
-// HUD: day, wallet, slots left today, rank, where you are; under it the objective line.
+// HUD: day, wallet, slots left today, rank, where you are, the parcel you carry; under it the objective line.
 import type { Hud } from "../game";
 import type { Objective } from "../objective";
 import type { Strings } from "../strings";
@@ -30,6 +30,10 @@ export class HudView {
         this.wallet,
         el("span", { className: `chip slots${h.slotsLeft === 0 ? " out" : ""}` }, ...both(this.s("slots-left", { n: h.slotsLeft }), this.s("slots-short", { n: h.slotsLeft }))),
         el("span", { className: "chip rank", textContent: h.rankName }),
+        // The TUI status line's parcel marker, naming where it goes.
+        ...(h.errand
+          ? [el("span", { className: "chip errand" }, ...both(this.s("errand-chip", { place: h.errand.placeName }), this.s("errand-chip-short", { place: h.errand.placeName })))]
+          : []),
       );
     }
     const okey = JSON.stringify(o ?? null);

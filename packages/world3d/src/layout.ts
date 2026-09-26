@@ -37,15 +37,21 @@ export interface DoorSpec {
   anchor: string;
   width: number;
   depth: Vec2;
+  /** metres across, to the right as you face the door from outside (keeps a door box clear of furniture or an NPC beside it) */
+  shift?: number;
 }
 export interface PlaceLayout {
   buildings: string[];
-  /** walking into this box (x/z, street space) means being at the place; the default place has none */
+  /** the scene space its zone / door is in (default: the street); `interior` is the space it opens into */
+  space?: string;
+  /** walking into this box (x/z, in `space`) means being at the place; a space's default place has none */
   zone?: Box2;
+  /** more boxes of the same zone (a place wrapped round another place's door); they may overlap each other */
+  zones?: Box2[];
   spawn: Spawn;
-  /** the place has an interior scene space (key of `interiors`) */
+  /** the place has a scene space of its own (key of `interiors`: a room, or an outdoor side street) */
   interior?: string;
-  /** the street door that leads into the interior */
+  /** the door (in `space`) that leads into it */
   door?: DoorSpec;
 }
 /** A held prop: a characters/ prop (origin at its grip). `carry: true` (boxes, bags) plays the carry pose. */
@@ -74,9 +80,17 @@ export interface InteractableSpec {
   at: { building: string; anchor?: string } | { pos: Vec3 };
   range?: number;
 }
+/**
+ * A scene space other than Main Street, entered through its place's door: a room (shell or size +
+ * ground boxes), or with `outdoor: true` a side street (sky, fog, the full day's light) with street
+ * buildings and tiles. Its own places' zones and doors (`places.<p>.space`) go in it like Main
+ * Street's; the way out (the open front edge, or `exitBox`) leads back to the space its door is in.
+ */
 export interface InteriorLayout {
-  /** the core place this interior shows */
+  /** the core place this space shows (its default place) */
   place: string;
+  /** a side street, not a room */
+  outdoor?: boolean;
   /** an interiors/ shell (open front at z=0, room toward -z); its furniture_slots are placed as pieces */
   shell?: { id: string; asset: string };
   /** width, depth (m) when there is no shell */
@@ -86,8 +100,17 @@ export interface InteriorLayout {
   /** where the player comes in: a shell stand anchor or a fixed stand, then `inset` m along its facing, `shift` m across */
   entry: ({ anchor: string } | FixedStand) & { inset: number; shift?: number };
   /** depth (m) of the exit trigger along the open front edge */
-  exitDepth: number;
+  exitDepth?: number;
+  /** the way out, when it isn't the open front edge (a side street's end) */
+  exitBox?: Box2;
+  /** furniture and props: block by their index size */
   pieces: BuildingPlacement[];
+  /** street buildings: block by their footprint, as on Main Street */
+  buildings?: BuildingPlacement[];
+  tiles?: Placement[];
+  walkers?: WalkerLayout[];
+  /** walking heights (kerbs); default the flat floor */
+  surfaces?: Surfaces;
   ground: GroundBox[];
   dressing: Placement[];
   interactables: InteractableSpec[];
@@ -109,7 +132,8 @@ export interface Layout {
   defaultPlace: string;
   bounds: Box2;
   surfaces: Surfaces;
-  player: { character: string };
+  /** the player's character, and what they carry while an errand is on (a parcel: `{asset, carry: true}`) */
+  player: { character: string; errandProp?: HeldPropSpec };
   places: Record<string, PlaceLayout>;
   npcs: Record<string, NpcLayout>;
   buildings: BuildingPlacement[];
@@ -152,7 +176,7 @@ export interface SpacePiece extends BuildingPlacement {
   block: BlockMode;
 }
 
-/** A trigger box: a place's zone, a street door into an interior, or an interior's way out. */
+/** A trigger box: a place's zone, a door into another space, or a space's way out. */
 export interface Trigger {
   kind: "zone" | "door" | "exit";
   /** the place walking in means going to */
@@ -263,7 +287,7 @@ export class LayoutIndex {
     this.pieceSpace.set(p.id, space);
   }
 
-  /** An interior's pieces: its shell, the shell's furniture slots (ids `<shell id>:<asset>[:n]`), then its own pieces. */
+  /** A space's pieces: its shell, the shell's furniture slots (ids `<shell id>:<asset>[:n]`), its own pieces, then its street buildings. */
   private interiorPieces(i: InteriorLayout): SpacePiece[] {
     const out: SpacePiece[] = [];
     if (i.shell) {
@@ -277,6 +301,7 @@ export class LayoutIndex {
       }
     }
     for (const p of i.pieces) out.push({ ...p, block: "size" });
+    for (const b of i.buildings ?? []) out.push({ ...b, block: "footprint" });
     return out;
   }
 
@@ -297,9 +322,21 @@ export class LayoutIndex {
     return [STREET, ...Object.keys(this.layout.interiors ?? {})];
   }
 
-  /** The space that shows `place`: its interior, else the street. */
+  /** The space that shows `place`: its own space, else the space its zone is in (the street by default). */
   spaceOf(place: string): string {
-    return this.layout.places[place]?.interior ?? STREET;
+    const p = this.layout.places[place];
+    return p?.interior ?? p?.space ?? STREET;
+  }
+
+  /** The space a space's door is in: where its way out leads (null for the street). */
+  outerSpace(space: string): string | null {
+    if (space === STREET) return null;
+    return this.layout.places[this.interior(space).place]?.space ?? STREET;
+  }
+
+  /** The place you are at in a space outside its triggers. */
+  defaultPlaceOf(space: string): string {
+    return space === STREET ? this.layout.defaultPlace : this.interior(space).place;
   }
 
   /** The one anchor lookup: a named anchor of a placed building / piece, in its space's coordinates. */
@@ -362,14 +399,17 @@ export class LayoutIndex {
     };
   }
 
-  /** Where the player comes out on the street from an interior: past the door trigger, facing away from the door. */
+  /** Where the player comes out of a space into the space its door is in: past the door trigger, facing away from the door. */
   exitSpawn(interiorId: string): Stand {
     const place = this.interior(interiorId).place;
+    const outer = this.outerSpace(interiorId)!;
     const door = this.layout.places[place]?.door;
-    if (!door) return this.spawnIn(STREET, this.layout.defaultPlace);
-    const d = this.stand(door.building, door.anchor);
+    if (!door) return this.spawnIn(outer, this.defaultPlaceOf(outer));
+    const d = this.doorStand(door);
     const out = door.depth[1] + 0.6;
-    return { pos: [d.pos[0] + d.facing[0] * out, this.heightAt(STREET, 0, d.pos[2] + d.facing[2] * out), d.pos[2] + d.facing[2] * out], facing: d.facing };
+    const x = d.pos[0] + d.facing[0] * out;
+    const z = d.pos[2] + d.facing[2] * out;
+    return { pos: [x, this.heightAt(outer, x, z), z], facing: d.facing };
   }
 
   interior(id: string): InteriorLayout {
@@ -392,15 +432,14 @@ export class LayoutIndex {
 
   /**
    * Where the player appears after core moved them to `place` while they were in space `from`:
-   * inside an interior at its entry; on the street out of the door of the interior just left when
-   * that door opens onto this place; else the place's spawn.
+   * out of the door of the space just left, when that door is in this space and opens onto this
+   * place; else the place's spawn (a space of its own: its entry).
    */
   arrival(place: string, from: string): { space: string; stand: Stand } {
     const space = this.spaceOf(place);
-    if (space !== STREET) return { space, stand: this.entrySpawn(space) };
-    if (from !== STREET && this.layout.interiors?.[from]) {
+    if (from !== space && this.layout.interiors?.[from] && this.outerSpace(from) === space) {
       const out = this.exitSpawn(from);
-      if (this.placeAt(STREET, out.pos[0], out.pos[2]) === place) return { space, stand: out };
+      if (this.placeAt(space, out.pos[0], out.pos[2]) === place) return { space, stand: out };
     }
     return { space, stand: this.spawnIn(space, place) };
   }
@@ -419,19 +458,40 @@ export class LayoutIndex {
     return Object.keys(this.layout.npcs).filter((n) => this.npcSpace(n) === space);
   }
 
-  private streetSpace(): SpaceLayout {
-    const l = this.layout;
+  /** A door's anchor stand, moved `shift` across (to the right as you face it from outside). */
+  private doorStand(door: DoorSpec): Stand {
+    const d = this.stand(door.building, door.anchor);
+    const k = door.shift ?? 0;
+    const len = Math.hypot(d.facing[0], d.facing[2]) || 1;
+    return { pos: [d.pos[0] + (d.facing[2] / len) * k, d.pos[1], d.pos[2] - (d.facing[0] / len) * k], facing: d.facing };
+  }
+
+  /** The zones and doors of the places in `space` (`places.<p>.space`, the street by default). */
+  private placeTriggers(space: string): Trigger[] {
     const triggers: Trigger[] = [];
-    for (const [place, p] of Object.entries(l.places)) {
-      if (p.zone) {
-        const c = [(p.zone.min[0] + p.zone.max[0]) / 2, (p.zone.min[1] + p.zone.max[1]) / 2];
-        triggers.push({ kind: "zone", place, box: p.zone, at: [c[0], 2.2, c[1]] });
+    for (const [place, p] of Object.entries(this.layout.places)) {
+      if ((p.space ?? STREET) !== space) continue;
+      for (const box of [...(p.zone ? [p.zone] : []), ...(p.zones ?? [])]) {
+        const c = [(box.min[0] + box.max[0]) / 2, (box.min[1] + box.max[1]) / 2];
+        triggers.push({ kind: "zone", place, box, at: [c[0], 2.2, c[1]] });
       }
       if (p.door) {
-        const d = this.stand(p.door.building, p.door.anchor);
-        triggers.push({ kind: "door", place, box: boxAlong(d.pos, d.facing, p.door.width, p.door.depth), at: [d.pos[0], 2.4, d.pos[2] + d.facing[2] * p.door.depth[0]] });
+        const d = this.doorStand(p.door);
+        const f = p.door.depth[0];
+        triggers.push({
+          kind: "door",
+          place,
+          box: boxAlong(d.pos, d.facing, p.door.width, p.door.depth),
+          at: [d.pos[0] + d.facing[0] * f, d.pos[1] + 2.2, d.pos[2] + d.facing[2] * f],
+        });
       }
     }
+    return triggers;
+  }
+
+  private streetSpace(): SpaceLayout {
+    const l = this.layout;
+    const triggers = this.placeTriggers(STREET);
     return {
       id: STREET,
       defaultPlace: l.defaultPlace,
@@ -450,32 +510,46 @@ export class LayoutIndex {
     };
   }
 
+  /** A space's walking heights: Main Street's kerbs, a side street's own, else its flat floor. */
+  private surfacesOf(space: string): Surfaces {
+    if (space === STREET) return this.layout.surfaces;
+    const i = this.interior(space);
+    if (i.surfaces) return i.surfaces;
+    return { default: i.floorY ?? (i.shell ? ((this.asset(i.shell.asset).anchors?.floor_top_z as number | undefined) ?? 0.06) : 0.06), bands: [] };
+  }
+
   private interiorSpace(id: string): SpaceLayout {
     const i = this.interior(id);
-    const floorY = i.floorY ?? (i.shell ? ((this.asset(i.shell.asset).anchors?.floor_top_z as number | undefined) ?? 0.06) : 0.06);
+    const surfaces = this.surfacesOf(id);
+    const floorY = surfaces.default;
     const [W, D] = i.size ?? (i.shell ? [this.asset(i.shell.asset).size_m[0], this.asset(i.shell.asset).size_m[2]] : [6, 5]);
     const bounds = i.bounds ?? { min: [-W / 2 + WALL, -D + WALL], max: [W / 2 - WALL, 0.35] };
-    // The whole open front edge leads out, to the street place outside this interior's door.
+    // The way out (the whole open front edge, or its exit box) leads to the place outside this space's door.
+    const outer = this.outerSpace(id)!;
     const outside = this.exitSpawn(id);
-    const exitPlace = this.placeAt(STREET, outside.pos[0], outside.pos[2]);
+    const exitPlace = this.placeAt(outer, outside.pos[0], outside.pos[2]);
+    const depth = i.exitDepth ?? 0.9;
+    const box: Box2 = i.exitBox ?? { min: [bounds.min[0], bounds.max[1] - depth], max: [bounds.max[0], bounds.max[1]] };
     const exit: Trigger = {
       kind: "exit",
       place: exitPlace,
-      box: { min: [bounds.min[0], bounds.max[1] - i.exitDepth], max: [bounds.max[0], bounds.max[1]] },
-      at: [this.entrySpawn(id).pos[0], floorY + 1.4, bounds.max[1] - i.exitDepth / 2],
+      box,
+      at: i.exitBox
+        ? [(box.min[0] + box.max[0]) / 2, floorY + 1.4, (box.min[1] + box.max[1]) / 2]
+        : [this.entrySpawn(id).pos[0], floorY + 1.4, bounds.max[1] - depth / 2],
     };
     const pieces = [...this.buildings.values()].filter((p) => this.pieceSpace.get(p.id) === id);
     return {
       id,
       defaultPlace: i.place,
       bounds,
-      surfaces: { default: floorY, bands: [] },
+      surfaces,
       pieces,
-      tiles: [],
+      tiles: i.tiles ?? [],
       ground: i.ground,
       dressing: i.dressing,
-      walkers: [],
-      triggers: [exit],
+      walkers: i.walkers ?? [],
+      triggers: [exit, ...this.placeTriggers(id)],
       interactables: i.interactables.map((x) => ({
         kind: x.kind,
         range: x.range ?? 1.5,
@@ -484,7 +558,7 @@ export class LayoutIndex {
       npcs: this.npcsIn(id),
       camera: i.camera ?? {},
       background: i.background,
-      interior: true,
+      interior: !i.outdoor,
     };
   }
 
@@ -504,7 +578,7 @@ export class LayoutIndex {
 
   /** Walking surface height at (x, z). */
   heightAt(space: string, _x: number, z: number): number {
-    const surfaces = space === STREET ? this.layout.surfaces : this.space(space).surfaces;
+    const surfaces = this.surfacesOf(space);
     const band = surfaces.bands.find((b) => z > b.zMin && z < b.zMax);
     return band ? band.y : surfaces.default;
   }

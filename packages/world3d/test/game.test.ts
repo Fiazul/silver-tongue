@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { comboKey, newGame, type Course, type GameEvent } from "@silver-tongue/core";
 import { buildCourse } from "../../../tools/src/build-course";
 import { createGame, openSession, type UiModel } from "../src/game";
-import { boxesOverlap, heldProp, LAYOUT, LayoutIndex, route, type AssetIndex, type Box2 } from "../src/layout";
+import { boxesOverlap, heldProp, LAYOUT, LayoutIndex, route, STREET, type AssetIndex, type Box2 } from "../src/layout";
 import { blocked } from "../src/movement";
 import { ZONE_MARGIN } from "../src/spaces";
 import { createCore } from "@silver-tongue/core";
@@ -160,6 +160,24 @@ describe("world3d game (real course)", () => {
     expect(game.model.feed.map((f) => f.kind)).toEqual(expect.arrayContaining(["unlocked", "rankChanged", "dayEnded", "noteReady", "mentorVisited"]));
   });
 
+  it("a shop you can't afford says what it needs (the TUI menu's line); a save with a parcel resumes with it on the HUD and the objective", () => {
+    const now = () => 1_000;
+    const broke = createCore(course, { ...newGame(course), player: "Sam", place: "shop", wallet: 1, scenesDone: { "shop-intro": 1 }, trust: { shopkeeper: 1 } }, { now, rng: () => 0.5 });
+    const g = createGame({ course, core: broke, now });
+    g.talkTo("shopkeeper");
+    expect(broke.state.run).toBeNull();
+    const need = g.t("menu-needs-money", { npc: g.npcName("shopkeeper"), scene: g.t("scene-shop-buy"), currency: course.world.currency, cost: 5 });
+    expect(g.model.feed.at(-1)).toMatchObject({ text: need, tone: "info" });
+
+    const core = createCore(course, { ...newGame(course), player: "Sam", place: "market", errand: { to: "hospital" }, scenesDone: { "delivery-intro": 1, "delivery-pickup": 1 } }, { now, rng: () => 0.5 });
+    const game = createGame({ course, core, now });
+    expect(game.model.hud.errand).toEqual({ to: "hospital", placeName: game.t("place-hospital") });
+    expect(game.model.objective).toMatchObject({ text: game.s("obj-deliver", { place: game.t("place-hospital"), npc: game.npcName("doctor") }), scene: "delivery-hospital" });
+    // no second parcel while one is carried
+    game.talkTo("dispatcher");
+    expect(core.state.run).toBeNull();
+  });
+
   it("saves under the TUI's localStorage keys", () => {
     const store = new Map<string, string>();
     const kv = {
@@ -201,12 +219,37 @@ describe("layout", () => {
     expect(L.space("noodle_shop").pieces.map((p) => p.asset)).toEqual(expect.arrayContaining(["noodle_shop_shell", "counter_noodle", "table_square"]));
   });
 
-  it.skipIf(!index)("trigger zones never overlap, in any space", () => {
+  it.skipIf(!index)("every place in the course's world has a space, and its spawn is at that place, clear of every other place's trigger", () => {
+    const L = new LayoutIndex(LAYOUT, index!);
+    for (const place of Object.keys(course.world.places)) {
+      const space = L.spaceOf(place);
+      expect(L.spaceIds(), place).toContain(space);
+      const sp = L.spawn(place).pos;
+      expect(L.placeAt(space, sp[0], sp[2]), `${place} spawn`).toBe(place);
+      // nowhere near a trigger that would send the player on the moment they land (grown by the margin)
+      for (const t of L.space(space).triggers) {
+        const near = t.box.min[0] - ZONE_MARGIN <= sp[0] && sp[0] <= t.box.max[0] + ZONE_MARGIN && t.box.min[1] - ZONE_MARGIN <= sp[2] && sp[2] <= t.box.max[1] + ZONE_MARGIN;
+        if (near) expect(t.place, `${place} spawn near ${t.kind} ${t.place}`).toBe(place);
+      }
+    }
+    // every space is reachable from the street through doors / zones (and back out)
+    const seen = new Set([STREET]);
+    const queue = [STREET];
+    while (queue.length) for (const t of L.space(queue.shift()!).triggers) {
+      const next = L.spaceOf(t.place);
+      if (!seen.has(next)) (seen.add(next), queue.push(next));
+    }
+    expect([...seen].sort()).toEqual([...L.spaceIds()].sort());
+  });
+
+  it.skipIf(!index)("trigger zones of different places never overlap, in any space", () => {
     const L = new LayoutIndex(LAYOUT, index!);
     for (const id of L.spaceIds()) {
       const ts = L.space(id).triggers;
       for (let i = 0; i < ts.length; i++)
         for (let j = i + 1; j < ts.length; j++) {
+          // one place's zone may be several boxes (wrapped round another place's door); they may touch
+          if (ts[i].place === ts[j].place) continue;
           // grown by the hysteresis margin too: two zones must not be within reach of one step
           const grow = (b: Box2): Box2 => ({ min: [b.min[0] - ZONE_MARGIN, b.min[1] - ZONE_MARGIN], max: [b.max[0] + ZONE_MARGIN, b.max[1] + ZONE_MARGIN] });
           expect(boxesOverlap(grow(ts[i].box), grow(ts[j].box)), `${id}: ${ts[i].place} / ${ts[j].place}`).toBe(false);
@@ -214,7 +257,7 @@ describe("layout", () => {
     }
   });
 
-  it.skipIf(!index)("every interior: entry spawn clear of its exit and its furniture; the exit spawn on the street clear of every door", () => {
+  it.skipIf(!index)("every interior: entry spawn clear of its triggers and its furniture, each trigger reachable deep inside; the exit spawn clear of every door outside", () => {
     const L = new LayoutIndex(LAYOUT, index!);
     for (const [id, interior] of Object.entries(LAYOUT.interiors)) {
       const sp = L.space(id);
@@ -228,6 +271,13 @@ describe("layout", () => {
       const free = (x: number, z: number) => !blocked(x, z, [...blockers, ...npcBoxes], sp.bounds);
       expect(free(entry[0], entry[2]), `${id} entry blocked at ${entry} by ${JSON.stringify([...blockers, ...npcBoxes].filter((b) => blocked(entry[0], entry[2], [b], sp.bounds)))}`).toBe(true);
       for (const n of sp.npcs) expect(free(L.talkStand(n).pos[0], L.talkStand(n).pos[2]), `${n} talk stand blocked`).toBe(true);
+      // a door or zone inside a room (the stairwell door) has a free spot deep enough in it to fire (ZoneTracker)
+      for (const t of sp.triggers) {
+        let reach = false;
+        for (let x = t.box.min[0] + ZONE_MARGIN; x <= t.box.max[0] - ZONE_MARGIN + 1e-9 && !reach; x += 0.05)
+          for (let z = t.box.min[1] + ZONE_MARGIN; z <= t.box.max[1] - ZONE_MARGIN + 1e-9 && !reach; z += 0.05) reach = free(x, z);
+        expect(reach, `${id} ${t.kind} ${t.place} can't be reached deep inside`).toBe(true);
+      }
       // things to use are within reach of some free spot
       for (const x of sp.interactables) {
         let reach = false;
@@ -237,8 +287,12 @@ describe("layout", () => {
         expect(reach, `${id} ${x.kind} out of reach`).toBe(true);
       }
       const out = L.exitSpawn(id).pos;
-      expect(L.triggerAt("street", out[0], out[2], -ZONE_MARGIN)?.kind, `${id} exit spawn in a trigger`).not.toBe("door");
-      expect(sp.triggers.find((t) => t.kind === "exit")?.place).toBe(L.placeAt("street", out[0], out[2]));
+      const outer = L.outerSpace(id)!;
+      expect(L.triggerAt(outer, out[0], out[2], -ZONE_MARGIN)?.kind, `${id} exit spawn in a trigger`).not.toBe("door");
+      expect(L.triggerAt(outer, out[0], out[2], -ZONE_MARGIN)?.kind, `${id} exit spawn in a trigger`).not.toBe("exit");
+      expect(sp.triggers.find((t) => t.kind === "exit")?.place).toBe(L.placeAt(outer, out[0], out[2]));
+      // the way out leads to a place core can reach from here (hop by hop: the room's door opens onto Main Street, off Market Street)
+      expect(route(course.world, interior.place, L.placeAt(outer, out[0], out[2])).length, `${id} exits to ${L.placeAt(outer, out[0], out[2])}`).toBeGreaterThan(0);
       expect(interior.place in course.world.places).toBe(true);
     }
   });

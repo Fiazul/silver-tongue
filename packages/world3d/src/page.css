@@ -40,6 +40,8 @@ button.icon { padding: 0.15em 0.5em; border-radius: 8px; font-size: 0.9rem; min-
 .chip.wallet.late { border-color: var(--bad); }
 .chip.slots.out { background: #f3d0c8; }
 .chip .short { display: none; }
+.chip.errand { background: #d6ecf2; font-weight: 700; }
+.chip.errand::before { content: "\25A3"; margin-right: 0.35em; } /* a parcel */
 @keyframes bump { 50% { transform: scale(1.25); } }
 
 /* speech bubble */
@@ -137,6 +139,9 @@ dialog::backdrop { background: rgba(30, 20, 10, 0.45); }
 .float { position: fixed; transform: translateX(-50%); font-weight: 800; font-size: 1.1rem; animation: floatup 1.8s ease-out forwards; text-shadow: 0 1px 0 #fff; }
 .float.good { color: var(--good); }
 .float.bad { color: var(--bad); }
+.float .fx-label { display: block; font-size: 0.75rem; font-weight: 700; text-align: center; }
+.float.fx-wages .fx-label::before, .float.fx-shopping .fx-label::before { content: "\25A3"; margin-right: 0.3em; } /* a parcel / a bag */
+.reply-cost { font-weight: 700; color: var(--bad); margin-left: auto; margin-right: 0.6em; }
 @keyframes floatup { from { opacity: 1; margin-top: 0; } to { opacity: 0; margin-top: 46px; } }
 
 /* notebook pulse (a new word) */

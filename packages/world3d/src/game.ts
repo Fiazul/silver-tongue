@@ -5,17 +5,21 @@
 // replies, same word help logging, same narration ids.
 import {
   availableSceneIds,
+  comboKey,
   createCore,
   describeRun,
   mentorAvailable,
+  moneyBlocked,
   mulberry32,
   rankFor,
+  sceneCost,
   type Core,
   type Course,
   type GameEvent,
   type GameState,
   type Input,
   type RenderedLine,
+  type WalletReason,
   type WordId,
 } from "@silver-tongue/core";
 import { makeText, notebookLines, type StyledLine, type Text } from "@silver-tongue/tui";
@@ -46,10 +50,20 @@ export interface Bubble {
   fresh: WordId[];
 }
 
+/** `cost`: what the right reply spends (buying something, as the TUI's shop), shown with the replies. */
 export type ReplyPanel =
-  | { mode: "pick"; options: RenderedLine[] }
+  | { mode: "pick"; options: RenderedLine[]; cost?: number }
   /** tiles (typed replies play as tiles in core): tap them in order, then say it */
-  | { mode: "tiles"; tiles: string[] };
+  | { mode: "tiles"; tiles: string[]; cost?: number };
+
+/** A wallet change floating from the wallet chip: "+¥14 delivery", "−¥4 shopping". */
+export interface WalletFx {
+  seq: number;
+  delta: number;
+  reason: WalletReason;
+  /** a word under the amount (shopping; the wages of a delivery) */
+  label?: string;
+}
 
 /** The end-of-day summary card, from dayEnded and the walletChanged events of the day. */
 export interface DayCard {
@@ -84,6 +98,8 @@ export interface Hud {
   rentLate: boolean;
   place: string;
   placeName: string;
+  /** the parcel being carried (core state.errand): where it goes. The status line's parcel marker. */
+  errand: { to: string; placeName: string } | null;
 }
 
 export interface UiModel {
@@ -108,7 +124,7 @@ export interface UiModel {
   /** the latest end-of-day summary (the overlay shows each new seq once) */
   dayCard: DayCard | null;
   /** recent wallet changes, for the floating "+¥5" (newest last, bounded) */
-  walletFx: { seq: number; delta: number }[];
+  walletFx: WalletFx[];
   /** bumped when a word goes into the notebook or becomes known: the notebook button pulses */
   notebookPulse: number;
   /** bumped on every mix-up (a reply that did the wrong thing): the NPC shrugs */
@@ -238,7 +254,17 @@ export function createGame(opts: GameOptions): Game {
       rentLate: st.rentLate,
       place: st.place,
       placeName: t(`place-${st.place}`),
+      errand: st.errand ? { to: st.errand.to, placeName: t(`place-${st.errand.to}`) } : null,
     };
+  }
+
+  /** What the right reply to the exchange in progress spends (a variant's cost), if anything. */
+  function replyCost(): number | undefined {
+    const run = core.state.run;
+    if (!run) return undefined;
+    const ex = course.scenes.find((x) => x.id === run.scene)?.exchanges[run.exchange];
+    const cost = ex?.variants[comboKey(run.combo)]?.cost ?? 0;
+    return cost > 0 ? cost : undefined;
   }
 
   const feed = (kind: FeedItem["kind"], text: string, tone: Tone) => {
@@ -270,6 +296,7 @@ export function createGame(opts: GameOptions): Game {
     model.events = [...model.events, ...events].slice(-EVENT_LOG);
     const lastPlace = [...events].reverse().find((e) => e.type === "placeEntered");
     let hinted = false;
+    let delivered = false;
     let ended: { day: number; food: number; rent: number } | null = null;
     // Words first heard in this batch, as app.ts marks them.
     const fresh = new Set(events.flatMap((e) => (e.type === "wordStateChanged" && e.from === "unseen" ? [e.word] : [])));
@@ -289,9 +316,11 @@ export function createGame(opts: GameOptions): Game {
         case "lineSpoken":
           model.bubble = { seq: ++seq, npc: e.npc, npcName: npcName(e.npc), line: e.line, kind: "line", slow: false, fresh: freshIn(e.line) };
           break;
-        case "replyOptions":
-          model.reply = e.mode === "pick" ? { mode: "pick", options: e.options } : { mode: "tiles", tiles: e.tiles };
+        case "replyOptions": {
+          const cost = replyCost();
+          model.reply = e.mode === "pick" ? { mode: "pick", options: e.options, cost } : { mode: "tiles", tiles: e.tiles, cost };
           break;
+        }
         case "actionPerformed":
           if (!e.tilesWrong && t.has(`action-${e.action.action}`)) feed(e.type, t(`action-${e.action.action}`, actionArgs(e.action)), "story");
           if (!e.matched) {
@@ -317,7 +346,11 @@ export function createGame(opts: GameOptions): Game {
             }),
             e.delta > 0 ? "good" : "bad",
           );
-          model.walletFx = [...model.walletFx, { seq: ++seq, delta: e.delta }].slice(-8);
+          {
+            // Shopping says so under the amount; so do the wages of a delivery (they follow errandEnded).
+            const label = e.reason === "shopping" ? t("reason-shopping") : e.reason === "wages" && delivered ? s("fx-delivery") : undefined;
+            model.walletFx = [...model.walletFx, { seq: ++seq, delta: e.delta, reason: e.reason, ...(label ? { label } : {}) }].slice(-8);
+          }
           if (e.reason === "wages") today.earned += e.delta;
           if (e.reason === "mixup") today.mixups += 1;
           if (ended && e.reason === "food") ended.food += -e.delta;
@@ -340,6 +373,14 @@ export function createGame(opts: GameOptions): Game {
           break;
         case "unlocked":
           feed(e.type, t("unlocked", { scene: t(`scene-${e.scene}`) }), "good");
+          break;
+        case "errandStarted":
+          // The parcel: the player carries it (main.ts, from hud.errand), the HUD and the objective name where it goes.
+          feed(e.type, t("errand-started"), "note");
+          break;
+        case "errandEnded":
+          feed(e.type, t("errand-ended"), "note");
+          delivered = true;
           break;
         case "rankChanged":
           feed(e.type, t("rank-up", { rank: t(`rank-${e.rank}`) }), "good");
@@ -450,7 +491,12 @@ export function createGame(opts: GameOptions): Game {
     }
     if (course.world.mentor?.npc === npc && model.mentor) items.push(model.mentor);
     if (!items.length) {
-      feed("info", s("nothing-to-say", { npc: npcName(npc) }), "info");
+      // As app.ts's menu: a scene here that waits only for money says what it needs.
+      const waiting = course.scenes.filter((x) => x.place === st.place && x.npc === npc && moneyBlocked(x, st));
+      if (waiting.length) {
+        for (const x of waiting)
+          feed("info", t("menu-needs-money", { npc: npcName(npc), scene: t(`scene-${x.id}`), currency: course.world.currency, cost: sceneCost(x) }), "info");
+      } else feed("info", s("nothing-to-say", { npc: npcName(npc) }), "info");
       return refresh();
     }
     if (items.length === 1) {

@@ -9,12 +9,18 @@ import { INPUT_AFFORDANCES, type Game } from "../src/game";
 import { course, makeGame, playScene } from "./helpers";
 
 const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
-/** The `type: "…"` members of an exported union in core's types.ts. */
+/**
+ * The `type: "…"` members of an exported union in core's types.ts. The union runs to the first
+ * line that isn't indented (a member spread over several lines ends its own lines with ";", so
+ * stopping at the first ";\n" would miss every member after it).
+ */
 function unionTypes(name: string): string[] {
   const src = read("../../core/src/types.ts");
   const start = src.indexOf(`export type ${name} =`);
   expect(start, name).toBeGreaterThan(-1);
-  const body = src.slice(start, src.indexOf(";\n", start));
+  const lines = src.slice(start).split("\n");
+  const end = lines.findIndex((l, i) => i > 0 && !/^\s/.test(l));
+  const body = lines.slice(0, end < 0 ? undefined : end).join("\n");
   return [...new Set([...body.matchAll(/type: "(\w+)"/g)].map((m) => m[1]))];
 }
 
@@ -32,11 +38,17 @@ describe("parity with the TUI", () => {
     for (const i of inputs) expect(table, i).toContain(`\`${i}\``);
   });
 
-  it("every GameEvent variant has a case in the dispatcher", () => {
+  it("every GameEvent variant has a case in the dispatcher, and the README's handled list names it", () => {
+    const events = unionTypes("GameEvent");
+    // the parse reaches past multi-line members (actionPerformed) to the end of the union
+    expect(events).toEqual(expect.arrayContaining(["placeEntered", "actionPerformed", "mentorVisited", "errandStarted", "errandEnded", "inputRejected"]));
     const src = read("../src/game.ts");
     const dispatch = src.slice(src.indexOf("function dispatch("), src.indexOf("function persist("));
     const cases = new Set([...dispatch.matchAll(/case "(\w+)":/g)].map((m) => m[1]));
-    for (const e of unionTypes("GameEvent")) expect(cases.has(e), e).toBe(true);
+    for (const e of events) expect(cases.has(e), e).toBe(true);
+    const readme = read("../README.md");
+    const handled = readme.slice(readme.indexOf("Every `GameEvent` is handled"), readme.indexOf("## Seeing it"));
+    for (const e of events) expect(handled, e).toMatch(new RegExp(`\\b${e}\\b`));
   });
 
   it("each Input is sent to core by its Game affordance (and accepted)", () => {

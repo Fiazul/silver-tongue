@@ -9,6 +9,7 @@ import { decodeSave, encodeSave, sessionLines } from "@silver-tongue/tui";
 import { fromLocalStorage, type KeyValue } from "@silver-tongue/tui-web/src/web-storage";
 import { unlockAudioOnFirstGesture } from "./audio";
 import { CameraRig, outlineScale } from "./camera";
+import { PlayerCarry } from "./carry";
 import { openSession, type Game, type UiModel } from "./game";
 import { MoveInput, toGround } from "./input";
 import { LAYOUT, LayoutIndex, type AssetIndex, type Stand } from "./layout";
@@ -82,6 +83,10 @@ async function main() {
   const street = spaces.get("street")!;
 
   const player = new Player(await assets.actor(LAYOUT.player.character), street.area);
+  // The parcel of an errand, in the player's hands while core has one (state.errand).
+  const bagSpec = LAYOUT.player.errandProp;
+  const bagAsset = typeof bagSpec === "string" ? bagSpec : bagSpec?.asset;
+  const carry = new PlayerCarry(player.actor, bagAsset ? await assets.instance(bagAsset) : null, bagSpec);
   const rig = new CameraRig(renderer.domElement);
 
   // Where a tap sent the player: a small ring on the ground.
@@ -157,6 +162,7 @@ async function main() {
     const arrival = nav.sync(game.core.state.place);
     if (arrival) arriving = arrival;
     applyDaylight();
+    carry.sync(m.hud.errand);
     if (m.mixups && m.mixups.seq !== mixupSeq) {
       mixupSeq = m.mixups.seq;
       space.shrug(m.mixups.npc);
@@ -240,7 +246,8 @@ async function main() {
     const { s } = game!;
     const placeName = (p: string) => game!.t(`place-${p}`);
     if (t.kind === "talk") return s("prompt-talk", { npc: game!.npcName(t.ref) });
-    if (t.kind === "enter") return s("prompt-enter", { place: placeName(t.ref) });
+    // A door into a side street (the gate to Station Road) is a way to go, not a building to enter.
+    if (t.kind === "enter") return s(L.space(L.spaceOf(t.ref)).interior ? "prompt-enter" : "prompt-go", { place: placeName(t.ref) });
     if (t.kind === "exit") return s("prompt-exit", { place: placeName(t.ref) });
     if (t.kind === "sleep") return s("prompt-sleep");
     return s("prompt-notebook");
@@ -440,6 +447,8 @@ async function main() {
       /** debug: preview any time of day (0 morning .. 1 evening) regardless of the real slot; the next real game event calls applyDaylight() again and overrides it. */
       setDaylight: (t: number) => space.setDaylight(t),
       dayCard: () => game?.model.dayCard,
+      /** the parcel: where core says it goes, and whether the player has it in hand */
+      errand: () => ({ to: game?.core.state.errand?.to ?? null, carrying: carry.holding, clip: player.actor.state }),
       /** accepted goTo inputs in core's log (a place-trigger thrash shows as a burst here) */
       goToCount: () => game?.core.state.log.filter((l) => l.input.type === "goTo").length ?? 0,
       /** last frame's draw calls (frustum-culled) and the space's static batching: draw calls before / after merging, unculled */

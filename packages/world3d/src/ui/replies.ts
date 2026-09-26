@@ -55,7 +55,7 @@ export class RepliesView {
       const give = el("button", { className: "secondary", textContent: this.s("tiles-give-up") });
       give.addEventListener("click", () => this.hooks.onGiveUp());
       this.node.replaceChildren(
-        el("div", { className: "replies-title", textContent: this.t("tiles-title") }),
+        el("div", { className: "replies-title" }, el("span", { textContent: this.t("tiles-title") }), ...this.price(r)),
         answer,
         el("div", { className: "tiles" }, ...tiles),
         el("div", { className: "tile-tools" }, undo, say, give),
@@ -71,6 +71,7 @@ export class RepliesView {
       "div",
       { className: "replies-title" },
       el("span", { textContent: this.helpMode ? this.s("word-help-on") : this.t("reply-title") }),
+      ...this.price(r),
       help,
     );
     const rows = r.options.map((o, i) => {
@@ -89,6 +90,11 @@ export class RepliesView {
       return row;
     });
     this.node.replaceChildren(title, ...rows);
+  }
+
+  /** The price of the right reply (shopping), as a tag in the panel's title. */
+  private price(r: ReplyPanel): HTMLElement[] {
+    return r.cost ? [el("span", { className: "reply-cost", textContent: this.s("reply-cost", { currency: this.course.world.currency, cost: r.cost }) })] : [];
   }
 
   private addTile(i: number) {
