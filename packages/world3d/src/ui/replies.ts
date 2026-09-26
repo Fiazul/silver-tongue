@@ -1,7 +1,7 @@
 // Reply panel: 2-4 options in pick mode, each with a ▶ that says it (without picking it). Word help mode ("?")
 // turns taps on words into look-ups instead of picks, like the TUI's [w]. Tiles mode: tap the
 // tiles in order (the TUI's tile numbers), Undo (backspace), Say it (enter), or give up.
-import type { Course, WordId } from "@silver-tongue/core";
+import { joinTiles, type Course, type WordId } from "@silver-tongue/core";
 import type { ReplyPanel } from "../game";
 import type { Strings } from "../strings";
 import type { Text } from "@silver-tongue/tui";
@@ -44,7 +44,7 @@ export class RepliesView {
 
   private draw(r: ReplyPanel) {
     if (r.mode === "tiles") {
-      const answer = el("div", { className: "tile-answer", textContent: this.chosen.map((i) => r.tiles[i]).join("") || "…" });
+      const answer = el("div", { className: "tile-answer", textContent: joinTiles(this.course, this.chosen.map((i) => r.tiles[i])) || "…" });
       const tiles = r.tiles.map((x, i) => {
         const b = el("button", { className: "tile", textContent: x, disabled: this.chosen.includes(i) });
         b.addEventListener("click", () => this.addTile(i));

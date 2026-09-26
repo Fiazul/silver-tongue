@@ -8,6 +8,7 @@ import {
   comboKey,
   createCore,
   describeRun,
+  joinTiles,
   mentorAvailable,
   moneyBlocked,
   mulberry32,
@@ -23,6 +24,7 @@ import {
   type Input,
   type RenderedLine,
   type WalletReason,
+  type Word,
   type WordId,
 } from "@silver-tongue/core";
 import { makeText, notebookLines, type AudioOut, type Speech, type StyledLine, type Text } from "@silver-tongue/tui";
@@ -142,7 +144,8 @@ export interface UiModel {
 
 export interface Gloss {
   text: string;
-  pron?: string;
+  /** how to say it (Word.readings), as the TUI shows it: every reading of a word, the sentence-help one of each word of a line */
+  reading?: string;
   gloss: string;
   /** the clips that say it (the popover's play button), and whether slowly */
   audio: string[];
@@ -223,12 +226,27 @@ export const INPUT_AFFORDANCES: Record<Input["type"], { tui: string; world3d: st
   setSound: { tui: "[m] sound on / off", world3d: "the ♪ chip in the HUD, or Menu → Sound", api: "setSound" },
 };
 
+/** A word's readings as the TUI's word help and notebook show them: all of them, most native first. */
+export function wordReadings(w: Word | undefined): string {
+  return w?.readings?.join(" ") ?? "";
+}
+
+/** The reading sentence help shows for a word (the last of its readings), as the TUI's [s] and the ruby over a slowed line. */
+export function sentenceReading(w: Word | undefined): string | undefined {
+  return w?.readings?.at(-1);
+}
+
+/** A whole line's reading, as the TUI's sentence help: each word's sentence reading, space-separated. */
+export function lineReading(course: Course, line: RenderedLine): string {
+  return line.tokens.flatMap((tk) => sentenceReading(course.words[tk.word]) ?? []).join(" ");
+}
+
 const EVENT_LOG = 200;
 const FEED_LOG = 60;
 
 export function createGame(opts: GameOptions): Game {
   const { course, core } = opts;
-  const t = display(makeText(course.learnerFtl));
+  const t = display(makeText(course.learnerFtl, course.learner));
   const s = makeStrings(t);
   const wordIds = Object.keys(course.words);
   const npcName = (npc: string) => t(`npc-${npc}`);
@@ -584,10 +602,10 @@ export function createGame(opts: GameOptions): Game {
     const r = model.reply;
     if (r?.mode !== "tiles" || !tiles.length) return;
     // As app.ts: tiles that make the right reply are shown as the reply itself, punctuation and all.
-    const placed = tiles.map((i) => r.tiles[i] ?? "").join("");
+    const placed = joinTiles(course, tiles.map((i) => r.tiles[i] ?? ""));
     const right = rightReply();
     const name = core.state.player ?? "";
-    const match = !!right && tilePieces(right).map((x) => (x === PLAYER_MARK ? name : x)).join("") === placed;
+    const match = !!right && joinTiles(course, tilePieces(right).map((x) => (x === PLAYER_MARK ? name : x))) === placed;
     feed("you", s("you-say", { text: match ? personalize(right!, name).text : placed }), "you");
     tileReply = right?.audio ?? [];
     send({ type: "replyTiles", tiles });
@@ -605,19 +623,20 @@ export function createGame(opts: GameOptions): Game {
     if (!w) return undefined;
     hear(w.audio);
     send({ type: "helpWord", word });
-    return { text: w.w, pron: w.pron, gloss: w.gloss, audio: w.audio ?? [] };
+    const reading = wordReadings(w);
+    return { text: w.w, ...(reading ? { reading } : {}), gloss: w.gloss, audio: w.audio ?? [] };
   }
 
   /** The whole line's meaning, said aloud. Not logged as help: the words still have to be recognised. */
   function sentence(line: RenderedLine): Gloss | undefined {
     if (!line.meaning) return undefined;
-    const pron = line.tokens.flatMap((tk) => course.words[tk.word]?.pron ?? []).join(" ");
+    const reading = lineReading(course, line);
     // The bubble's line is said as the bubble says it (a reaction in the NPC's voice, a slow repeat slowly).
     const b = model.bubble?.line === line ? model.bubble : null;
     const audio = b ? b.audio : (line.audio ?? []);
     const slow = !!b?.slow;
     say(audio, slow);
-    return { text: line.text, pron: pron || undefined, gloss: line.meaning, audio, ...(slow ? { slow } : {}) };
+    return { text: line.text, ...(reading ? { reading } : {}), gloss: line.meaning, audio, ...(slow ? { slow } : {}) };
   }
 
   function say(clips: string[] | undefined, slow = false) {

@@ -270,7 +270,7 @@ export class Overlay {
     const r = at.getBoundingClientRect();
     this.gloss.replaceChildren(
       el("div", { className: "g-word", textContent: g.text }),
-      ...(g.pron ? [el("div", { className: "g-pron", textContent: g.pron })] : []),
+      ...(g.reading ? [el("div", { className: "g-reading", textContent: g.reading })] : []),
       el("div", { className: "g-gloss", textContent: g.gloss }),
     );
     if (g.audio.length) {

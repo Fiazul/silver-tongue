@@ -1,4 +1,4 @@
-# The home-screen icons (src/icons/*.png): the "舌" glyph (tongue) in paper colour on the accent
+# The home-screen icons (icons/*.png): the "舌" glyph (tongue) in paper colour on the accent
 # red. Checked in; rerun only to change the look:  python3 scripts/make-icons.py
 # Needs Pillow and a CJK font (Noto CJK); pass a font path as the first argument to override.
 import os
@@ -6,7 +6,7 @@ import sys
 from PIL import Image, ImageDraw, ImageFont
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-OUT = os.path.join(HERE, "..", "src", "icons")
+OUT = os.path.join(HERE, "..", "icons")
 FONTS = sys.argv[1:] + [
     "/usr/share/fonts/opentype/noto/NotoSerifCJK-Bold.ttc",
     "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",

@@ -1,4 +1,4 @@
-// Speech bubble over the speaking NPC's head. Hanzi only; tap a word for pinyin + gloss, tap
+// Speech bubble over the speaking NPC's head. The line as written; tap a word for its readings + gloss, tap
 // "…" for the whole sentence (and hear it), ▶ to hear the line again. The line is said as it
 // appears (game.ts queues it). The world projects the head_top anchor to the screen each frame.
 import type { Course, RenderedLine, WordId } from "@silver-tongue/core";

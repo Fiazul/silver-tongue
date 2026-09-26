@@ -12,7 +12,7 @@ import type { AssetIndex } from "../src/layout";
 const CONTENT = fileURLToPath(new URL("../../../content", import.meta.url));
 /** The asset library the tests read: the vendored packages/world3d/assets unless WORLD3D_ASSETS says otherwise (as build.mjs). */
 export const ASSETS = process.env.WORLD3D_ASSETS ?? fileURLToPath(new URL("../assets", import.meta.url));
-export const course = buildCourse(CONTENT, "zh-china-en").course as Course;
+export const course = buildCourse(CONTENT, "zh-china").course as Course;
 const indexPath = `${ASSETS}/index.json`;
 export const assetIndex: AssetIndex | undefined = existsSync(indexPath) ? JSON.parse(readFileSync(indexPath, "utf8")) : undefined;
 

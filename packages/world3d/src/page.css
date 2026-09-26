@@ -67,7 +67,7 @@ rt { font-size: 0.45em; color: var(--accent); }
 /* gloss popover */
 .gloss { position: fixed; z-index: 30; background: var(--ink); color: var(--paper); border-radius: 10px; padding: 0.45em 0.8em; box-shadow: var(--shadow); max-width: 80vw; }
 .g-word { font-size: 1.4rem; }
-.g-pron { color: #f6c26b; }
+.g-reading { color: #f6c26b; }
 .g-gloss { font-size: 0.95rem; }
 .gloss .g-play { margin-top: 0.35em; background: var(--paper); color: var(--ink); }
 

@@ -1,15 +1,16 @@
-// Bootstraps the 3D front end: storage (same keys as the browser TUI), every scene space (the
+// Bootstraps the 3D front end: the course (courses.ts, picked and loaded as the browser TUI does),
+// storage (same keys as the browser TUI), every scene space (the
 // street and the interiors), the player, the camera, the overlay, and the frame loop that ties
 // walking to core (zones / doors -> goTo through SpaceNav, NPC taps / E -> the scene start sequence
 // in game.ts, prompts -> talk / enter / leave / sleep / notebook). Input: keys and the touch
 // joystick feed one MoveInput vector (input.ts); clicks and taps go through touch.ts.
 import * as THREE from "three";
-import type { Course } from "@silver-tongue/core";
 import { decodeSave, encodeSave, sessionLines } from "@silver-tongue/tui";
 import { fromLocalStorage, type KeyValue } from "@silver-tongue/tui-web/src/web-storage";
 import { createAudioPlayer, unlockAudioOnGesture } from "./audio";
 import { CameraRig, outlineScale } from "./camera";
 import { PlayerCarry } from "./carry";
+import { pickCourse } from "./courses";
 import { openSession, type Game, type UiModel } from "./game";
 import { MoveInput, toGround } from "./input";
 import { LAYOUT, LayoutIndex, type AssetIndex, type Stand } from "./layout";
@@ -17,15 +18,16 @@ import { Player } from "./player";
 import { nearestPrompt, promptTargets, SpaceNav, TALK_RANGE, type Arrival, type PromptTarget } from "./spaces";
 import { PointerControls } from "./touch";
 import { Overlay } from "./ui/overlay";
+import { showCourseChoice } from "./ui/start";
 import type { Insets } from "./ui/viewport";
 import { AssetCache, drawCalls, SceneSpace, setOutlineScale } from "./world";
 import type { WebSessions } from "@silver-tongue/tui-web/src/web-storage";
 
-/** The built course, put in by build.mjs. */
-declare const __COURSE__: Course;
-/** Where the clips are, relative to the page (build.mjs): "../audio/" on Pages (the TUI's copy), "audio/" when bundled. */
-declare const __AUDIO_BASE__: string;
-const course = __COURSE__;
+/**
+ * Where courses/<id>/audio/ is, relative to the page (build.mjs): "../" on Pages (the browser TUI's
+ * copy at the site root), "" when the clips are bundled into this dist/.
+ */
+declare const __AUDIO_ROOT__: string;
 const ASSETS = "./assets"; // relative: the page works under a subpath (GitHub Pages /world3d/)
 
 // Private windows and blocked site data make localStorage throw: play on without saving.
@@ -52,16 +54,12 @@ const uiRoot = document.querySelector<HTMLElement>("#ui")!;
 // Phones: no pinch / double-tap zoom (iOS ignores user-scalable=no), no pull-to-refresh (page.css
 // touch-action / overscroll-behavior); the first gesture unlocks audio.
 for (const ev of ["gesturestart", "gesturechange", "dblclick"]) document.addEventListener(ev, (e) => e.preventDefault(), { passive: false });
-// One audio player for the page (every game shares it), loading clips by URL as they are said.
-const audio = createAudioPlayer({
-  base: __AUDIO_BASE__,
-  audio: typeof Audio === "undefined" ? undefined : new Audio(),
-  wait: (ms, cb) => {
-    const h = setTimeout(cb, ms);
-    return { cancel: () => clearTimeout(h) };
-  },
-});
-unlockAudioOnGesture(audio);
+
+async function fetchJson<T>(path: string): Promise<T> {
+  const res = await fetch(path);
+  if (!res.ok) throw new Error(`${path}: ${res.status}`);
+  return (await res.json()) as T;
+}
 
 /** The safe-area insets (notch, home bar) in CSS px, read through a probe padded by env(safe-area-inset-*). */
 function safeInsets(): Insets {
@@ -77,6 +75,29 @@ function safeInsets(): Insets {
 }
 
 async function main() {
+  // The course first (the start list, when there are several and none is remembered), then the street.
+  let picked: Awaited<ReturnType<typeof pickCourse>>;
+  try {
+    picked = await pickCourse({ fetchJson, kv, choose: (choice) => showCourseChoice(document.body, choice) });
+  } catch (e) {
+    // No course text has loaded, so there is no reading language to say this in (as tui-web).
+    loading.textContent = "The game could not load. Serve this page from a web server and reload.";
+    console.error(e);
+    return;
+  }
+  const { course, entry } = picked;
+  document.documentElement.lang = course.learner;
+  // One audio player for the page (every game shares it), loading clips by URL as they are said.
+  const audio = createAudioPlayer({
+    base: `${__AUDIO_ROOT__}courses/${entry.id}/audio/`,
+    audio: typeof Audio === "undefined" ? undefined : new Audio(),
+    wait: (ms, cb) => {
+      const h = setTimeout(cb, ms);
+      return { cancel: () => clearTimeout(h) };
+    },
+  });
+  unlockAudioOnGesture(audio);
+
   const index = (await (await fetch(`${ASSETS}/index.json`)).json()) as AssetIndex;
   const L = new LayoutIndex(LAYOUT, index);
 

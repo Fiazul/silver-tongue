@@ -13,7 +13,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { ASSETS, fakeAudio } from "./helpers";
 
 const CONTENT = fileURLToPath(new URL("../../../content", import.meta.url));
-const { course: built, errors } = buildCourse(CONTENT, "zh-china-en");
+const { course: built, errors } = buildCourse(CONTENT, "zh-china");
 const course = built as Course;
 
 /** A fake UI adapter: records every model it is handed and every event the dispatcher passes on. */

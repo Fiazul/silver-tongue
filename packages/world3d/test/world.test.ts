@@ -377,7 +377,7 @@ describe("street life motion", () => {
 
 describe("3D wording", () => {
   it("no text the 3D world shows carries a TUI key hint ([w], [s], [enter], number keys)", () => {
-    const t = display(makeText(course.learnerFtl));
+    const t = display(makeText(course.learnerFtl, course.learner));
     const ids = [...course.learnerFtl.matchAll(/^([a-z][\w-]*)\s*=/gm)].map((m) => m[1]);
     const shown = ids.filter((id) => !id.startsWith("keys-") && !TUI_ONLY.has(id));
     expect(shown.length).toBeGreaterThan(50);
