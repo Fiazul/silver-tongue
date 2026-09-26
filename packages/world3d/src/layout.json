@@ -1,0 +1,1547 @@
+{
+  "$comment": "Ported from assets/street_mockup.glb (tools/blender/mockup.py) by scripts/port-mockup.mjs. glTF/three.js axes: x right, y up, +z towards the camera. Rotations in degrees about +Y (rotY) and +X (tiltX).",
+  "defaultPlace": "street",
+  "bounds": {
+    "min": [
+      -28,
+      -4.6
+    ],
+    "max": [
+      28,
+      4.6
+    ]
+  },
+  "surfaces": {
+    "default": 0.18,
+    "bands": [
+      {
+        "zMin": -2,
+        "zMax": 2,
+        "y": 0.05
+      }
+    ]
+  },
+  "player": {
+    "character": "player"
+  },
+  "places": {
+    "street": {
+      "buildings": [],
+      "spawn": {
+        "pos": [
+          -1.844,
+          0.18,
+          3.2
+        ],
+        "facing": [
+          0,
+          0,
+          -1
+        ]
+      }
+    },
+    "noodle_shop": {
+      "buildings": [
+        "noodle_shop"
+      ],
+      "spawn": {
+        "interior": "noodle_shop"
+      },
+      "interior": "noodle_shop",
+      "door": {
+        "building": "noodle_shop",
+        "anchor": "door",
+        "width": 1.4,
+        "depth": [
+          0.95,
+          1.7
+        ]
+      }
+    },
+    "market": {
+      "buildings": [
+        "fruit_stall",
+        "supermarket"
+      ],
+      "zone": {
+        "min": [
+          1.516,
+          -4
+        ],
+        "max": [
+          11.626,
+          -1.6
+        ]
+      },
+      "spawn": {
+        "building": "fruit_stall",
+        "anchor": "player_stand"
+      }
+    },
+    "room": {
+      "buildings": [
+        "rented_room"
+      ],
+      "spawn": {
+        "interior": "room"
+      },
+      "interior": "room",
+      "door": {
+        "building": "rented_room",
+        "anchor": "door",
+        "width": 1.4,
+        "depth": [
+          1.85,
+          2.6
+        ]
+      }
+    },
+    "warehouse": {
+      "buildings": [
+        "warehouse"
+      ],
+      "spawn": {
+        "interior": "warehouse"
+      },
+      "interior": "warehouse",
+      "door": {
+        "building": "warehouse",
+        "anchor": "door",
+        "width": 1.8,
+        "depth": [
+          2.35,
+          3.3
+        ]
+      }
+    }
+  },
+  "npcs": {
+    "wang": {
+      "character": "old_wang",
+      "building": "bus_stop",
+      "stand": "npc_stand",
+      "playerStand": "player_stand",
+      "heldProp": "folding_fan"
+    },
+    "cook": {
+      "character": "cook",
+      "building": "noodle_counter",
+      "stand": "npc_stand",
+      "playerStand": "player_stand",
+      "heldProp": "ladle"
+    },
+    "landlord": {
+      "character": "landlord",
+      "building": "room_interior",
+      "stand": "npc_stand",
+      "playerStand": "player_stand",
+      "heldProp": "key_ring"
+    },
+    "foreman": {
+      "character": "warehouse_boss",
+      "space": "warehouse",
+      "stand": {
+        "pos": [
+          0.6,
+          0.06,
+          -3.3
+        ],
+        "facing": [
+          0,
+          0,
+          1
+        ]
+      },
+      "playerStand": {
+        "pos": [
+          0.6,
+          0.06,
+          -2.1
+        ],
+        "facing": [
+          0,
+          0,
+          -1
+        ]
+      },
+      "heldProp": "clipboard"
+    }
+  },
+  "buildings": [
+    {
+      "id": "district_gate",
+      "asset": "district_gate",
+      "pos": [
+        -24.091,
+        0.18,
+        -4
+      ],
+      "rotY": 0
+    },
+    {
+      "id": "tea_house",
+      "asset": "tea_house",
+      "pos": [
+        -16.722,
+        0.18,
+        -4
+      ],
+      "rotY": 0
+    },
+    {
+      "id": "rented_room",
+      "asset": "rented_room",
+      "pos": [
+        -9.383,
+        0.18,
+        -4
+      ],
+      "rotY": 0
+    },
+    {
+      "id": "noodle_shop",
+      "asset": "noodle_shop",
+      "pos": [
+        -2.144,
+        0.18,
+        -4
+      ],
+      "rotY": 0
+    },
+    {
+      "id": "fruit_stall",
+      "asset": "fruit_stall",
+      "pos": [
+        3.416,
+        0.18,
+        -4
+      ],
+      "rotY": 0
+    },
+    {
+      "id": "supermarket",
+      "asset": "supermarket",
+      "pos": [
+        8.546,
+        0.18,
+        -4
+      ],
+      "rotY": 0
+    },
+    {
+      "id": "filler_phone_shop",
+      "asset": "filler_phone_shop",
+      "pos": [
+        13.856,
+        0.18,
+        -4
+      ],
+      "rotY": 0
+    },
+    {
+      "id": "bus_stop",
+      "asset": "bus_stop",
+      "pos": [
+        18.111,
+        0.18,
+        -3.1
+      ],
+      "rotY": 0
+    },
+    {
+      "id": "warehouse",
+      "asset": "warehouse",
+      "pos": [
+        24.886,
+        0.18,
+        -4.2
+      ],
+      "rotY": 0
+    },
+    {
+      "id": "filler_shutter",
+      "asset": "filler_shutter",
+      "pos": [
+        -25.22,
+        0.18,
+        4
+      ],
+      "rotY": -180
+    },
+    {
+      "id": "filler_tailor",
+      "asset": "filler_tailor",
+      "pos": [
+        -20.41,
+        0.18,
+        4
+      ],
+      "rotY": -180
+    }
+  ],
+  "tiles": [
+    {
+      "asset": "road_straight",
+      "pos": [
+        -24,
+        0,
+        0
+      ],
+      "rotY": 0
+    },
+    {
+      "asset": "pavement_straight",
+      "pos": [
+        -24,
+        0,
+        -3
+      ],
+      "rotY": 0
+    },
+    {
+      "asset": "pavement_straight",
+      "pos": [
+        -24,
+        0,
+        3
+      ],
+      "rotY": -180
+    },
+    {
+      "asset": "road_straight",
+      "pos": [
+        -16,
+        0,
+        0
+      ],
+      "rotY": 0
+    },
+    {
+      "asset": "pavement_straight",
+      "pos": [
+        -16,
+        0,
+        -3
+      ],
+      "rotY": 0
+    },
+    {
+      "asset": "pavement_straight",
+      "pos": [
+        -16,
+        0,
+        3
+      ],
+      "rotY": -180
+    },
+    {
+      "asset": "road_straight",
+      "pos": [
+        -8,
+        0,
+        0
+      ],
+      "rotY": 0
+    },
+    {
+      "asset": "pavement_straight",
+      "pos": [
+        -8,
+        0,
+        -3
+      ],
+      "rotY": 0
+    },
+    {
+      "asset": "pavement_straight",
+      "pos": [
+        -8,
+        0,
+        3
+      ],
+      "rotY": -180
+    },
+    {
+      "asset": "road_straight",
+      "pos": [
+        0,
+        0,
+        0
+      ],
+      "rotY": 0
+    },
+    {
+      "asset": "pavement_straight",
+      "pos": [
+        0,
+        0,
+        -3
+      ],
+      "rotY": 0
+    },
+    {
+      "asset": "pavement_straight",
+      "pos": [
+        0,
+        0,
+        3
+      ],
+      "rotY": -180
+    },
+    {
+      "asset": "road_crossing",
+      "pos": [
+        8,
+        0,
+        0
+      ],
+      "rotY": 0
+    },
+    {
+      "asset": "pavement_straight",
+      "pos": [
+        8,
+        0,
+        -3
+      ],
+      "rotY": 0
+    },
+    {
+      "asset": "pavement_straight",
+      "pos": [
+        8,
+        0,
+        3
+      ],
+      "rotY": -180
+    },
+    {
+      "asset": "road_straight",
+      "pos": [
+        16,
+        0,
+        0
+      ],
+      "rotY": 0
+    },
+    {
+      "asset": "pavement_straight",
+      "pos": [
+        16,
+        0,
+        -3
+      ],
+      "rotY": 0
+    },
+    {
+      "asset": "pavement_straight",
+      "pos": [
+        16,
+        0,
+        3
+      ],
+      "rotY": -180
+    },
+    {
+      "asset": "road_straight",
+      "pos": [
+        24,
+        0,
+        0
+      ],
+      "rotY": 0
+    },
+    {
+      "asset": "pavement_straight",
+      "pos": [
+        24,
+        0,
+        -3
+      ],
+      "rotY": 0
+    },
+    {
+      "asset": "pavement_straight",
+      "pos": [
+        24,
+        0,
+        3
+      ],
+      "rotY": -180
+    }
+  ],
+  "ground": [
+    {
+      "name": "forecourt",
+      "colour": "#C8C1B2",
+      "min": [
+        -40,
+        0,
+        -6.6
+      ],
+      "max": [
+        40,
+        0.18,
+        -4
+      ]
+    },
+    {
+      "name": "forecourt",
+      "colour": "#C8C1B2",
+      "min": [
+        -40,
+        0,
+        4
+      ],
+      "max": [
+        40,
+        0.18,
+        6
+      ]
+    },
+    {
+      "name": "road_ext",
+      "colour": "#4A4A4E",
+      "min": [
+        -40,
+        0,
+        -2
+      ],
+      "max": [
+        -28,
+        0.05,
+        2
+      ]
+    },
+    {
+      "name": "pave_ext",
+      "colour": "#C8C1B2",
+      "min": [
+        -40,
+        0,
+        2
+      ],
+      "max": [
+        -28,
+        0.18,
+        4
+      ]
+    },
+    {
+      "name": "pave_ext",
+      "colour": "#C8C1B2",
+      "min": [
+        -40,
+        0,
+        -4
+      ],
+      "max": [
+        -28,
+        0.18,
+        -2
+      ]
+    },
+    {
+      "name": "road_ext",
+      "colour": "#4A4A4E",
+      "min": [
+        28,
+        0,
+        -2
+      ],
+      "max": [
+        40,
+        0.05,
+        2
+      ]
+    },
+    {
+      "name": "pave_ext",
+      "colour": "#C8C1B2",
+      "min": [
+        28,
+        0,
+        2
+      ],
+      "max": [
+        40,
+        0.18,
+        4
+      ]
+    },
+    {
+      "name": "pave_ext",
+      "colour": "#C8C1B2",
+      "min": [
+        28,
+        0,
+        -4
+      ],
+      "max": [
+        40,
+        0.18,
+        -2
+      ]
+    }
+  ],
+  "dressing": [
+    {
+      "asset": "lantern",
+      "pos": [
+        -17.922,
+        2.83,
+        -3.16
+      ],
+      "rotY": 0
+    },
+    {
+      "asset": "lantern",
+      "pos": [
+        -15.522,
+        2.83,
+        -3.16
+      ],
+      "rotY": 0
+    },
+    {
+      "asset": "planter_pot",
+      "pos": [
+        -19.722,
+        0.18,
+        -3.5
+      ],
+      "rotY": 0
+    },
+    {
+      "asset": "water_urn",
+      "pos": [
+        -13.822,
+        0.18,
+        -3.55
+      ],
+      "rotY": 0
+    },
+    {
+      "asset": "laundry_pole_bar",
+      "pos": [
+        -10.483,
+        8.93,
+        -3.415
+      ],
+      "rotY": 0
+    },
+    {
+      "asset": "laundry_pole_bar",
+      "pos": [
+        -10.483,
+        5.83,
+        -3.415
+      ],
+      "rotY": 0
+    },
+    {
+      "asset": "lantern_string",
+      "pos": [
+        -4.244,
+        2.87,
+        -3.5
+      ],
+      "rotY": 0
+    },
+    {
+      "asset": "lantern",
+      "pos": [
+        -4.744,
+        2.52,
+        -3.04
+      ],
+      "rotY": 0
+    },
+    {
+      "asset": "lantern",
+      "pos": [
+        0.456,
+        2.52,
+        -3.04
+      ],
+      "rotY": 0
+    },
+    {
+      "asset": "steamer_stack",
+      "pos": [
+        -1.744,
+        1.21,
+        -4.47
+      ],
+      "rotY": 0
+    },
+    {
+      "asset": "bowl_noodles",
+      "pos": [
+        -2.744,
+        1.21,
+        -4.42
+      ],
+      "rotY": 0
+    },
+    {
+      "asset": "bowl_noodles",
+      "pos": [
+        -3.194,
+        1.21,
+        -4.42
+      ],
+      "rotY": 0
+    },
+    {
+      "asset": "sign_aboard",
+      "pos": [
+        0.756,
+        0.18,
+        -2.65
+      ],
+      "rotY": -15
+    },
+    {
+      "asset": "table_folding",
+      "pos": [
+        -4.794,
+        0.18,
+        -2.75
+      ],
+      "rotY": 0
+    },
+    {
+      "asset": "stool_plastic",
+      "pos": [
+        -4.794,
+        0.18,
+        -2.1
+      ],
+      "rotY": 0
+    },
+    {
+      "asset": "stool_plastic",
+      "pos": [
+        -4.794,
+        0.18,
+        -3.4
+      ],
+      "rotY": 0
+    },
+    {
+      "asset": "bowl_soup",
+      "pos": [
+        -4.794,
+        0.93,
+        -2.75
+      ],
+      "rotY": 0
+    },
+    {
+      "asset": "cat",
+      "pos": [
+        1.006,
+        0.18,
+        -3.45
+      ],
+      "rotY": -60
+    },
+    {
+      "asset": "crate_apples",
+      "pos": [
+        2.266,
+        0.88,
+        -3.274
+      ],
+      "rotY": 0,
+      "tiltX": 32
+    },
+    {
+      "asset": "crate_apples",
+      "pos": [
+        2.266,
+        1.1,
+        -3.626
+      ],
+      "rotY": 0,
+      "tiltX": 32
+    },
+    {
+      "asset": "crate_oranges",
+      "pos": [
+        3.416,
+        0.88,
+        -3.274
+      ],
+      "rotY": 0,
+      "tiltX": 32
+    },
+    {
+      "asset": "crate_oranges",
+      "pos": [
+        3.416,
+        1.1,
+        -3.626
+      ],
+      "rotY": 0,
+      "tiltX": 32
+    },
+    {
+      "asset": "crate_bananas",
+      "pos": [
+        4.566,
+        0.88,
+        -3.274
+      ],
+      "rotY": 0,
+      "tiltX": 32
+    },
+    {
+      "asset": "crate_bananas",
+      "pos": [
+        4.566,
+        1.1,
+        -3.626
+      ],
+      "rotY": 0,
+      "tiltX": 32
+    },
+    {
+      "asset": "hanging_scale",
+      "pos": [
+        4.316,
+        2.03,
+        -4
+      ],
+      "rotY": 0
+    },
+    {
+      "asset": "fruit_seller",
+      "pos": [
+        3.416,
+        0.18,
+        -4.8
+      ],
+      "rotY": 0
+    },
+    {
+      "asset": "clerk",
+      "pos": [
+        10.146,
+        0.18,
+        -3.45
+      ],
+      "rotY": 0
+    },
+    {
+      "asset": "customer_b",
+      "pos": [
+        6.946,
+        0.18,
+        -2.8
+      ],
+      "rotY": -90
+    },
+    {
+      "asset": "shopping_trolley",
+      "pos": [
+        7.296,
+        1.08,
+        -2.95
+      ],
+      "rotY": -90
+    },
+    {
+      "asset": "pigeon",
+      "pos": [
+        17.511,
+        0.18,
+        -2.2
+      ],
+      "rotY": 30,
+      "behaviour": "scatter"
+    },
+    {
+      "asset": "pigeon",
+      "pos": [
+        17.861,
+        0.18,
+        -2
+      ],
+      "rotY": -40,
+      "behaviour": "scatter"
+    },
+    {
+      "asset": "pigeon",
+      "pos": [
+        18.461,
+        0.18,
+        -2.3
+      ],
+      "rotY": 100,
+      "behaviour": "scatter"
+    },
+    {
+      "asset": "box_stack",
+      "pos": [
+        26.186,
+        1.18,
+        -3.1
+      ],
+      "rotY": 8
+    },
+    {
+      "asset": "hand_truck",
+      "pos": [
+        25.286,
+        1.18,
+        -2.75
+      ],
+      "rotY": -25
+    },
+    {
+      "asset": "box_medium",
+      "pos": [
+        27.086,
+        1.18,
+        -2.9
+      ],
+      "rotY": 0
+    },
+    {
+      "asset": "tree_street",
+      "pos": [
+        -11.144,
+        0.18,
+        3.3
+      ],
+      "rotY": 0
+    },
+    {
+      "asset": "tree_street",
+      "pos": [
+        1.356,
+        0.18,
+        3.3
+      ],
+      "rotY": 0
+    },
+    {
+      "asset": "tree_street",
+      "pos": [
+        10.856,
+        0.18,
+        3.3
+      ],
+      "rotY": 0
+    },
+    {
+      "asset": "street_lamp",
+      "pos": [
+        -7.644,
+        0.18,
+        2.45
+      ],
+      "rotY": -180
+    },
+    {
+      "asset": "street_lamp",
+      "pos": [
+        5.356,
+        0.18,
+        2.45
+      ],
+      "rotY": -180
+    },
+    {
+      "asset": "street_lamp",
+      "pos": [
+        15.856,
+        0.18,
+        2.45
+      ],
+      "rotY": -180
+    },
+    {
+      "asset": "power_pole",
+      "pos": [
+        -19.144,
+        0.18,
+        2.55
+      ],
+      "rotY": 0
+    },
+    {
+      "asset": "power_pole",
+      "pos": [
+        -6.144,
+        0.18,
+        2.55
+      ],
+      "rotY": 0
+    },
+    {
+      "asset": "bin_public",
+      "pos": [
+        -4.144,
+        0.18,
+        3.6
+      ],
+      "rotY": -180
+    },
+    {
+      "asset": "bollard",
+      "pos": [
+        -4.344,
+        0.18,
+        2.45
+      ],
+      "rotY": 0
+    },
+    {
+      "asset": "bollard",
+      "pos": [
+        -3.544,
+        0.18,
+        2.45
+      ],
+      "rotY": 0
+    },
+    {
+      "asset": "bollard",
+      "pos": [
+        -2.744,
+        0.18,
+        2.45
+      ],
+      "rotY": 0
+    },
+    {
+      "asset": "scooter_delivery",
+      "pos": [
+        -0.644,
+        0.18,
+        2.9
+      ],
+      "rotY": -180
+    },
+    {
+      "asset": "bicycle",
+      "pos": [
+        2.856,
+        0.18,
+        3
+      ],
+      "rotY": -180
+    },
+    {
+      "asset": "courier",
+      "pos": [
+        -0.544,
+        0.18,
+        3.6
+      ],
+      "rotY": 144
+    },
+    {
+      "asset": "planter_pot",
+      "pos": [
+        -5.744,
+        0.18,
+        3.6
+      ],
+      "rotY": 0
+    },
+    {
+      "asset": "planter_pot",
+      "pos": [
+        -5.144,
+        0.18,
+        3.6
+      ],
+      "rotY": 0
+    },
+    {
+      "asset": "planter_pot",
+      "pos": [
+        7.256,
+        0.18,
+        3.6
+      ],
+      "rotY": 0
+    },
+    {
+      "asset": "customer_a_khaki",
+      "pos": [
+        -9.144,
+        0.18,
+        3
+      ],
+      "rotY": 90
+    }
+  ],
+  "interiors": {
+    "noodle_shop": {
+      "place": "noodle_shop",
+      "shell": {
+        "id": "noodle_interior",
+        "asset": "noodle_shop_shell"
+      },
+      "entry": {
+        "anchor": "entrance",
+        "inset": 0.9,
+        "shift": 0.45
+      },
+      "exitDepth": 0.9,
+      "pieces": [
+        {
+          "id": "noodle_counter",
+          "asset": "counter_noodle",
+          "pos": [
+            -0.5,
+            0.06,
+            -3.45
+          ],
+          "rotY": 0
+        }
+      ],
+      "ground": [],
+      "dressing": [
+        {
+          "asset": "bowl_noodles",
+          "pos": [
+            -0.8,
+            1.5,
+            -3.45
+          ],
+          "rotY": 0
+        },
+        {
+          "asset": "bowl_soup",
+          "pos": [
+            -0.2,
+            1.5,
+            -3.45
+          ],
+          "rotY": 0
+        },
+        {
+          "asset": "steamer_stack",
+          "pos": [
+            0.45,
+            1.5,
+            -3.45
+          ],
+          "rotY": 0
+        },
+        {
+          "asset": "bowl_noodles",
+          "pos": [
+            1.2,
+            0.81,
+            -1.2
+          ],
+          "rotY": 20
+        },
+        {
+          "asset": "customer_a_blue",
+          "pos": [
+            1.2,
+            0.06,
+            -0.6
+          ],
+          "rotY": 180
+        }
+      ],
+      "interactables": [],
+      "camera": {
+        "distance": 11
+      },
+      "background": "#2E2621"
+    },
+    "room": {
+      "place": "room",
+      "shell": {
+        "id": "room_interior",
+        "asset": "room_shell"
+      },
+      "entry": {
+        "anchor": "entrance",
+        "inset": 0.9,
+        "shift": 0
+      },
+      "exitDepth": 0.8,
+      "pieces": [],
+      "ground": [
+        {
+          "name": "notebook",
+          "colour": "#B8352A",
+          "min": [
+            1.24,
+            0.81,
+            -0.86
+          ],
+          "max": [
+            1.5,
+            0.84,
+            -0.6
+          ]
+        }
+      ],
+      "dressing": [],
+      "interactables": [
+        {
+          "kind": "sleep",
+          "at": {
+            "pos": [
+              -1.0,
+              0.52,
+              -1.25
+            ]
+          },
+          "range": 1.4
+        },
+        {
+          "kind": "notebook",
+          "at": {
+            "pos": [
+              1.37,
+              0.84,
+              -0.73
+            ]
+          },
+          "range": 1.4
+        }
+      ],
+      "camera": {
+        "distance": 8.5
+      },
+      "background": "#2E2621"
+    },
+    "warehouse": {
+      "place": "warehouse",
+      "size": [
+        9,
+        6
+      ],
+      "floorY": 0.06,
+      "entry": {
+        "pos": [
+          2.2,
+          0.06,
+          -0.3
+        ],
+        "facing": [
+          0,
+          0,
+          -1
+        ],
+        "inset": 0.9,
+        "shift": 0
+      },
+      "exitDepth": 0.9,
+      "pieces": [
+        {
+          "id": "wh_stack_1",
+          "asset": "box_stack",
+          "pos": [
+            -3.6,
+            0.06,
+            -5.4
+          ],
+          "rotY": 0
+        },
+        {
+          "id": "wh_stack_2",
+          "asset": "box_stack",
+          "pos": [
+            -2.7,
+            0.06,
+            -5.4
+          ],
+          "rotY": 6
+        },
+        {
+          "id": "wh_stack_3",
+          "asset": "box_stack",
+          "pos": [
+            -3.6,
+            0.06,
+            -4.5
+          ],
+          "rotY": -4
+        },
+        {
+          "id": "wh_stack_4",
+          "asset": "box_stack",
+          "pos": [
+            3.4,
+            0.06,
+            -5.4
+          ],
+          "rotY": 3
+        },
+        {
+          "id": "wh_pallet_1",
+          "asset": "pallet",
+          "pos": [
+            -1.2,
+            0.06,
+            -5.2
+          ],
+          "rotY": 0
+        },
+        {
+          "id": "wh_pallet_2",
+          "asset": "pallet",
+          "pos": [
+            1.8,
+            0.06,
+            -5.2
+          ],
+          "rotY": 0
+        },
+        {
+          "id": "wh_pallet_3",
+          "asset": "pallet",
+          "pos": [
+            -3.2,
+            0.06,
+            -2.6
+          ],
+          "rotY": 90
+        },
+        {
+          "id": "wh_box_1",
+          "asset": "box_large",
+          "pos": [
+            -1.2,
+            0.2,
+            -5.2
+          ],
+          "rotY": 5
+        },
+        {
+          "id": "wh_box_2",
+          "asset": "box_large",
+          "pos": [
+            1.8,
+            0.2,
+            -5.2
+          ],
+          "rotY": -8
+        },
+        {
+          "id": "wh_box_3",
+          "asset": "box_medium",
+          "pos": [
+            -3.2,
+            0.2,
+            -2.6
+          ],
+          "rotY": 12
+        },
+        {
+          "id": "wh_crate",
+          "asset": "crate_wood",
+          "pos": [
+            2.9,
+            0.06,
+            -3.4
+          ],
+          "rotY": 20
+        },
+        {
+          "id": "wh_truck",
+          "asset": "hand_truck",
+          "pos": [
+            -1.9,
+            0.06,
+            -3.0
+          ],
+          "rotY": -30
+        }
+      ],
+      "ground": [
+        {
+          "name": "wh_floor",
+          "colour": "#9A968E",
+          "min": [
+            -4.5,
+            0,
+            -6
+          ],
+          "max": [
+            4.5,
+            0.06,
+            0.2
+          ]
+        },
+        {
+          "name": "wh_back",
+          "colour": "#B9AE9C",
+          "min": [
+            -4.7,
+            0,
+            -6.2
+          ],
+          "max": [
+            4.5,
+            3.4,
+            -6
+          ]
+        },
+        {
+          "name": "wh_left",
+          "colour": "#AFA491",
+          "min": [
+            -4.7,
+            0,
+            -6.2
+          ],
+          "max": [
+            -4.5,
+            3.4,
+            0.2
+          ]
+        },
+        {
+          "name": "wh_dock_door",
+          "colour": "#6E7B6A",
+          "min": [
+            -1.2,
+            0.06,
+            -6.01
+          ],
+          "max": [
+            1.2,
+            2.8,
+            -5.99
+          ]
+        }
+      ],
+      "dressing": [
+        {
+          "asset": "box_small",
+          "pos": [
+            -1.5,
+            0.06,
+            -3.3
+          ],
+          "rotY": 15
+        },
+        {
+          "asset": "box_medium",
+          "pos": [
+            2.3,
+            0.06,
+            -4.2
+          ],
+          "rotY": -10
+        }
+      ],
+      "interactables": [],
+      "camera": {
+        "distance": 13
+      },
+      "background": "#2E2621"
+    }
+  },
+  "walkers": [
+    {
+      "character": "customer_a_green",
+      "path": [
+        [
+          -20,
+          4.15
+        ],
+        [
+          20,
+          4.15
+        ]
+      ],
+      "speed": 1.1
+    },
+    {
+      "character": "customer_a",
+      "path": [
+        [
+          18,
+          4.35
+        ],
+        [
+          -18,
+          4.35
+        ]
+      ],
+      "speed": 1.25
+    },
+    {
+      "character": "customer_a_blue",
+      "path": [
+        [
+          -14,
+          -2.25
+        ],
+        [
+          -6,
+          -2.25
+        ],
+        [
+          -5.4,
+          -1.75
+        ],
+        [
+          -4.1,
+          -1.75
+        ],
+        [
+          -3.6,
+          -2.25
+        ],
+        [
+          13,
+          -2.25
+        ]
+      ],
+      "speed": 1.0
+    },
+    {
+      "character": "kid",
+      "path": [
+        [
+          6.2,
+          4.0
+        ],
+        [
+          8.6,
+          4.0
+        ],
+        [
+          8.6,
+          -2.3
+        ],
+        [
+          11.2,
+          -2.3
+        ]
+      ],
+      "speed": 1.4
+    },
+    {
+      "character": "customer_b",
+      "path": [
+        [
+          -22,
+          -2.4
+        ],
+        [
+          -14.5,
+          -2.4
+        ]
+      ],
+      "speed": 0.9
+    }
+  ]
+}

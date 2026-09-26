@@ -22,6 +22,7 @@
     "tools/test"
   ],
   "exclude": [
-    "packages/tui-web"
+    "packages/tui-web",
+    "packages/world3d"
   ]
 }

@@ -6,7 +6,7 @@
   "workspaces": ["packages/*", "tools"],
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc && tsc -p packages/tui-web",
+    "typecheck": "tsc && tsc -p packages/tui-web && tsc -p packages/world3d",
     "import:zh": "tsx tools/src/import-vocab-pack.ts vendor/vocab-engine/packs/zh content/languages/zh content/learner/en/glosses-zh.ftl",
     "build:course": "tsx tools/src/build-course.ts",
     "bots": "tsx tools/src/bots.ts",

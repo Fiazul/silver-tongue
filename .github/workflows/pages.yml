@@ -1,5 +1,8 @@
 name: pages
-# Builds the browser game (packages/tui-web) and deploys it to GitHub Pages on every push to main.
+# Builds the browser game (packages/tui-web) and the 3D street (packages/world3d) and deploys
+# them to GitHub Pages on every push to main: the TUI at the site root, the 3D game under
+# /world3d/ (every world3d URL is relative, so a fork's <user>.github.io/silver-tongue/world3d/
+# works too). world3d's GLBs are vendored in packages/world3d/assets: no external asset library.
 # Needs Pages turned on for the repository with "GitHub Actions" as the source.
 
 on:
@@ -28,9 +31,17 @@ jobs:
       - run: npm ci
       - run: npm run build:course
       - run: npm run build:web
+      - run: npm run build -w @silver-tongue/world3d
+      - name: Assemble the site (tui-web at /, world3d at /world3d/)
+        run: |
+          rm -rf _site
+          mkdir -p _site
+          cp -R packages/tui-web/dist/. _site/
+          mkdir -p _site/world3d
+          cp -R packages/world3d/dist/. _site/world3d/
       - uses: actions/upload-pages-artifact@v4
         with:
-          path: packages/tui-web/dist
+          path: _site
 
   deploy:
     needs: build
