@@ -57,6 +57,7 @@ import { LoadingScreen } from "./ui/loading";
 import { Overlay } from "./ui/overlay";
 import type { Insets } from "./ui/viewport";
 import { AssetCache, drawCalls, SceneSpace, setOutlineScale } from "./world";
+import { SeeThroughControl } from "./seethrough";
 import { GuideMarker } from "./marker";
 import { daySteps, edgeArrow, findPath, LostTimer, nextSteps, resolveTarget, type PathGrid, type WayTarget } from "./wayfind";
 import { EdgeArrowView, PathTrail, spaceGrid } from "./wayview";
@@ -406,6 +407,9 @@ async function main() {
   const figureMotion = (f: Figure) => space.figures.get(f.id)?.motion;
   /** the fly-over while it plays (a new game), with its letterbox */
   let flyover: { path: CameraPathPlayer; bars: Letterbox } | null = null;
+  /** the see-through (seethrough.ts): the player and whoever they talk to, never hidden */
+  const see = new SeeThroughControl();
+  const seeFocus: (THREE.Vector3 | null | undefined)[] = [null, null];
   /** the fly-over's state for browser checks: playing, done (played out or skipped), null (never played: a loaded save) */
   let flyoverState: "playing" | "done" | null = null;
 
@@ -1099,7 +1103,10 @@ async function main() {
       player.update(dt, still);
       space.update(dt, player.position, null);
       if (done) endFlyover();
-      else return renderer.render(space.scene, rig.camera);
+      else {
+        see.update(dt, rig.camera, [], space.canopies, false); // no hole on the fly-over
+        return renderer.render(space.scene, rig.camera);
+      }
     }
     // A place change into another space: fade, swap, fade back.
     if (arriving && !transitioning) {
@@ -1158,6 +1165,10 @@ async function main() {
     }
     rig.update(dt, focus, !!sceneNpc);
     updateEdge();
+    // See-through: a hole round the player, and round the NPC in a scene (or the figure barking).
+    seeFocus[0] = player.position;
+    seeFocus[1] = sceneNpc ? space.npcs.get(sceneNpc)?.actor.root.position : barking ? figureActor(barking.fig)?.root.position : null;
+    see.update(dt, rig.camera, seeFocus, space.canopies);
 
     // Speech bubble on the speaker's head: a scene started from the topic picker (or any NPC the
     // current space doesn't have, e.g. mid space-swap) can leave the actor lookup empty for a frame
@@ -1271,6 +1282,16 @@ async function main() {
       }),
       /** the start flow is on screen */
       starting: () => startOpen,
+      /**
+       * The see-through: seeThrough("off") / ("on") switches it (screenshot comparisons), `radius`
+       * (m at the focus depth) sets the hole's size; returns its state (radius, feather, margin,
+       * the focus depths, the canopies faded now).
+       */
+      seeThrough: (cmd?: "on" | "off" | boolean, radius?: number) => {
+        if (cmd !== undefined) see.on = cmd === true || cmd === "on";
+        if (typeof radius === "number" && radius >= 0) see.radius = radius;
+        return see.status(space.canopies);
+      },
     },
   });
 }

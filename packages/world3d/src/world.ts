@@ -9,6 +9,7 @@ import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js
 import { CharacterActor, type ActorOptions } from "./actor";
 import { turnToward } from "./anim";
 import { HORIZON, moveClouds, skirtGeometry } from "./horizon";
+import { CANOPIES, markSeeThrough, patchSeeThrough, seeAttribute, SEE_ATTR, SEE_FRAG, SEE_FRAG_PARS, SEE_HOLE, SEE_NEVER, SEE_VERT, SEE_VERT_PARS, SEE_THROUGH, seeSpecFor, seeUniforms, type Canopy, type SeeSpec } from "./seethrough";
 import { figureId } from "./barks";
 import { CHARACTER_KINDS, type LoadEvent } from "./loading";
 import { anchorToWorld, heldProp, yawFor, type Blocker, type Box2, type HeldPropSpec, type LayoutIndex, type Placement, type SpaceLayout, type Vec3 } from "./layout";
@@ -42,28 +43,46 @@ function gradientMap(): THREE.DataTexture {
  * skeleton; the shader pushes out in bind space, then skins (three sets USE_SKINNING for it).
  */
 const OUTLINE_THICKNESS = 0.022; // m
-const outlineMaterial = new THREE.ShaderMaterial({
-  uniforms: { thickness: { value: OUTLINE_THICKNESS }, color: { value: new THREE.Color("#2A2320") } },
-  vertexShader: /* glsl */ `
+const outlineUniforms = { thickness: { value: OUTLINE_THICKNESS }, color: { value: new THREE.Color("#2A2320") } };
+/** The hull shader; `see`: with the see-through cut (seethrough.ts), so the hole takes the outline with it. */
+function outline(see: boolean): THREE.ShaderMaterial {
+  const m = new THREE.ShaderMaterial({
+    uniforms: see ? { ...outlineUniforms, ...seeUniforms } : { ...outlineUniforms },
+    vertexShader: /* glsl */ `
     uniform float thickness;
     attribute vec3 hullNormal;
     #include <common>
     #include <skinning_pars_vertex>
+    ${see ? SEE_VERT_PARS : ""}
     void main() {
       vec3 transformed = position + normalize(hullNormal) * thickness;
       #include <skinbase_vertex>
       #include <skinning_vertex>
-      gl_Position = projectionMatrix * modelViewMatrix * vec4(transformed, 1.0);
+      vec4 mvPosition = modelViewMatrix * vec4(transformed, 1.0);
+      ${see ? SEE_VERT : ""}
+      gl_Position = projectionMatrix * mvPosition;
     }`,
-  fragmentShader: /* glsl */ `
+    fragmentShader: /* glsl */ `
     uniform vec3 color;
-    void main() { gl_FragColor = vec4(color, 1.0); }`,
-  side: THREE.BackSide,
-});
+    ${see ? SEE_FRAG_PARS : ""}
+    void main() {
+      ${see ? SEE_FRAG : ""}
+      gl_FragColor = vec4(color, 1.0);
+    }`,
+    side: THREE.BackSide,
+    name: see ? "outline" : "outline_character",
+  });
+  if (see) markSeeThrough(m);
+  return m;
+}
+/** the static world's hulls (cut by the see-through) */
+const outlineMaterial = outline(true);
+/** characters' hulls (never cut: they are what the hole shows) */
+const characterOutline = outline(false);
 
 /** Outline width multiplier (phones draw a thicker line, camera.ts outlineScale). */
 export function setOutlineScale(k: number) {
-  outlineMaterial.uniforms.thickness.value = OUTLINE_THICKNESS * k;
+  outlineUniforms.thickness.value = OUTLINE_THICKNESS * k;
 }
 
 function hullGeometry(src: THREE.BufferGeometry): THREE.BufferGeometry {
@@ -97,12 +116,15 @@ class Toon {
   private gradient = gradientMap();
   private materials = new Map<string, THREE.MeshToonMaterial>();
 
-  /** One toon material per source colour (palette colours: few materials, shared everywhere). */
-  material(src: THREE.Material): THREE.MeshToonMaterial {
+  /**
+   * One toon material per source colour (palette colours: few materials, shared everywhere); the
+   * world's are patched for the see-through (seethrough.ts), `character`'s kept apart and never.
+   */
+  material(src: THREE.Material, character = false): THREE.MeshToonMaterial {
     const m = src as THREE.MeshStandardMaterial;
     const color = m.color ?? new THREE.Color(1, 1, 1);
     const emissive = m.emissive ?? new THREE.Color(0, 0, 0);
-    const key = `${color.getHexString()}|${emissive.getHexString()}|${m.opacity}|${m.side}|${m.vertexColors ? "vc" : ""}`;
+    const key = `${color.getHexString()}|${emissive.getHexString()}|${m.opacity}|${m.side}|${m.vertexColors ? "vc" : ""}${character ? "|character" : ""}`;
     let toon = this.materials.get(key);
     if (!toon) {
       toon = new THREE.MeshToonMaterial({
@@ -115,6 +137,7 @@ class Toon {
         side: m.side,
         name: m.name,
       });
+      if (!character) patchSeeThrough(toon);
       this.materials.set(key, toon);
     }
     return toon;
@@ -123,28 +146,29 @@ class Toon {
   flat(hex: string): THREE.MeshToonMaterial {
     let toon = this.materials.get(hex);
     if (!toon) {
-      toon = new THREE.MeshToonMaterial({ color: new THREE.Color(hex), gradientMap: this.gradient });
+      toon = patchSeeThrough(new THREE.MeshToonMaterial({ color: new THREE.Color(hex), gradientMap: this.gradient }));
       this.materials.set(hex, toon);
     }
     return toon;
   }
 
-  /** Toon materials on every mesh of a template, plus outline hulls unless `outline` is false. */
-  apply(root: THREE.Object3D, outline: boolean) {
+  /** Toon materials on every mesh of a template, plus outline hulls unless `outline` is false; `character`: never cut by the see-through. */
+  apply(root: THREE.Object3D, outline: boolean, character = false) {
     const meshes: THREE.Mesh[] = [];
     root.traverse((o) => {
       if ((o as THREE.Mesh).isMesh) meshes.push(o as THREE.Mesh);
     });
     for (const mesh of meshes) {
-      mesh.material = Array.isArray(mesh.material) ? mesh.material.map((m) => this.material(m)) : this.material(mesh.material);
+      mesh.material = Array.isArray(mesh.material) ? mesh.material.map((m) => this.material(m, character)) : this.material(mesh.material, character);
+      const hullMaterial = character ? characterOutline : outlineMaterial;
       if (!outline) continue;
       const skinned = mesh as THREE.SkinnedMesh;
       let hull: THREE.Mesh;
       if (skinned.isSkinnedMesh) {
-        const h = new THREE.SkinnedMesh(hullGeometry(mesh.geometry), outlineMaterial);
+        const h = new THREE.SkinnedMesh(hullGeometry(mesh.geometry), hullMaterial);
         h.bind(skinned.skeleton, skinned.bindMatrix);
         hull = h;
-      } else hull = new THREE.Mesh(hullGeometry(mesh.geometry), outlineMaterial);
+      } else hull = new THREE.Mesh(hullGeometry(mesh.geometry), hullMaterial);
       hull.name = `${mesh.name}_outline`;
       hull.userData.outline = true;
       hull.raycast = () => {}; // never picked
@@ -286,7 +310,7 @@ export class AssetCache {
           root.animations = gltf.animations; // kept through clone(): the actor's clips
           // Characters and what they hold move, so they can't be batched: one mesh each instead.
           if (entry.set === "characters") mergePrimitives(root);
-          this.toon.apply(root, !NO_OUTLINE_SETS.has(entry.set) && !isFlat(name));
+          this.toon.apply(root, !NO_OUTLINE_SETS.has(entry.set) && !isFlat(name), entry.set === "characters");
           this.loaded.add(name);
           this.onLoad?.({ type: "done", name });
           return root;
@@ -369,25 +393,45 @@ function worldGeometry(mesh: THREE.Mesh): THREE.BufferGeometry {
  * anything they hold) into one mesh per batch key, added to `scene`; the source meshes go. The
  * roots themselves stay (empty, named: scene lookups by name still work). Returns the number of
  * meshes merged away. Frustum culling then works per batch, not per prop: fine for one street.
+ * Every static mesh (batched or not) gets the see-through tag (seethrough.ts `seeThru`) from its
+ * root's `userData.see` (a SeeSpec; none: cut by the hole) and `userData.seeAsset` (canopies):
+ * baked per vertex, so one batch holds ground, props and canopy clusters in one draw.
  */
 export function mergeStatic(scene: THREE.Object3D, roots: THREE.Object3D[]): number {
   scene.updateMatrixWorld(true);
   const batches = new Map<string, THREE.Mesh[]>();
+  const rootOf = new Map<THREE.Mesh, THREE.Object3D>();
+  const loose: THREE.Mesh[] = [];
   for (const root of roots)
     root.traverse((o) => {
       const mesh = o as THREE.Mesh;
       if (!mesh.isMesh) return;
+      rootOf.set(mesh, root);
       const key = batchKey(mesh);
-      if (!key) return;
+      if (!key) return void loose.push(mesh);
       const list = batches.get(key) ?? [];
       list.push(mesh);
       batches.set(key, list);
     });
+  const tag = (geo: THREE.BufferGeometry, mesh: THREE.Mesh, world: boolean) => {
+    const root = rootOf.get(mesh)!;
+    geo.setAttribute(SEE_ATTR, seeAttribute(geo, mesh, root.userData.see as SeeSpec | undefined, root.userData.seeAsset as string | undefined, world));
+    return geo;
+  };
   const gone = new Set<THREE.Object3D>();
   for (const meshes of batches.values()) {
-    if (meshes.length < 2) continue;
-    const merged = mergeGeometries(meshes.map(worldGeometry), false);
-    if (!merged) continue;
+    if (meshes.length < 2) {
+      loose.push(...meshes);
+      continue;
+    }
+    const merged = mergeGeometries(
+      meshes.map((m) => tag(worldGeometry(m), m, true)),
+      false,
+    );
+    if (!merged) {
+      loose.push(...meshes);
+      continue;
+    }
     merged.computeBoundingSphere();
     const src = meshes[0];
     const batch = new THREE.Mesh(merged, src.material);
@@ -401,6 +445,8 @@ export function mergeStatic(scene: THREE.Object3D, roots: THREE.Object3D[]): num
     scene.add(batch);
     for (const m of meshes) gone.add(m);
   }
+  // not batched: its own copy of the geometry (templates share theirs), tagged in place
+  for (const m of loose) if (!m.geometry.hasAttribute(SEE_ATTR)) m.geometry = tag(m.geometry.clone(), m, false);
   for (const m of gone) {
     // A merged mesh's children that weren't merged (an unbatchable hull) keep their place in the world.
     for (const c of [...m.children]) if (!gone.has(c)) m.parent?.attach(c);
@@ -535,6 +581,8 @@ export class SceneSpace {
   /** the town's sky dome materials and their own colours (tinted through the day), and the haze colour it starts from */
   private sky: { mat: THREE.MeshBasicMaterial; base: THREE.Color }[] = [];
   private horizon?: THREE.Color;
+  /** the canopies here (seethrough.ts): each one's fade cluster and footprint */
+  readonly canopies: Canopy[] = [];
   /** static batching (mergeStatic): draw calls before / after, meshes merged away */
   batching = { before: 0, after: 0, merged: 0 };
 
@@ -603,6 +651,7 @@ export class SceneSpace {
         const o = await this.assets.instance(name);
         o.name = name;
         if (name === "clouds") this.placeClouds(o);
+        o.userData.see = seeSpecFor(L.asset(name).set, name);
         scene.add(o);
         statics.push(o);
       }
@@ -613,6 +662,7 @@ export class SceneSpace {
       const floor = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), this.assets.toon.flat("#C8C1B2"));
       floor.rotation.x = -Math.PI / 2;
       floor.position.y = -0.01;
+      floor.userData.see = { tag: SEE_NEVER } satisfies SeeSpec;
       scene.add(floor);
       statics.push(floor);
     }
@@ -621,6 +671,8 @@ export class SceneSpace {
       const box = new THREE.Mesh(new THREE.BoxGeometry(size[0], size[1], size[2]), this.assets.toon.flat(g.colour));
       box.position.set((g.min[0] + g.max[0]) / 2, (g.min[1] + g.max[1]) / 2, (g.min[2] + g.max[2]) / 2);
       box.name = g.name;
+      // interiors' boxes are floors and walls too: cut by the hole (the floor underfoot never is: below the lift)
+      box.userData.see = { tag: SEE_HOLE } satisfies SeeSpec;
       scene.add(box);
       statics.push(box);
     }
@@ -628,6 +680,7 @@ export class SceneSpace {
     for (const t of layout.tiles) {
       const o = await this.assets.instance(t.asset);
       this.place(o, t);
+      o.userData.see = seeSpecFor(L.asset(t.asset).set, t.asset);
       scene.add(o);
       statics.push(o);
     }
@@ -635,6 +688,7 @@ export class SceneSpace {
       const o = await this.assets.instance(b.asset);
       this.place(o, b);
       o.name = b.id;
+      o.userData.see = this.seeSpec(o, b.id, b.asset);
       scene.add(o);
       statics.push(o);
       const blocker = b.block === "footprint" ? this.buildingBlocker(b, await this.assets.template(b.asset)) : b.block === "size" ? L.sizeBlocker(b) : null;
@@ -647,6 +701,7 @@ export class SceneSpace {
       if (e.set === "characters" && CHARACTER_KINDS.has(e.kind ?? "")) continue;
       const o = await this.assets.instance(d.asset);
       this.place(o, d);
+      o.userData.see = this.seeSpec(o, d.asset, d.asset);
       scene.add(o);
       statics.push(o);
     }
@@ -662,6 +717,27 @@ export class SceneSpace {
     this.batching.merged = mergeStatic(scene, statics);
     this.batching.after = drawCalls(scene);
     this.staticCalls = { before: this.batching.before, after: this.batching.after };
+  }
+
+  /**
+   * A static instance's see-through tag (seethrough.ts): ground never cut, the rest by the hole;
+   * a canopy asset (CANOPIES) also gets the next fade cluster and its footprint (its canopy parts' XZ box).
+   */
+  private seeSpec(o: THREE.Object3D, id: string, asset: string): SeeSpec {
+    const spec = seeSpecFor(this.L.asset(asset).set, asset);
+    const canopy = CANOPIES[asset];
+    if (!canopy || spec.tag !== SEE_HOLE || this.canopies.length >= SEE_THROUGH.maxClusters) return spec;
+    o.updateMatrixWorld(true);
+    const box = new THREE.Box3();
+    o.traverse((m) => {
+      const mesh = m as THREE.Mesh;
+      if (mesh.isMesh && !mesh.userData.outline && !Array.isArray(mesh.material) && canopy.parts.test(mesh.material.name)) box.expandByObject(mesh);
+    });
+    if (box.isEmpty()) return spec;
+    const cluster = this.canopies.length;
+    this.canopies.push({ id, asset, cluster, min: [box.min.x, box.min.z], max: [box.max.x, box.max.z] });
+    o.userData.seeAsset = asset;
+    return { tag: SEE_HOLE, cluster, baseY: o.position.y };
   }
 
   /** draw calls of the static part before / after batching (populate adds the characters' to both) */
@@ -755,6 +831,7 @@ export class SceneSpace {
     // the skirt in the apron's own far-grass colour (the same palette key: one toon material, one batch)
     const skirt = new THREE.Mesh(skirtGeometry(), this.assets.toon.material(new THREE.MeshStandardMaterial({ color: HORIZON.skirt.colour })));
     skirt.name = "horizon_skirt";
+    skirt.userData.see = { tag: SEE_NEVER } satisfies SeeSpec;
     this.scene.add(skirt);
     statics.push(skirt);
     for (const c of HORIZON.caps) {
@@ -764,6 +841,7 @@ export class SceneSpace {
       cap.position.set((c.from[0] + c.to[0]) / 2, (c.from[1] + c.to[1]) / 2, (c.from[2] + c.to[2]) / 2);
       cap.lookAt(cap.position.x + c.facing[0], cap.position.y + c.facing[1], cap.position.z + c.facing[2]);
       cap.name = c.name;
+      cap.userData.see = { tag: SEE_NEVER } satisfies SeeSpec;
       this.scene.add(cap);
       statics.push(cap);
     }
@@ -771,6 +849,7 @@ export class SceneSpace {
     if (town.landscape.includes(echo.asset)) {
       const o = await this.assets.instance(echo.asset);
       o.name = `${echo.asset}_echo`;
+      o.userData.see = { tag: SEE_NEVER } satisfies SeeSpec;
       o.rotation.y = echo.rotYDeg * DEG;
       o.scale.setScalar(echo.scale);
       this.scene.add(o);
