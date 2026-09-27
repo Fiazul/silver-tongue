@@ -1,4 +1,4 @@
-// Reply panel: 2-4 options in pick mode, each with a ▶ that says it (without picking it). Word help mode ("?")
+// Reply panel: a bark's one "…" (continue mode); 2-4 options in pick mode, each with a ▶ that says it (without picking it). Word help mode ("?")
 // turns taps on words into look-ups instead of picks, like the TUI's [w]. Tiles mode: tap the
 // tiles in order (the TUI's tile numbers), Undo (backspace), Say it (enter), or give up. Each option's
 // native meaning is hidden under a hint chip (start/hint-chip.ts); tiles play tile_place / tile_undo.
@@ -71,6 +71,13 @@ export class RepliesView {
       );
       return;
     }
+    if (r.mode === "continue") {
+      // A bark: one reply, "…", that closes it (as does a tap anywhere, E, Enter, Space or 1).
+      const go = el("button", { className: "option continue", textContent: r.label, title: this.s("bark-continue") });
+      go.addEventListener("click", () => this.hooks.onPick(0));
+      this.node.replaceChildren(go);
+      return;
+    }
     const help = el("button", { className: `icon help${this.helpMode ? " on" : ""}`, title: this.s("word-help"), textContent: "?" });
     help.addEventListener("click", () => {
       this.helpMode = !this.helpMode;
@@ -141,6 +148,11 @@ export class RepliesView {
       if (Number.isInteger(n) && n >= 0 && n < r.tiles.length) this.addTile(n);
       else if (k === "Backspace") this.undoTile();
       else if (k === "Enter") this.sayTiles();
+      else return false;
+      return true;
+    }
+    if (r?.mode === "continue") {
+      if (k === "1" || k === "Enter" || k === " " || k.toLowerCase() === "e" || k === "Escape") this.hooks.onPick(0);
       else return false;
       return true;
     }

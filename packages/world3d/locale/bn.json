@@ -124,6 +124,23 @@
     "way-lost": "আপনার পরের ধাপ: {text}",
     "way-bed": "আপনার বিছানা",
     "path-menu-on": "পথ দেখান: চালু",
-    "path-menu-off": "পথ দেখান: বন্ধ"
+    "path-menu-off": "পথ দেখান: বন্ধ",
+    "bark-continue": "আচ্ছা",
+    "bark-hint": "এখানে সবাই আপনার সঙ্গে কথা বলবে। হিন্ট চিপে দেখা যাবে তারা {native} ভাষায় কী বলল।",
+    "role-passerby": "পথচারী",
+    "role-egg_seller": "ডিমওয়ালা",
+    "role-stroller": "পথিক",
+    "role-shopper": "ক্রেতা",
+    "role-worker": "অফিসকর্মী",
+    "role-kid": "বাচ্চা",
+    "role-granny": "দাদি",
+    "role-tourist": "পর্যটক",
+    "role-courier": "কুরিয়ার",
+    "role-boatman": "মাঝি",
+    "role-diner": "খদ্দের",
+    "role-tea_guest": "চা-প্রেমী",
+    "role-cat": "বিড়াল",
+    "role-dog": "কুকুর",
+    "role-pigeon": "পায়রা"
   }
 }

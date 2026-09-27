@@ -1,7 +1,8 @@
 // The 3D game's own settings, apart from the shared `silver-tongue:settings` (course + reading
 // language, which tui-web also reads and rewrites whole): sound on / off for music, ambience and
 // effects (word clips follow core's setSound as well), the music volume, whether the first-steps
-// guide (and wayfinding's "lost?" reminder) is hidden, and whether the ground path hint is off. Unreadable or blocked storage: the defaults.
+// guide (and wayfinding's "lost?" reminder) is hidden (and whether its note after the first bark
+// was shown), and whether the ground path hint is off. Unreadable or blocked storage: the defaults.
 import type { KeyValue } from "@silver-tongue/tui-web/src/web-storage";
 
 export const PREFS_KEY = "silver-tongue:world3d:prefs";
@@ -13,6 +14,8 @@ export interface Prefs {
   guideHidden: boolean;
   /** Menu → Show path: off (wayfinding's ground path hint; on by default) */
   pathHidden: boolean;
+  /** the guide's one-off note after the first bark (src/barks.ts) has been shown */
+  barkHint?: boolean;
 }
 
 export const DEFAULT_PREFS: Prefs = { sound: true, music: 0.8, guideHidden: false, pathHidden: false };
@@ -26,6 +29,7 @@ export function loadPrefs(kv: KeyValue): Prefs {
       music: typeof d.music === "number" && d.music >= 0 && d.music <= 1 ? d.music : DEFAULT_PREFS.music,
       guideHidden: typeof d.guideHidden === "boolean" ? d.guideHidden : DEFAULT_PREFS.guideHidden,
       pathHidden: typeof d.pathHidden === "boolean" ? d.pathHidden : DEFAULT_PREFS.pathHidden,
+      ...(d.barkHint === true ? { barkHint: true } : {}),
     };
   } catch {
     return { ...DEFAULT_PREFS };

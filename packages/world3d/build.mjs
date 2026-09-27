@@ -16,6 +16,8 @@
 // into dist/courses/<course>/audio/ and loads them from there. Clips missing: the game plays silently
 // and the HUD says "no audio".
 //
+// Barks (barks/audio/<language>/, scripts/bark-audio.mjs) go to assets/audio/barks/<language>/.
+//
 // Music, ambience, effects (assets/audio/, make-it-in-china tools/audio) and the title backdrop
 // (assets/ui/) are copied as files with a manifest listing what ships: both .ogg and .m4a (the
 // page picks by canPlayType), except that a one-off build whose total would pass the 15 MB
@@ -85,6 +87,18 @@ function copySounds(oggOnlyMusic) {
   }
   writeFileSync(join(dist, "assets", "audio", "manifest.json"), JSON.stringify(shipped));
   return bytes;
+}
+
+/**
+ * Copies the barks' clips (barks/audio/<language>/, scripts/bark-audio.mjs: .ogg + .m4a, the page
+ * picks by canPlayType) into dist/assets/audio/barks/<language>/; returns the bytes copied.
+ */
+function copyBarks() {
+  const src = join(here, "barks", "audio");
+  if (!existsSync(src)) return 0;
+  const out = join(dist, "assets", "audio", "barks");
+  cpSync(src, out, { recursive: true });
+  return size(out);
 }
 
 /** Bytes the music's .m4a files would add. */
@@ -208,12 +222,12 @@ writeHtml();
 const catalog = copyCourses();
 const clips = copyAudio(catalog);
 // Everything but main.js is in place: would both formats of the music pass the budget?
-let sounds = copySounds(false);
+let sounds = copySounds(false) + copyBarks();
 const MUSIC_OGG_ONLY = !bundleAudio && size(dist) + 1.2 * 1024 * 1024 > BUDGET; // + main.js
 if (MUSIC_OGG_ONLY) {
   rmSync(join(dist, "assets", "audio"), { recursive: true, force: true });
   rmSync(join(dist, "assets", "ui"), { recursive: true, force: true });
-  sounds = copySounds(true);
+  sounds = copySounds(true) + copyBarks();
 }
 rmSync(join(dist, "chunks"), { recursive: true, force: true });
 const ctx = await context({
@@ -245,6 +259,6 @@ if (dev) {
   const kb = (n) => `${Math.round(n / 1024)} KB`;
   const chunks = existsSync(join(dist, "chunks")) ? readdirSync(join(dist, "chunks")).map((f) => `${f} ${kb(statSync(join(dist, "chunks", f)).size)}`) : [];
   console.log(
-    `built packages/world3d/dist: sound + title ${kb(sounds)}${MUSIC_OGG_ONLY ? ` (music .ogg only: over the 15 MB budget with both, -${kb(musicM4aBytes())})` : " (.ogg + .m4a)"}, courses/ ${catalog.map((e) => `${e.id} (${e.learners.join(", ")})`).join(", ")}, audio ${clips ? `${clips[0]} clips in courses/<course>/audio/ (${kb(clips[1])}${clips[2] ? `, ${clips[2]} missing` : ""})` : `loaded from ${audioRoot}courses/<course>/audio/`}, index.html ${kb(statSync(join(dist, "index.html")).size)}, main.js ${kb(statSync(join(dist, "main.js")).size)} + chunks/ ${chunks.join(", ") || "none"}, assets/ ${kb(size(join(dist, "assets")))} (${glbs} GLBs); total ${kb(size(dist))}`,
+    `built packages/world3d/dist: sound + title + barks ${kb(sounds)}${MUSIC_OGG_ONLY ? ` (music .ogg only: over the 15 MB budget with both, -${kb(musicM4aBytes())})` : " (.ogg + .m4a)"}, courses/ ${catalog.map((e) => `${e.id} (${e.learners.join(", ")})`).join(", ")}, audio ${clips ? `${clips[0]} clips in courses/<course>/audio/ (${kb(clips[1])}${clips[2] ? `, ${clips[2]} missing` : ""})` : `loaded from ${audioRoot}courses/<course>/audio/`}, index.html ${kb(statSync(join(dist, "index.html")).size)}, main.js ${kb(statSync(join(dist, "main.js")).size)} + chunks/ ${chunks.join(", ") || "none"}, assets/ ${kb(size(join(dist, "assets")))} (${glbs} GLBs); total ${kb(size(dist))}`,
   );
 }

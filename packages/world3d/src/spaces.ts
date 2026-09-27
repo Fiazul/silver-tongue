@@ -128,13 +128,14 @@ export class SpaceNav {
   }
 }
 
-export type PromptKind = "talk" | "enter" | "exit" | "sleep" | "notebook";
+/** `bark`: someone outside the course (a walker, a pet, a stall keeper; src/barks.ts), `at` their live position (main.ts). */
+export type PromptKind = "talk" | "bark" | "enter" | "exit" | "sleep" | "notebook";
 
 export interface PromptTarget {
-  /** stable id: `talk:wang`, `enter:noodle_shop`, `exit:street`, `sleep:0` */
+  /** stable id: `talk:wang`, `bark:walker:0`, `enter:noodle_shop`, `exit:street`, `sleep:0` */
   id: string;
   kind: PromptKind;
-  /** npc for talk, place for enter / exit */
+  /** npc for talk, the figure id for bark, place for enter / exit */
   ref: string;
   /** where the hint floats (world, this space) */
   at: Vec3;

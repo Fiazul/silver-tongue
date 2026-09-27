@@ -204,6 +204,7 @@
         },
         {
           "asset": "customer_a_blue",
+          "role": "diner",
           "pos": [
             1.2,
             0.06,
@@ -294,6 +295,7 @@
       "dressing": [
         {
           "asset": "customer_a_green",
+          "role": "tea_guest",
           "pos": [
             1.2,
             0.06,

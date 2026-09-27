@@ -124,6 +124,23 @@
     "way-lost": "你的下一步：{text}",
     "way-bed": "你的床",
     "path-menu-on": "显示路线：开",
-    "path-menu-off": "显示路线：关"
+    "path-menu-off": "显示路线：关",
+    "bark-continue": "好的",
+    "bark-hint": "这里的每个人都会跟你说话。提示卡会用{native}告诉你他们说了什么。",
+    "role-passerby": "路人",
+    "role-egg_seller": "卖鸡蛋的",
+    "role-stroller": "散步的人",
+    "role-shopper": "买菜的人",
+    "role-worker": "上班族",
+    "role-kid": "小孩",
+    "role-granny": "奶奶",
+    "role-tourist": "游客",
+    "role-courier": "快递员",
+    "role-boatman": "船夫",
+    "role-diner": "食客",
+    "role-tea_guest": "喝茶的人",
+    "role-cat": "猫",
+    "role-dog": "狗",
+    "role-pigeon": "鸽子"
   }
 }

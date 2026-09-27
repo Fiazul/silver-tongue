@@ -741,6 +741,7 @@ export class Overlay {
     }
     if (e.key === "Escape") {
       this.gloss.classList.add("hidden");
+      if (m.bark) this.game.endBark();
       return true;
     }
     // The TUI's sound keys: M sound on / off, R says the bubble again.

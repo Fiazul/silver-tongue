@@ -160,6 +160,8 @@ courses/<id>/<learner>.json (courses.ts) ─► core ◄─ inputs ── game.t
   flow's strings; `game`: the chrome in bn / zh over `strings.ts`'s English), `native-names.json`,
   `intro-zh.json` (design/start/intro.json), `index.ts` (`UI_LOCALES`, `COMING_SOON`, `INTROS`).
 - `src/guide.ts`: the first-steps guide (see First-steps guide); `src/marker.ts` its 3D marker.
+- `src/barks.ts` + `barks/` (outside `src/`, as `locale/`): what everyone outside the course says
+  (see Barks): `barks/<language>.json` (roles and lines), `barks/index.ts` (`BARKS`), `barks/audio/`.
 - `src/prefs.ts`: the 3D game's own settings (`silver-tongue:world3d:prefs`: sound, music
   volume, guide hidden), apart from the shared key tui-web rewrites whole.
 - `src/game.ts`: the only module that talks to core. No DOM, no three.js, so it runs under vitest.
@@ -402,6 +404,7 @@ case).
 | lines said as they come (line clips; reactions in each NPC's voice, `reactionAudio`; the player's reply, picked or right tiles) | the same, through `src/audio.ts` (one element, clips in order with a 300 ms beat, slow repeats at 0.8) | none |
 | [r] say the last line again (slowly after a slow repeat) | ▶ on the bubble, or R | none |
 | [s] whole sentence says the line; [p] play the word / sentence looked up | "…" says the sentence; ▶ in the gloss popover; ▶ on each reply option says it without picking | none |
+| Barks (none in the TUI: only the story NPCs talk there) | everyone else in the town and the interiors (walkers, pets, pigeons, the egg seller, the boatman, the diner, the tea drinker) and a story NPC with nothing to talk about: "E · Talk to Egg seller" / tap the prompt within 2.3 m; a line in the course's language with its reading, the meaning under the hint chip, its clip; "…" (or a tap anywhere, E, Enter) closes it (see Barks) | none (no slot, nothing logged) |
 
 Every `GameEvent` is handled in `game.ts` `dispatch`: placeEntered (banner), sceneStarted,
 lineSpoken / npcReacted / lineRephrased (bubble), replyOptions (panel), actionPerformed (narration,
@@ -493,7 +496,9 @@ wooden one, a lake with a pier to the west, hills, and mountains 360-400 m out u
   `tools/blender/sets/landscape.py` (then drop the world3d side).
 - **Street life:** seven walkers on the paths (the promenade, loop_south, the east spoke to the
   east loop, the north spoke, loop_north, the west loop over the stone bridge, the gate), a cat by
-  the noodle shop, a dog on the lake shore, three pigeons on the plaza (they scatter).
+  the noodle shop, a dog on the lake shore, three pigeons on the plaza (they scatter), the egg
+  seller at their stall on the south bank and a boatman by the pier. Every one of them talks (see
+  Barks).
 
 ## Seeing it (street life, interiors, the day)
 
@@ -670,6 +675,46 @@ steps point at the same target and hand over to it. No core inputs or state. `sr
 - Draw calls: marker 2 + path 1 = 3 while shown (`window.world3d.info().calls`); the guide's
   marker alone drew 6 before.
 
+## Barks
+
+Everyone the player can walk up to says something in the course's language. `barks/<language>.json`
+(keyed by `course.language.code`; `zh` now) lists roles, each 1-3 lines `{ text, reading, gloss: {
+en, bn }, clip }`; `src/barks.ts` maps figures to roles and picks a line (at random, never the one
+that role said last).
+
+- **Who:** every walker and every dressing character (people standing about, pets, pigeons) in the
+  town and the interiors (`spaceFigures`, in the order `world.ts` builds them). The role is the
+  entry's `role` (`scripts/port-town.mjs` WALKERS / STANDING, `src/layout.json` interior dressing),
+  else its asset (cat, dog, pigeon), else `passerby` (你好 / 不好意思，我有点忙。). A story NPC with no
+  scene for you (and none waiting for money) says its own lines (role = its npc id) instead of the
+  "nothing to talk about" toast.
+- **The town's figures:** walkers stroller, shopper, worker, kid, granny, tourist, courier; the cat
+  by the noodle shop, the dog on the lake shore, three pigeons; the egg seller's stall on the south
+  bank (a folding table with egg trays at (-4, 28.3), the seller behind it at (-4, 27.55); 今天没有鸡蛋。)
+  and a boatman on the lake shore by the pier (-33.8, 3.1): both added by the port (`STANDING`), not
+  blocked. Inside: a diner in the noodle shop, a tea drinker in the tea house, the neighbour's dog
+  on the stairs. The fruit stall already has its keeper (Miss Gao).
+- **Talking:** the same prompt as the story NPCs ("E · Talk to Egg seller", within 2.3 m, the name
+  from `role-<role>` in `strings.ts` / `locale/`), over the figure's head where it is now. The figure
+  stops and turns to the player (a walker leaves its path, `WalkerMotion.held`, and walks on after;
+  a pigeon doesn't scatter; an extra turns and turns back), plays `talk`; the player turns to it.
+  The bubble shows the line with its words tappable (the course's words in it, looked up without
+  logging help), its reading (pinyin) under it, the meaning in the UI language under the hint chip;
+  "…" (the reply panel's one button), a tap anywhere, E / Enter / Space / 1 / Esc, walking 1.5 m past
+  talk range, a door or the Go to list close it. No core input: no slot, no notebook entry.
+- **Audio:** `npm run bark-audio -w @silver-tongue/world3d` (`scripts/bark-audio.mjs`) makes one clip
+  per line with edge-tts, the course audio's voices (a role's `voice`, else the story NPC's in
+  `content/languages/<language>/voices.json`, else the file's) and trim (tools/src/audio.ts), as
+  `barks/audio/<language>/<sha1(voice|text)[:16]>.ogg` + `.m4a`, writes each line's `clip`, and
+  drops unused files; offline, a line keeps no clip and is said silently. The build copies them to
+  `assets/audio/barks/<language>/`; they play on their own `AudioPlayer` (`createAudioPlayer`'s
+  `ext`, by `pickFormat`), clip ids prefixed `bark:` in the bubble so game.ts routes them there,
+  following core's sound setting.
+- **Guide:** the first bark while the guide is on adds a one-off note, "Everyone here will talk to
+  you. The hint chip shows what they said in English." (`bark-hint`; remembered in prefs).
+- Console: `world3d.figures()` (id, role, where, talking, held), `world3d.bark(id)`,
+  `world3d.barkShown()`.
+
 ## Tests (DOM-free, `npm test`)
 
 - `test/game.test.ts`: the game model against the real course; layout checks (every NPC in its
@@ -727,6 +772,14 @@ steps point at the same target and hand over to it. No core inputs or state. `sr
   by click, a pointer / touch press that lifts on the row, or Enter / Space; the row itself does.
 - `test/loading.test.ts`: the load plan (every asset once, the first frame's set, NPCs by distance,
   nearest door first) and the progress reducer (bytes, count fallback, server length).
+- `test/barks.test.ts`: the picker (every line comes up, never the same twice in a row, even with a
+  constant rng; an unknown role says passerby's), every figure in the merged town and every interior
+  mapped to a role of its own (none falls back) and counted as world.ts builds them, every story NPC
+  with lines, role names in en / bn / zh, 1-3 lines per role with a reading and a meaning in every
+  native language (the UI languages but the course's), clips on disk, the course's words as tokens;
+  a bark in the game (bubble, reading, meaning, clip on the bark player, "…" closes, core unchanged,
+  meaning in bn, the one-off hint, sound off, a story NPC with nothing to say, the Go to list and
+  core inputs ending it); a held walker / pigeon.
 - `test/anim.test.ts`: the animation state machine and `CharacterActor`.
 - `test/input.test.ts`: joystick maths (vector from the touch offset, dead zone, clamp at the
   rim), tap vs drag, keys and joystick feeding one vector, the phone outline width.
@@ -758,6 +811,9 @@ steps point at the same target and hand over to it. No core inputs or state. `sr
   railings don't block (the grid's edge keeps you off the canal). The pavilion's raised floor and
   the canal steps down to the water aren't walked on. Walkers don't avoid anything beyond their
   laid paths (the port keeps those clear of the blockers).
+- **Barks:** a walker, pet or extra can't be tapped on the 3D model itself (world.ts picks NPCs,
+  interactables and the ground): walk up and use the prompt (tap it, the round button, or E). The
+  egg stall's table isn't blocked (the town's blockers are town.json's own).
 - **Day card:** "change today" counts from the start of the day in this session (a game resumed
   mid-day counts from the resume).
 

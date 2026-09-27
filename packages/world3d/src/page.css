@@ -120,6 +120,8 @@ h2, h3 { font-family: var(--font-display); font-weight: 400; letter-spacing: 0.0
 .hint-chip.inline::before { inset: -10px; }
 .option:has([data-nested]:active) { transform: none; box-shadow: var(--shadow); }
 .bubble-line.slow { letter-spacing: 0.08em; }
+.bubble-reading { font-family: var(--font-body); font-size: 0.95rem; color: var(--ink); opacity: 0.75; margin-top: -0.1em; }
+.bubble-name.bark { color: var(--jade); }
 .bubble-tools { display: flex; justify-content: flex-end; gap: 6px; margin-top: 2px; }
 .tok.tappable { cursor: pointer; border-bottom: 2px dotted rgba(42, 35, 32, 0.35); }
 .tok.fresh { border-bottom: 2px solid rgba(184, 53, 42, 0.55); }
@@ -141,6 +143,7 @@ rt { font-size: 0.45em; color: var(--accent); }
 .option:hover { background: var(--jade-light); }
 .option:active { transform: translateY(3px); box-shadow: var(--lift-pressed); }
 .option-text { font-family: var(--font-hanzi); }
+.option.continue { justify-content: center; width: 100%; font-size: 1.6rem; font-family: var(--font-body); letter-spacing: 0.2em; }
 .option .key { font-size: 0.8rem; opacity: 0.55; min-width: 1em; }
 .option-text { flex: 1; }
 .tiles { display: flex; flex-wrap: wrap; gap: 6px; margin: 0.3em; }

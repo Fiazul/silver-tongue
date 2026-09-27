@@ -17,6 +17,9 @@ import { cleanName, type CatalogEntry, type Course } from "@silver-tongue/core";
 import { decodeSave, encodeSave, sessionLines } from "@silver-tongue/tui";
 import { fromLocalStorage, type KeyValue } from "@silver-tongue/tui-web/src/web-storage";
 import { COMING_SOON, NATIVE_NAMES } from "../locale";
+import { BARKS } from "../barks";
+import { turnToward } from "./anim";
+import { BarkPicker, spaceFigures, type Figure } from "./barks";
 import {
   ambientFor,
   createAudioPlayer,
@@ -65,6 +68,8 @@ import type { WebSessions } from "@silver-tongue/tui-web/src/web-storage";
  */
 declare const __AUDIO_ROOT__: string;
 const ASSETS = "./assets"; // relative: the page works under a subpath (GitHub Pages /world3d/)
+/** a bark ends when the player walks this far past talk range */
+const BARK_LEAVE_M = 1.5;
 /** a tap on the ground this close (m) to the great tree's altar rings its bell */
 const ALTAR_TAP_M = 2;
 
@@ -212,6 +217,32 @@ async function main() {
     return a;
   };
 
+  /** The barks' clips (assets/audio/barks/<language>/, .ogg or .m4a by canPlayType), one player per course language. */
+  let barkPlayer: AudioPlayer | null = null;
+  let barkLanguage = "";
+  const barkAudio = (language: string): AudioPlayer | null => {
+    if (barkLanguage === language) return barkPlayer;
+    barkPlayer?.stop();
+    barkLanguage = language;
+    const ext = pickFormat(canPlayType);
+    barkPlayer =
+      ext && BARKS[language]
+        ? createAudioPlayer(
+            {
+              base: `${ASSETS}/audio/barks/${language}/`,
+              audio: typeof Audio === "undefined" ? undefined : new Audio(),
+              wait: (ms, cb) => {
+                const h = setTimeout(cb, ms);
+                return { cancel: () => clearTimeout(h) };
+              },
+            },
+            { ext },
+          )
+        : null;
+    if (barkPlayer) unlockAudioOnGesture(barkPlayer);
+    return barkPlayer;
+  };
+
   /**
    * Mounts the start flow and resolves with its result (the intro step fetches and remembers the
    * course, courses.ts applyStart). `opts.intro` replays the six words only (Settings).
@@ -352,6 +383,27 @@ async function main() {
   let transitioning = false;
   let mixupSeq = 0;
   let prompt: PromptTarget | null = null;
+  // Barks (src/barks.ts): everyone outside the course says a line in the course's language.
+  const barkBook = (c: Course) => {
+    const book = BARKS[c.language.code];
+    return book ? new BarkPicker(book, rng) : null;
+  };
+  let barks = barkBook(course);
+  /** the figure (walker, extra, pigeon) whose bark is on screen, and the yaw an extra turns back to */
+  let barking: { fig: Figure; homeYaw: number } | null = null;
+  /** extras turning back to their own facing after a bark */
+  const turningBack: { root: THREE.Object3D; yaw: number }[] = [];
+  let figuresFor: { space: string; list: Figure[] } | null = null;
+  const barkHead = new THREE.Vector3();
+  const figures = (): Figure[] => {
+    if (!barks) return [];
+    if (figuresFor?.space !== space.id) figuresFor = { space: space.id, list: spaceFigures(L, space.id, barks.book) };
+    return figuresFor.list;
+  };
+  /** A figure's actor in the current space (world.ts builds walkers / extras / scatterers in layout order). */
+  const figureActor = (f: Figure) =>
+    f.kind === "walker" ? space.walkers[f.slot]?.actor : f.kind === "scatter" ? space.scatterers[f.slot]?.actor : space.extras[f.slot];
+  const figureMotion = (f: Figure) => (f.kind === "walker" ? space.walkers[f.slot]?.motion : f.kind === "scatter" ? space.scatterers[f.slot]?.motion : undefined);
   /** the fly-over while it plays (a new game), with its letterbox */
   let flyover: { path: CameraPathPlayer; bars: Letterbox } | null = null;
   /** the fly-over's state for browser checks: playing, done (played out or skipped), null (never played: a loaded save) */
@@ -428,6 +480,7 @@ async function main() {
     const next = spaces.get(id)!;
     // Through a door: it opens going in, and closes behind you coming out.
     if (door && next !== space && next.layout.interior !== space.layout.interior) sfx(next.layout.interior ? "door_open" : "door_close");
+    releaseBark(); // the bark itself ends next frame (updateBark: its speaker isn't in this space)
     space.scene.remove(player.root, marker, guideMarker.root, trail.mesh);
     space = next;
     space.scene.add(player.root, marker, guideMarker.root, trail.mesh);
@@ -463,6 +516,8 @@ async function main() {
     overlay.lang = uiFor(course);
     guide = new Guide(course);
     guide.hidden = prefs.guideHidden;
+    barks = barkBook(course);
+    figuresFor = null;
   }
 
   /** Sound on / off everywhere: music, ambience, effects (the mixer) and the word clips (core's setSound). */
@@ -594,7 +649,9 @@ async function main() {
       space.shrug(m.mixups.npc);
     }
     // The scene's NPC talks while their line is on screen (the player stays on idle).
-    space.setTalking(m.scene && m.bubble?.npc === m.scene.npc ? m.scene.npc : null);
+    // A story NPC with nothing to talk about barks: they talk too.
+    space.setTalking(m.scene && m.bubble?.npc === m.scene.npc ? m.scene.npc : m.bark && space.npcs.has(m.bark.id) ? m.bark.id : null);
+    if (barking && m.bark?.id !== barking.fig.id) releaseBark();
     const npc = m.scene?.npc ?? null;
     if (npc === sceneNpc) return;
     sceneNpc = npc;
@@ -613,6 +670,7 @@ async function main() {
   function boot(opts: { fresh?: boolean; id?: string; name?: string }) {
     if (!flyover) flyoverState = null;
     sceneNpc = null;
+    releaseBark();
     pendingTalk = null;
     pendingUse = null;
     arriving = null;
@@ -625,6 +683,8 @@ async function main() {
       id: opts.id,
       audio: audio ?? undefined,
       ui: uiFor(course),
+      barks: barks ?? undefined,
+      barkAudio: (barks && barkAudio(barks.book.language)) ?? undefined,
       onChange: (m) => {
         if (!ready) return;
         overlay.render(m);
@@ -718,19 +778,79 @@ async function main() {
     if (!game || game.model.mode !== "explore" || transitioning) return;
     pendingUse = null;
     if (t.kind === "talk") return requestTalk(t.ref);
+    if (t.kind === "bark") return startBark(t.ref);
     if (t.kind === "enter" || t.kind === "exit") return game.enterPlace(t.ref);
     if (t.kind === "sleep") return game.sleep();
     if (t.kind === "notebook") return overlay.openNotebook();
   }
 
   function targets(): PromptTarget[] {
-    return promptTargets(L, nav.space, !!game?.model.canSleep);
+    return [...promptTargets(L, nav.space, !!game?.model.canSleep), ...barkTargets()];
+  }
+
+  /** Everyone here who barks, where they are now (walkers walk, pigeons scatter); the prompt floats over their head. */
+  function barkTargets(): PromptTarget[] {
+    const out: PromptTarget[] = [];
+    for (const f of figures()) {
+      const a = figureActor(f);
+      if (!a) continue;
+      const p = a.root.position;
+      const top = a.headTop(barkHead).y;
+      out.push({ id: f.id, kind: "bark", ref: f.id, at: [p.x, top + 0.45, p.z], range: TALK_RANGE });
+    }
+    return out;
+  }
+
+  /**
+   * Talks to a figure outside the course: it stops (a walker leaves its path, a pigeon stays put)
+   * and turns to the player, who turns to it; its line, reading, meaning and clip (game.bark). The
+   * first bark of all brings the guide's one-off note.
+   */
+  function startBark(id: string) {
+    if (!game || !barks || game.model.scene || game.model.mode !== "explore") return;
+    const f = figures().find((x) => x.id === id);
+    const a = f && figureActor(f);
+    if (!f || !a) return;
+    releaseBark();
+    const { line } = barks.pick(f.role);
+    let hint: string | undefined;
+    if (!prefs.barkHint && !guide.hidden && guide.active(game.core.state)) {
+      hint = game.s("bark-hint", { native: languageName(uiFor(course)) });
+      prefs.barkHint = true;
+      savePrefs(kv, prefs);
+    }
+    barking = { fig: f, homeYaw: a.root.rotation.y };
+    const m = figureMotion(f);
+    if (m) m.held = true;
+    a.talking = true;
+    const i = turningBack.findIndex((x) => x.root === a.root);
+    if (i >= 0) {
+      barking.homeYaw = turningBack[i].yaw;
+      turningBack.splice(i, 1);
+    }
+    player.faceToward(a.root.position.x, a.root.position.z);
+    game.bark({ id: f.id, name: game.s(`role-${f.role}`), role: f.role }, line, hint);
+  }
+
+  /** Lets the figure of the bark go: a walker walks on, a pigeon may scatter again, an extra turns back. */
+  function releaseBark() {
+    if (!barking) return;
+    const { fig, homeYaw } = barking;
+    barking = null;
+    const a = figureActor(fig);
+    const m = figureMotion(fig);
+    if (m) m.held = false;
+    if (a) {
+      a.talking = false;
+      if (fig.kind === "extra") turningBack.push({ root: a.root, yaw: homeYaw });
+    }
   }
 
   function promptLabel(t: PromptTarget): string {
     const { s } = game!;
     const placeName = (p: string) => game!.t(`place-${p}`);
     if (t.kind === "talk") return s("prompt-talk", { npc: game!.npcName(t.ref) });
+    if (t.kind === "bark") return s("prompt-talk", { npc: s(`role-${figures().find((f) => f.id === t.ref)?.role ?? "passerby"}`) });
     // A door into a side street (the gate to Station Road) is a way to go, not a building to enter.
     if (t.kind === "enter") return s(L.space(L.spaceOf(t.ref)).interior ? "prompt-enter" : "prompt-go", { place: placeName(t.ref) });
     if (t.kind === "exit") return s("prompt-exit", { place: placeName(t.ref) });
@@ -746,6 +866,8 @@ async function main() {
   /** A tap / click on the canvas (touch.ts told it from a joystick drag): talk to an NPC, use a thing, or walk there. */
   function tap(cx: number, cy: number) {
     if (!game || overlay.blocking || transitioning || startOpen) return;
+    // A bark on screen: a tap anywhere closes it.
+    if (game.model.bark) return game.endBark();
     const r = canvas.getBoundingClientRect();
     const ndc = new THREE.Vector2(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1);
     const hit = space.pick(ndc, rig.camera);
@@ -942,6 +1064,28 @@ async function main() {
     edge.update(a, game.s("way-distance", { name, m: Math.round(flat(player.position, t.at)) }));
   }
 
+  /** Per frame: an extra being talked to turns to the player (walkers and pigeons do in streetlife.ts); walking off ends the bark; extras turn back after. */
+  function updateBark(dt: number) {
+    const b = game?.model.bark;
+    if (barking && b?.id === barking.fig.id) {
+      const a = figureActor(barking.fig);
+      if (a) {
+        const dx = player.position.x - a.root.position.x;
+        const dz = player.position.z - a.root.position.z;
+        if (barking.fig.kind === "extra" && Math.hypot(dx, dz) > 1e-3) a.root.rotation.y = turnToward(a.root.rotation.y, Math.atan2(dx, dz), 5 * dt);
+        if (Math.hypot(dx, dz) > TALK_RANGE + BARK_LEAVE_M) game!.endBark();
+      }
+    } else if (b && space.npcs.has(b.id)) {
+      const n = L.npcStand(b.id).pos;
+      if (flat(player.position, n) > TALK_RANGE + BARK_LEAVE_M) game!.endBark();
+    } else if (b) game!.endBark(); // its speaker isn't here any more (through a door)
+    for (let i = turningBack.length - 1; i >= 0; i--) {
+      const t = turningBack[i];
+      t.root.rotation.y = turnToward(t.root.rotation.y, t.yaw, 5 * dt);
+      if (Math.abs(t.root.rotation.y - t.yaw) < 1e-3) turningBack.splice(i, 1);
+    }
+  }
+
   renderer.setAnimationLoop(() => {
     const dt = Math.min(0.05, clock.getDelta());
     updateSound();
@@ -977,6 +1121,7 @@ async function main() {
     player.update(dt, dir);
     space.update(dt, player.position, sceneNpc);
     if (!player.walking) marker.visible = false;
+    updateBark(dt);
 
     // Walking into a zone / door / an interior's open front is going there (edge-triggered, see spaces.ts).
     const free = !player.locked && !transitioning && game.model.mode === "explore" && !overlay.blocking;
@@ -991,7 +1136,7 @@ async function main() {
     }
 
     // The one prompt: the nearest thing to use in range.
-    prompt = free ? nearestPrompt(L, nav.space, targets(), player.position.x, player.position.z) : null;
+    prompt = free && !game.model.bark ? nearestPrompt(L, nav.space, targets(), player.position.x, player.position.z) : null;
     if (prompt && pendingUse === prompt.id) use(prompt);
     else if (pendingUse && !player.walking) pendingUse = null;
     if (prompt) {
@@ -1019,7 +1164,8 @@ async function main() {
     // also tolerates this directly: a missing area/size/position never throws).
     const npc = overlay.bubble.npc;
     if (npc) {
-      const found = !!space.head(npc, head);
+      const talker = barking?.fig.id === npc ? figureActor(barking.fig) : undefined;
+      const found = talker ? !!talker.headTop(head) : !!space.head(npc, head);
       if (found) head.y += 0.25;
       const p = found ? project(head) : { x: 0, y: 0, visible: false };
       overlay.bubble.position(p.x, p.y, p.visible, overlay.bubbleArea());
@@ -1044,6 +1190,16 @@ async function main() {
         walkers: space.walkers.map((w) => ({ state: w.actor.state, waiting: w.motion.waiting })),
       }),
       talk: (npc: string) => requestTalk(npc),
+      /** everyone here who barks: id, role, where they are now, whether held (talking) */
+      figures: () =>
+        figures().map((f) => {
+          const a = figureActor(f);
+          return { id: f.id, role: f.role, kind: f.kind, at: a ? [a.root.position.x, a.root.position.z] : null, talking: !!a?.talking, held: !!figureMotion(f)?.held };
+        }),
+      /** talk to a figure by id (as its prompt does) */
+      bark: (id: string) => startBark(id),
+      /** the bark on screen (null: none) */
+      barkShown: () => game?.model.bark ?? null,
       walkTo: (x: number, z: number) => player.walkTo(x, z),
       // teleport(x, z): places the player, then runs the same edge-triggered zone check `nav.step`
       // does every frame of real walking, so core's place (and the space the player lands in)
