@@ -3,9 +3,12 @@
 // day summary card, wallet floats, name prompt, action buttons, the touch action button (the
 // prompt, for thumbs) and the menu (games, export, import, new game). Phone geometry comes from
 // ui/viewport.ts (layout()). No text is drawn in WebGL. It renders the UiModel from game.ts and turns taps
-// into Game calls; it keeps no game state of its own.
+// into Game calls; it keeps no game state of its own. Also: the first-steps guide's line in the HUD
+// and its one-off highlights (guide.ts), Menu → Settings, and a tap sound for every button (the sfx
+// hook: `data-sfx` on a button names another effect, "none" none).
 import type { Course, RenderedLine, WordId } from "@silver-tongue/core";
 import type { DayCard, FeedItem, Game, Gloss, UiModel } from "../game";
+import type { GuideStep } from "../guide";
 import { BubbleView } from "./bubble";
 import { el } from "./dom";
 import { HudView } from "./hud";
@@ -28,6 +31,35 @@ export interface OverlayHooks {
   importLine(line: string): Promise<string | null>;
   /** the floating prompt was tapped (or E pressed) */
   onPrompt(): void;
+  /** a sound effect (audio.ts SoundMixer) */
+  sfx?(id: string): void;
+  /** sound on / off from the HUD chip, M, the menu or Settings (word clips, music, effects) */
+  onSound?(on: boolean): void;
+  /** Menu → Settings */
+  settings?: SettingsHooks;
+  /** Menu → Hide / Show guide */
+  guide?: { hidden(): boolean; active(): boolean; setHidden(on: boolean): void };
+}
+
+export interface SettingsView {
+  learners: { code: string; label: string }[];
+  learner: string;
+  courses: { id: string; label: string; soon?: boolean }[];
+  course: string;
+  name: string;
+  sound: boolean;
+  /** 0..1 */
+  music: number;
+}
+
+export interface SettingsHooks {
+  current(): SettingsView;
+  /** another reading language / course (courses.ts applyStart, as tui-web's switchTo); an error message, or null */
+  switchTo(course: string, learner: string): Promise<string | null>;
+  /** an error message, or null when the name was taken */
+  setName(name: string): string | null;
+  setMusic(v: number): void;
+  replayIntro(): void;
 }
 
 export class Overlay {
@@ -76,6 +108,47 @@ export class Overlay {
     });
     this.promptBtn.addEventListener("click", () => this.hooks.onPrompt());
     this.actionBtn.addEventListener("click", () => this.hooks.onPrompt());
+    // Every button's sound: ui_tap unless it names its own (data-sfx), before its own handler runs.
+    root.addEventListener(
+      "click",
+      (e) => {
+        const b = (e.target as Element | null)?.closest?.("button, .option") as HTMLElement | null;
+        if (!b || (b as HTMLButtonElement).disabled) return;
+        const id = b.dataset.sfx ?? "ui_tap";
+        if (id !== "none") this.hooks.sfx?.(id);
+      },
+      true,
+    );
+  }
+
+  /** the UI language (hint chips' labels); main.ts sets it with the course */
+  lang = "";
+  private guideStep: GuideStep | null = null;
+  private highlighted = new Set<string>();
+
+  /** The guide's current step (main.ts, every frame): the HUD line, and its highlight the first time it can show. */
+  setGuide(step: GuideStep | null) {
+    const changed = (step?.text ?? null) !== (this.guideStep?.text ?? null);
+    this.guideStep = step;
+    if (!this.game) return;
+    if (changed) this.hud.render(this.game.model.hud, this.game.model.objective, step);
+    this.guideHighlight();
+  }
+
+  private guideHighlight() {
+    const h = this.guideStep?.highlight;
+    if (!h || this.highlighted.has(h) || this.held) return;
+    const m = this.game.model;
+    if (h === "replies" && m.reply) {
+      this.replies.glow();
+      this.highlighted.add(h);
+    } else if (h === "word" && m.bubble && this.bubble.pulseWord()) this.highlighted.add(h);
+  }
+
+  /** Sound on / off from any control: the hook (main.ts) when there is one, else core's setSound. */
+  private toggleSound(on: boolean) {
+    if (this.hooks.onSound) this.hooks.onSound(on);
+    else this.game.setSound(on);
   }
 
   /** A new viewport size / safe area: the phone layout's rects as CSS custom properties and classes on <html>. */
@@ -109,11 +182,14 @@ export class Overlay {
     this.hud?.node.remove();
     this.bubble?.node.remove();
     this.replies?.node.remove();
-    this.hud = new HudView(s, t, (on) => game.setSound(on));
+    this.hud = new HudView(s, t, (on) => this.toggleSound(on));
+    const sfx = (id: string) => this.hooks.sfx?.(id);
     this.bubble = new BubbleView(this.course, s, {
       onWord: (w, at) => this.lookUp(w, at),
       onSentence: (line, at) => this.sentence(line, at),
       onReplay: () => game.replay(),
+      sfx,
+      lang: this.lang,
     });
     this.replies = new RepliesView(this.course, t, s, {
       onPick: (i) => game.reply(i),
@@ -121,6 +197,8 @@ export class Overlay {
       onWord: (w, at) => this.lookUp(w, at),
       onGiveUp: () => game.giveUpTiles(),
       onHear: (clips) => game.say(clips),
+      sfx,
+      lang: this.lang,
     });
     this.root.append(this.hud.node, this.bubble.node, this.replies.node);
     this.seenFeed = 0;
@@ -160,8 +238,13 @@ export class Overlay {
     return this.notebook.open || this.nameForm.open || this.menu.open || this.dayCardView.open || !this.choices.classList.contains("hidden");
   }
 
+  /** A course switched in Settings (another reading language or course): its text from here on. */
+  setCourse(course: Course) {
+    this.course = course;
+  }
+
   render(m: UiModel) {
-    this.hud.render(m.hud, m.objective);
+    this.hud.render(m.hud, m.objective, this.guideStep);
     this.bubble.render(m.bubble);
     this.replies.render(m.reply);
     this.renderChoices(m);
@@ -186,6 +269,7 @@ export class Overlay {
     }
     if (m.mode === "name" && !this.nameForm.open && !this.held) this.openName();
     if (m.mode !== "name" && this.nameForm.open) this.nameForm.close();
+    this.guideHighlight();
   }
 
   private showBanner(place: string, name: string) {
@@ -213,6 +297,7 @@ export class Overlay {
     const { s } = this.game;
     const buttons: HTMLButtonElement[] = [];
     const nb = el("button", { className: "notebook-btn", textContent: s("notebook") });
+    nb.dataset.sfx = "none"; // openNotebook plays notebook_open
     nb.addEventListener("click", () => this.openNotebook());
     buttons.push(nb);
     if (m.mode === "explore") {
@@ -355,8 +440,10 @@ export class Overlay {
   openNotebook() {
     const { s } = this.game;
     const close = el("button", { className: "secondary", textContent: s("close") });
+    close.dataset.sfx = "ui_back";
     close.addEventListener("click", () => this.notebook.close());
     this.notebook.replaceChildren(el("h2", { textContent: s("notebook") }), el("div", { className: "nb-body" }, ...notebookNodes(this.game.notebook())), close);
+    if (!this.notebook.open) this.hooks.sfx?.("notebook_open");
     this.notebook.showModal();
   }
 
@@ -384,17 +471,20 @@ export class Overlay {
     if (!this.dayCardView.open) this.dayCardView.showModal();
   }
 
-  /** The menu: saved games, export / import a save line, new game, how to play. */
+  /** The menu: saved games, export / import a save line, new game, settings, sound, the guide, how to play. */
   openMenu() {
     const { t, s } = this.game;
     const body = el("div", { className: "menu-body" });
     const close = el("button", { className: "secondary", textContent: s("close") });
+    close.dataset.sfx = "ui_back";
     close.addEventListener("click", () => this.menu.close());
     const button = (label: string, run: () => void, cls = "") => {
       const b = el("button", { className: cls, textContent: label });
+      if (cls === "secondary") b.dataset.sfx = "ui_back";
       b.addEventListener("click", run);
       return b;
     };
+    const guide = this.hooks.guide;
     const home = () =>
       body.replaceChildren(
         button(t("web-games"), games),
@@ -404,18 +494,29 @@ export class Overlay {
           this.menu.close();
           this.hooks.onNewGame();
         }),
+        ...(this.hooks.settings ? [button(s("settings"), () => this.settingsView(body, home))] : []),
         sound(),
+        ...(guide?.active()
+          ? [
+              button(s(guide.hidden() ? "guide-show" : "guide-hide"), () => {
+                guide.setHidden(!guide.hidden());
+                home();
+              }),
+            ]
+          : []),
         button(s("help"), () => body.replaceChildren(el("p", { textContent: s("walk-hint") }), button(s("cancel"), home, "secondary"))),
       );
-    /** Sound on / off (setSound), as the HUD chip; relabels itself. */
+    /** Sound on / off (setSound, and the music and effects), as the HUD chip; relabels itself. */
     const sound = () => {
-      const label = () => s(`sound-menu-${this.game.model.hud.sound}`);
+      // With the mixer (main.ts) the setting is the prefs' sound; without it, core's (the HUD chip's).
+      const state = (): "on" | "off" | "none" => (this.hooks.settings ? (this.hooks.settings.current().sound ? "on" : "off") : this.game.model.hud.sound);
+      const label = () => s(`sound-menu-${state()}`);
       const b = button(label(), () => {
-        const h = this.game.model.hud.sound;
-        if (h !== "none") this.game.setSound(h !== "on");
+        const h = state();
+        if (h !== "none") this.toggleSound(h !== "on");
         b.textContent = label();
       }, "sound");
-      b.disabled = this.game.model.hud.sound === "none";
+      b.disabled = state() === "none";
       return b;
     };
     const games = () => {
@@ -453,6 +554,91 @@ export class Overlay {
     home();
     this.menu.replaceChildren(el("h2", { textContent: s("menu-title") }), body, close);
     this.menu.showModal();
+  }
+
+  /**
+   * Menu → Settings: reading language, course (with the coming-soon ones greyed), name, sound,
+   * music volume, replay the six words. Switching course goes through courses.ts (main.ts).
+   */
+  private settingsView(body: HTMLElement, back: () => void) {
+    const { s } = this.game;
+    const hooks = this.hooks.settings!;
+    const cur = hooks.current();
+    const row = (label: string, ...kids: (Node | string)[]) => el("div", { className: "set-row" }, el("div", { className: "set-label", textContent: label }), ...kids);
+    const msg = el("p", { className: "set-msg" });
+    const say = (text: string, bad = false) => {
+      msg.textContent = text;
+      msg.classList.toggle("err", bad);
+    };
+    const pick = <T extends { label: string }>(items: T[], on: (x: T) => boolean, choose: (x: T) => void, soon?: (x: T) => boolean) =>
+      el(
+        "div",
+        { className: "set-options" },
+        ...items.map((x) => {
+          const b = el("button", { textContent: x.label, disabled: !!soon?.(x) });
+          if (soon?.(x)) {
+            b.classList.add("soon");
+            b.title = s("settings-soon");
+          }
+          b.setAttribute("aria-pressed", String(on(x)));
+          b.addEventListener("click", () => choose(x));
+          return b;
+        }),
+      );
+    const switchTo = async (course: string, learner: string) => {
+      if (course === cur.course && learner === cur.learner) return;
+      const err = await hooks.switchTo(course, learner);
+      if (err) say(err, true);
+      else this.menu.close();
+    };
+    const name = el("input", { value: cur.name, maxLength: 40, placeholder: s("name-placeholder"), autocomplete: "off" });
+    const saveName = el("button", { textContent: s("settings-name-save") });
+    saveName.dataset.sfx = "ui_confirm";
+    saveName.addEventListener("click", () => {
+      const err = hooks.setName(name.value);
+      if (err) say(err, true);
+      else say(s("settings-name-saved"));
+    });
+    name.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") saveName.click();
+    });
+    const soundBtn = el("button", {});
+    const soundLabel = () => {
+      const on = hooks.current().sound;
+      soundBtn.textContent = s(on ? "settings-sound-on" : "settings-sound-off");
+      soundBtn.setAttribute("aria-pressed", String(on));
+    };
+    soundLabel();
+    soundBtn.addEventListener("click", () => {
+      this.toggleSound(!hooks.current().sound);
+      soundLabel();
+    });
+    const music = el("input", { type: "range", min: "0", max: "100", step: "5", value: String(Math.round(cur.music * 100)) });
+    music.setAttribute("aria-label", s("settings-music"));
+    music.addEventListener("input", () => hooks.setMusic(Number(music.value) / 100));
+    const intro = el("button", { textContent: s("settings-intro") });
+    intro.addEventListener("click", () => {
+      this.menu.close();
+      hooks.replayIntro();
+    });
+    const back2 = el("button", { className: "secondary", textContent: s("cancel") });
+    back2.dataset.sfx = "ui_back";
+    back2.addEventListener("click", back);
+    body.replaceChildren(
+      el("h3", { textContent: s("settings-title") }),
+      el(
+        "div",
+        { className: "settings-body" },
+        row(s("settings-reading"), pick(cur.learners, (x) => x.code === cur.learner, (x) => void switchTo(cur.course, x.code))),
+        row(s("settings-course"), pick(cur.courses, (x) => x.id === cur.course, (x) => void switchTo(x.id, cur.learner), (x) => !!x.soon)),
+        row(s("settings-name"), el("div", { className: "set-name" }, name, saveName)),
+        row(s("settings-sound"), el("div", { className: "set-options" }, soundBtn)),
+        row(s("settings-music"), music),
+        el("div", { className: "set-options" }, intro),
+        msg,
+      ),
+      back2,
+    );
   }
 
   private openName() {
@@ -498,8 +684,8 @@ export class Overlay {
       return true;
     }
     // The TUI's sound keys: M sound on / off, R says the bubble again.
-    if (e.key.toLowerCase() === "m" && m.hud.sound !== "none") {
-      this.game.setSound(m.hud.sound !== "on");
+    if (e.key.toLowerCase() === "m" && (m.hud.sound !== "none" || this.hooks.onSound)) {
+      this.toggleSound(this.hooks.settings ? !this.hooks.settings.current().sound : m.hud.sound !== "on");
       return true;
     }
     if (e.key.toLowerCase() === "r" && m.bubble) {

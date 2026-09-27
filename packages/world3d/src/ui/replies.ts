@@ -1,10 +1,12 @@
 // Reply panel: 2-4 options in pick mode, each with a ▶ that says it (without picking it). Word help mode ("?")
 // turns taps on words into look-ups instead of picks, like the TUI's [w]. Tiles mode: tap the
-// tiles in order (the TUI's tile numbers), Undo (backspace), Say it (enter), or give up.
+// tiles in order (the TUI's tile numbers), Undo (backspace), Say it (enter), or give up. Each option's
+// native meaning is hidden under a hint chip (start/hint-chip.ts); tiles play tile_place / tile_undo.
 import { joinTiles, type Course, type WordId } from "@silver-tongue/core";
 import type { ReplyPanel } from "../game";
 import type { Strings } from "../strings";
 import type { Text } from "@silver-tongue/tui";
+import { createHintChip } from "../start/hint-chip";
 import { el } from "./dom";
 import { lineNodes } from "./line";
 
@@ -15,6 +17,9 @@ export interface ReplyHooks {
   onGiveUp(): void;
   /** an option's ▶ */
   onHear(clips: string[] | undefined): void;
+  sfx?(id: string): void;
+  /** the UI language (the chips' labels) */
+  lang?: string;
 }
 
 export class RepliesView {
@@ -47,10 +52,12 @@ export class RepliesView {
       const answer = el("div", { className: "tile-answer", textContent: joinTiles(this.course, this.chosen.map((i) => r.tiles[i])) || "…" });
       const tiles = r.tiles.map((x, i) => {
         const b = el("button", { className: "tile", textContent: x, disabled: this.chosen.includes(i) });
+        b.dataset.sfx = "tile_place";
         b.addEventListener("click", () => this.addTile(i));
         return b;
       });
       const undo = el("button", { className: "secondary", textContent: this.s("tiles-undo"), disabled: !this.chosen.length });
+      undo.dataset.sfx = "tile_undo";
       undo.addEventListener("click", () => this.undoTile());
       const say = el("button", { className: "say", textContent: this.s("tiles-say"), disabled: !this.chosen.length });
       say.addEventListener("click", () => this.sayTiles());
@@ -85,6 +92,11 @@ export class RepliesView {
         this.hooks.onHear(o.audio);
       });
       const text = el("span", { className: "option-text" }, ...lineNodes(o, this.course, { onWord: this.helpMode ? this.hooks.onWord : undefined }));
+      if (o.meaning) {
+        const chip = createHintChip(o.meaning, { inline: true, lang: this.hooks.lang, sfx: this.hooks.sfx });
+        chip.dataset.sfx = "none";
+        text.append(chip);
+      }
       row.append(el("span", { className: "key", textContent: String(i + 1) }), text, replay);
       row.addEventListener("click", () => {
         if (!this.helpMode) this.hooks.onPick(i);
@@ -92,6 +104,13 @@ export class RepliesView {
       return row;
     });
     this.node.replaceChildren(title, ...rows);
+  }
+
+  /** The guide's "reply" step: the sheet glows (twice), once. */
+  glow() {
+    this.node.classList.remove("guide-glow");
+    void this.node.offsetWidth;
+    this.node.classList.add("guide-glow");
   }
 
   /** The price of the right reply (shopping), as a tag in the panel's title. */

@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
     <meta name="description" content="Learn a language by living in it: the 3D street." />
-    <meta name="theme-color" content="#b8352a" />
+    <meta name="theme-color" content="#a8261d" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -14,6 +14,9 @@
     <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png" />
     <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
     <title>Silver Tongue 3D</title>
+    <!-- the UI skin's faces (start/start.css): Lilita One for display, Noto Serif SC for the lines; system fallbacks offline -->
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lilita+One&amp;family=Noto+Serif+SC:wght@600&amp;display=swap" />
     <style>
 /*CSS*/
     </style>
@@ -22,6 +25,7 @@
     <main id="stage"></main>
     <div id="ui"></div>
     <div id="loading">Loading</div>
+    <div id="start"></div>
     <script type="module" src="./main.js"></script>
   </body>
 </html>

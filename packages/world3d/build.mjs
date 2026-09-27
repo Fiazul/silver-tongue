@@ -14,6 +14,13 @@
 // into dist/courses/<course>/audio/ and loads them from there. Clips missing: the game plays silently
 // and the HUD says "no audio".
 //
+// Music, ambience, effects (assets/audio/, make-it-in-china tools/audio) and the title backdrop
+// (assets/ui/) are copied as files with a manifest listing what ships: both .ogg and .m4a (the
+// page picks by canPlayType), except that a one-off build whose total would pass the 15 MB
+// budget ships the music as .ogg only (MUSIC_OGG_ONLY: the looping beds are the big files; a
+// browser without Vorbis then has no music, ambience and effects still in .m4a). --dev and
+// WORLD3D_AUDIO=bundle ship both.
+//
 // Assets come from the vendored packages/world3d/assets (refreshed from the make-it-in-china
 // library by `npm run assets:sync`); WORLD3D_ASSETS overrides it (any library dir with index.json).
 import { context } from "esbuild";
@@ -39,6 +46,52 @@ if (!existsSync(join(assetsSrc, "index.json"))) throw new Error(`no asset librar
 /** Copies the GLBs layout.json and town.json use and an index.json listing only those (scripts/used-assets.mjs). */
 function copyAssets() {
   return copyUsed(assetsSrc, join(dist, "assets"), [join(here, "src", "layout.json"), join(here, "src", "town.json")]);
+}
+
+const BUDGET = 15 * 1024 * 1024;
+
+/**
+ * Copies assets/ui/ and assets/audio/ (every manifest entry's files) into dist/assets/, with a
+ * manifest of what shipped. `oggOnlyMusic`: the music's .m4a stays behind (and out of the manifest).
+ * Returns the bytes copied.
+ */
+function copySounds(oggOnlyMusic) {
+  const src = join(here, "assets");
+  let bytes = 0;
+  if (existsSync(join(src, "ui"))) {
+    cpSync(join(src, "ui"), join(dist, "assets", "ui"), { recursive: true });
+    bytes += size(join(dist, "assets", "ui"));
+  }
+  const mf = join(src, "audio", "manifest.json");
+  if (!existsSync(mf)) return bytes;
+  const shipped = [];
+  for (const e of JSON.parse(readFileSync(mf, "utf8"))) {
+    const out = { ...e };
+    for (const key of ["file_ogg", "file_m4a"]) {
+      const f = e[key];
+      if (!f) continue;
+      if (oggOnlyMusic && e.kind === "music" && key === "file_m4a") {
+        delete out[key];
+        continue;
+      }
+      const rel = f.replace(/^assets\//, "");
+      mkdirSync(join(dist, "assets", dirname(rel)), { recursive: true });
+      copyFileSync(join(src, rel), join(dist, "assets", rel));
+      bytes += statSync(join(src, rel)).size;
+    }
+    shipped.push(out);
+  }
+  writeFileSync(join(dist, "assets", "audio", "manifest.json"), JSON.stringify(shipped));
+  return bytes;
+}
+
+/** Bytes the music's .m4a files would add. */
+function musicM4aBytes() {
+  const mf = join(here, "assets", "audio", "manifest.json");
+  if (!existsSync(mf)) return 0;
+  return JSON.parse(readFileSync(mf, "utf8"))
+    .filter((e) => e.kind === "music" && e.file_m4a)
+    .reduce((n, e) => n + statSync(join(here, "assets", e.file_m4a.replace(/^assets\//, ""))).size, 0);
 }
 
 /** The home-screen bits: manifest and icons (icons/, made by scripts/make-icons.py; outside src/, which holds no particular language). */
@@ -103,8 +156,9 @@ function copyAudio(catalog) {
   return [n, bytes, missing];
 }
 
+/** index.html with the CSS inlined: the UI skin (start/start.css, the start flow's design system) first, then page.css. */
 function writeHtml() {
-  const css = readFileSync(join(here, "src", "page.css"), "utf8");
+  const css = readFileSync(join(here, "src", "start", "start.css"), "utf8") + "\n" + readFileSync(join(here, "src", "page.css"), "utf8");
   const html = readFileSync(join(here, "src", "index.html"), "utf8").replace("/*CSS*/", () => css);
   writeFileSync(join(dist, "index.html"), html);
 }
@@ -126,6 +180,14 @@ copyStatic();
 writeHtml();
 const catalog = copyCourses();
 const clips = copyAudio(catalog);
+// Everything but main.js is in place: would both formats of the music pass the budget?
+let sounds = copySounds(false);
+const MUSIC_OGG_ONLY = !bundleAudio && size(dist) + 1.2 * 1024 * 1024 > BUDGET; // + main.js
+if (MUSIC_OGG_ONLY) {
+  rmSync(join(dist, "assets", "audio"), { recursive: true, force: true });
+  rmSync(join(dist, "assets", "ui"), { recursive: true, force: true });
+  sounds = copySounds(true);
+}
 const ctx = await context({
   entryPoints: [join(here, "src", "main.ts")],
   outfile: join(dist, "main.js"),
@@ -147,6 +209,6 @@ if (dev) {
   await ctx.dispose();
   const kb = (n) => `${Math.round(n / 1024)} KB`;
   console.log(
-    `built packages/world3d/dist: courses/ ${catalog.map((e) => `${e.id} (${e.learners.join(", ")})`).join(", ")}, audio ${clips ? `${clips[0]} clips in courses/<course>/audio/ (${kb(clips[1])}${clips[2] ? `, ${clips[2]} missing` : ""})` : `loaded from ${audioRoot}courses/<course>/audio/`}, index.html ${kb(statSync(join(dist, "index.html")).size)}, main.js ${kb(statSync(join(dist, "main.js")).size)}, assets/ ${kb(size(join(dist, "assets")))} (${glbs} GLBs); total ${kb(size(dist))}`,
+    `built packages/world3d/dist: sound + title ${kb(sounds)}${MUSIC_OGG_ONLY ? ` (music .ogg only: over the 15 MB budget with both, -${kb(musicM4aBytes())})` : " (.ogg + .m4a)"}, courses/ ${catalog.map((e) => `${e.id} (${e.learners.join(", ")})`).join(", ")}, audio ${clips ? `${clips[0]} clips in courses/<course>/audio/ (${kb(clips[1])}${clips[2] ? `, ${clips[2]} missing` : ""})` : `loaded from ${audioRoot}courses/<course>/audio/`}, index.html ${kb(statSync(join(dist, "index.html")).size)}, main.js ${kb(statSync(join(dist, "main.js")).size)}, assets/ ${kb(size(join(dist, "assets")))} (${glbs} GLBs); total ${kb(size(dist))}`,
   );
 }

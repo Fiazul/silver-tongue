@@ -34,7 +34,8 @@ export class CharacterActor {
   readonly mixer: THREE.AnimationMixer | null = null;
   private actions = new Map<AnimState, THREE.AnimationAction>();
   private current: THREE.AnimationAction | null = null;
-  private strideM: number;
+  /** metres one loop of the walk clip covers (footsteps follow it: audio.ts StrideClock) */
+  readonly strideM: number;
   private headTopY: number;
   private headBone: THREE.Object3D | undefined;
   /** a scene is running and this character's line is on screen */

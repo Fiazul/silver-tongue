@@ -1,6 +1,8 @@
 // HUD: day, wallet, slots left today, rank, where you are, the parcel you carry, the sound chip
-// (tap: on / off, as the TUI's [m]); under it the objective line.
+// (tap: on / off, as the TUI's [m]); under it the objective line, or the first-steps guide's step
+// while there is one (guide.ts), tagged "Guide".
 import type { Hud } from "../game";
+import type { GuideStep } from "../guide";
 import type { Objective } from "../objective";
 import type { Strings } from "../strings";
 import { el } from "./dom";
@@ -21,7 +23,7 @@ export class HudView {
     this.node.append(this.chips, this.objective);
   }
 
-  render(h: Hud, o?: Objective) {
+  render(h: Hud, o?: Objective, guide?: GuideStep | null) {
     const key = JSON.stringify(h);
     if (key !== this.last) {
       const bump = this.last && JSON.parse(this.last).wallet !== h.wallet;
@@ -42,14 +44,17 @@ export class HudView {
         this.soundChip(h.sound),
       );
     }
-    const okey = JSON.stringify(o ?? null);
+    const okey = JSON.stringify([o ?? null, guide?.text ?? null]);
     if (okey !== this.lastObjective) {
       this.lastObjective = okey;
-      this.objective.classList.toggle("hidden", !o?.text);
-      this.objective.replaceChildren(
-        ...(o?.text ? [el("div", { className: "obj-text", textContent: o.text })] : []),
-        ...(o?.sub ? [el("div", { className: "obj-sub", textContent: o.sub })] : []),
-      );
+      this.objective.classList.toggle("hidden", !o?.text && !guide);
+      this.objective.classList.toggle("guide", !!guide);
+      const text = guide
+        ? el("div", { className: "obj-text" }, el("span", { className: "obj-tag", textContent: this.s("guide-label") }), guide.text)
+        : o?.text
+          ? el("div", { className: "obj-text", textContent: o.text })
+          : null;
+      this.objective.replaceChildren(...(text ? [text] : []), ...(o?.sub ? [el("div", { className: "obj-sub", textContent: o.sub })] : []));
       this.objective.classList.remove("new");
       void this.objective.offsetWidth;
       this.objective.classList.add("new");

@@ -165,6 +165,8 @@ export interface GameOptions {
   onEvent?: (e: GameEvent) => void;
   /** sound out (src/audio.ts); without it the game is silent and the HUD says "no audio" */
   audio?: AudioOut;
+  /** the chrome's UI language (strings.ts; default the course's reading language) */
+  ui?: string;
 }
 
 export interface Game {
@@ -223,7 +225,7 @@ export const INPUT_AFFORDANCES: Record<Input["type"], { tui: string; world3d: st
   replyTiles: { tui: "tile numbers, backspace, enter", world3d: "tap tiles in order, Undo, Say it (or Give up: an empty reply)", api: "replyTiles" },
   helpWord: { tui: "[w] word help, number", world3d: "tap a word in the bubble, or ? then a word in a reply", api: "helpWord" },
   visitMentor: { tui: "menu: Ask <mentor> about the language", world3d: "mentor button, or talk to the mentor", api: "visitMentor" },
-  setName: { tui: "name prompt", world3d: "name dialog", api: "setName" },
+  setName: { tui: "name prompt", world3d: "the start flow's name step (a new game), Menu → Settings → name; the name dialog for a save without one", api: "setName" },
   sleep: { tui: "menu: Sleep", world3d: "the bed at home (prompt / tap), or the Sleep button at home", api: "sleep" },
   setSound: { tui: "[m] sound on / off", world3d: "the ♪ chip in the HUD, or Menu → Sound", api: "setSound" },
 };
@@ -249,7 +251,7 @@ const FEED_LOG = 60;
 export function createGame(opts: GameOptions): Game {
   const { course, core } = opts;
   const t = display(makeText(course.learnerFtl, course.learner));
-  const s = makeStrings(t);
+  const s = makeStrings(t, opts.ui ?? course.learner);
   const wordIds = Object.keys(course.words);
   const npcName = (npc: string) => t(`npc-${npc}`);
   let seq = 0;
@@ -722,6 +724,7 @@ export function openSession(
     onChange?: GameOptions["onChange"];
     onEvent?: GameOptions["onEvent"];
     audio?: GameOptions["audio"];
+    ui?: string;
   },
 ): { game: Game; opened: Opened; sessions: WebSessions } {
   const sessions = new WebSessions(kv, course, opts.now);
@@ -737,6 +740,7 @@ export function openSession(
     onChange: opts.onChange,
     onEvent: opts.onEvent,
     audio: opts.audio,
+    ui: opts.ui,
   });
   return { game, opened, sessions };
 }

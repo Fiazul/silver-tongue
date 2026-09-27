@@ -7,7 +7,7 @@
 // and the chooser come in as deps, so tests use fakes.
 import type { CatalogEntry, Course } from "@silver-tongue/core";
 import { chooseStart, courseLabels, learnerFor, makeText } from "@silver-tongue/tui";
-import { loadWebSettings, migrateWebAliases, saveWebSettings, type KeyValue } from "@silver-tongue/tui-web/src/web-storage";
+import { loadWebSettings, migrateWebAliases, saveWebSettings, WebSessions, type KeyValue } from "@silver-tongue/tui-web/src/web-storage";
 
 export type FetchJson = <T>(path: string) => Promise<T>;
 
@@ -82,4 +82,56 @@ export async function pickCourse({ fetchJson, kv, choose }: PickDeps): Promise<P
       error = t("web-load-failed");
     }
   }
+}
+
+// ---- the start flow (start/flow.ts) and Settings ----
+
+/** The catalog; throws when it can't be had (no reading language to say so in). */
+export async function loadCatalog(fetchJson: FetchJson): Promise<CatalogEntry[]> {
+  const catalog = await fetchJson<CatalogEntry[]>(CATALOG_PATH);
+  if (!Array.isArray(catalog) || !catalog.length) throw new Error("no courses in the catalog");
+  return catalog;
+}
+
+/**
+ * A returning player goes straight in: the remembered course (or the only one) in its reading
+ * language, when it has a saved game. Else null: the start flow runs. The course file is fetched
+ * (old ids migrated) only to look for saves; it is returned so it isn't fetched twice.
+ */
+export async function resumePick(deps: { fetchJson: FetchJson; kv: KeyValue; now: () => number }, catalog: CatalogEntry[]): Promise<Picked | null> {
+  const start = chooseStart(catalog, loadWebSettings(deps.kv));
+  if ("error" in start || start.ask) return null;
+  let course: Course;
+  try {
+    course = await fetchCourse(deps.fetchJson, deps.kv, start.course, start.learner);
+  } catch {
+    return null; // the flow lists the courses; choosing one there tries again
+  }
+  if (!new WebSessions(deps.kv, course, deps.now).list().length) return null;
+  saveWebSettings(deps.kv, { course: course.id, learner: course.learner });
+  return { catalog, entry: start.course, course };
+}
+
+/** What the start flow remembers from last time: the settings' course and reading language. */
+export function rememberedStart(kv: KeyValue): { learner?: string; course?: string } {
+  const s = loadWebSettings(kv);
+  return { ...(s.learner ? { learner: s.learner } : {}), ...(s.course ? { course: s.course } : {}) };
+}
+
+/**
+ * The start flow's pick (or Settings' switch, as tui-web's switchTo): the course file for that
+ * reading language (old ids migrated), remembered under the settings key the browser TUI shares.
+ * A reading language the course lacks falls back to its default (learnerFor). Throws when the file
+ * doesn't load (nothing is remembered then).
+ */
+export async function applyStart(
+  deps: { fetchJson: FetchJson; kv: KeyValue },
+  catalog: CatalogEntry[],
+  pick: { learner: string; course: string },
+): Promise<Picked> {
+  const entry = catalog.find((e) => e.id === pick.course);
+  if (!entry) throw new Error(`no course ${pick.course}`);
+  const course = await fetchCourse(deps.fetchJson, deps.kv, entry, learnerFor(entry, pick.learner));
+  saveWebSettings(deps.kv, { course: course.id, learner: course.learner });
+  return { catalog, entry, course };
 }

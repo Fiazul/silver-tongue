@@ -1,0 +1,11 @@
+{
+  "language": "zh",
+  "words": [
+    { "id": "ni-hao", "text": "你好", "reading": "nǐ hǎo", "meaning": { "en": "hello", "bn": "হ্যালো / নমস্কার" } },
+    { "id": "xie-xie", "text": "谢谢", "reading": "xièxie", "meaning": { "en": "thank you", "bn": "ধন্যবাদ" } },
+    { "id": "qing", "text": "请", "reading": "qǐng", "meaning": { "en": "please", "bn": "অনুগ্রহ করে" } },
+    { "id": "duo-shao-qian", "text": "多少钱", "reading": "duōshao qián", "meaning": { "en": "how much (money)?", "bn": "দাম কত?" } },
+    { "id": "wo-jiao", "text": "我叫…", "reading": "wǒ jiào…", "meaning": { "en": "my name is…", "bn": "আমার নাম…" } },
+    { "id": "zai-jian", "text": "再见", "reading": "zàijiàn", "meaning": { "en": "goodbye", "bn": "বিদায়" } }
+  ]
+}

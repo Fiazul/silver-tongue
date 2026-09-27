@@ -17,7 +17,7 @@ npm ci                                   # once, at the repo root
 npm run build:course                     # content -> dist/courses/index.json + <course>/<learner>.json (required)
 npm run dev -w @silver-tongue/world3d    # build + serve on http://localhost:8173/ (PORT=... to change); rebuilds main.js on save
 npm run build -w @silver-tongue/world3d  # dist/: index.html, main.js, courses/, assets/, manifest, icons (clips: see Audio)
-npm run assets:sync -w @silver-tongue/world3d  # refresh assets/ from the make-it-in-china library
+npm run assets:sync -w @silver-tongue/world3d  # refresh assets/ (GLBs, town, audio/, ui/title) from the make-it-in-china library (needs python3 + Pillow for the title frames)
 npm test && npm run typecheck            # includes this package's smoke test and tsc -p packages/world3d
 ```
 
@@ -29,17 +29,28 @@ make-it-in-china `tools/blender/build_all.py` and `tools/blender/town_layout.py`
 them. After the library changes or a layout starts using a new asset, refresh them with
 `npm run assets:sync -w @silver-tongue/world3d` (copies from `WORLD3D_ASSETS`, default `../assets`
 next to the repo checkout, and re-ports the town: see Outdoors). `WORLD3D_ASSETS` also overrides
-the build's and the tests' source. GLBs are served as files, never inlined. Current build: about
-11.8 MB in total (11,765 KB; main.js about 882 KB including three.js and the ported town, 106 KB of
-it; courses/ about 0.3 MB of course files; 116 GLBs about 10.5 MB: the town's landscape, buildings
-and props, five rooms, their furniture and props, and 18 rigged characters and pets, the humans at
-about 0.4 MB each, the bulk). The town added about 1.5 MB (GLBs +1.43 MB, main.js +106 KB). No
-Draco/meshopt compression yet: the budget is 15 MB; past 10 MB now, so the next asset to land should
-come with gltf-transform `optimize --compress meshopt` in `scripts/sync-assets.mjs` and three's
-MeshoptDecoder.
+the build's and the tests' source. GLBs are served as files, never inlined. The one-off build
+(`npm run build`), measured 2026-09-27:
+
+| part | KB | note |
+| --- | ---: | --- |
+| GLBs (`assets/`, 116) | 10,550 | the town's landscape, buildings and props, five rooms, 18 rigged characters and pets (humans ~0.4 MB each) |
+| music (`assets/audio/music`, .ogg only) | 2,469 | the .m4a (2,677 KB) stays behind: with it the total passes 15 MB (`build.mjs` MUSIC_OGG_ONLY) |
+| ambience (.ogg + .m4a) | 2,419 | |
+| effects (.ogg + .m4a) | 384 | |
+| title backdrop (`assets/ui/title`) | 291 | six JPEGs |
+| main.js | 935 | three.js, the ported town (106 KB), the start flow (+53 KB with guide and mixer) |
+| index.html | 38 | start.css + page.css inlined |
+| courses/ | 344 | |
+| **total** | **17,387** | was 11,765 before the sound and the start flow (+5.6 MB); `WORLD3D_AUDIO=bundle` (music in both formats, and the word clips): 27,173 |
+
+Over the 15 MB budget: the next saving is gltf-transform `optimize --compress meshopt` in
+`scripts/sync-assets.mjs` with three's MeshoptDecoder (the GLBs are the bulk), then the ambience as
+.ogg only. A browser without Vorbis (older Safari) has no music in the one-off build; its
+ambience and effects play from the .m4a.
 
 **Audio clips** (`content/audio/<language>`, for zh 870 clips, all referenced by the course, about
-7.1 MB) would take dist/ to about 17.4 MB, past the 15 MB budget, so a one-off build doesn't copy
+7.1 MB) would take dist/ further past the 15 MB budget, so a one-off build doesn't copy
 them: the page loads each clip by URL as it is said, from `../courses/<course>/audio/`, the browser
 TUI's copy at the Pages site root (tui-web's build copies them to its `dist/courses/<course>/audio/`).
 `npm run dev` and `WORLD3D_AUDIO=bundle npm run build -w @silver-tongue/world3d` copy the clips each
@@ -101,7 +112,19 @@ courses/<id>/<learner>.json (courses.ts) ─► core ◄─ inputs ── game.t
 ```
 
 - `src/courses.ts`: which course the page plays, picked and loaded as tui-web's `boot` /
-  `fetchCourse` (see Courses and reading languages). DOM-free; `src/ui/start.ts` is its start list.
+  `fetchCourse` (see Courses and reading languages): `resumePick` (a returning player), `applyStart`
+  (the start flow's pick, Settings' switch). DOM-free.
+- `src/start/`: the start flow (see Start flow), vendored from make-it-in-china `design/start/`:
+  `flow.ts` (start.js as a TS module), `hint-chip.ts` (HintChip), `strings.ts` (strings.js over
+  `locale/`), `intro.ts` (the six words read against the course), `start.css` (the design system:
+  the whole game's UI skin, inlined before `page.css`).
+- `locale/` (outside `src/`, as `icons/` is: upstream's `tools/test/language-free.test.ts` keeps
+  every `src/` free of Han script and quoted language codes): `<ui>.json` (`start`: the start
+  flow's strings; `game`: the chrome in bn / zh over `strings.ts`'s English), `native-names.json`,
+  `intro-zh.json` (design/start/intro.json), `index.ts` (`UI_LOCALES`, `COMING_SOON`, `INTROS`).
+- `src/guide.ts`: the first-steps guide (see First-steps guide); `src/marker.ts` its 3D marker.
+- `src/prefs.ts`: the 3D game's own settings (`silver-tongue:world3d:prefs`: sound, music
+  volume, guide hidden), apart from the shared key tui-web rewrites whole.
 - `src/game.ts`: the only module that talks to core. No DOM, no three.js, so it runs under vitest.
   - `dispatch(events)` is the one event dispatcher. Its `switch` covers every `GameEvent`, and the
     `never` default fails the typecheck when core adds an event.
@@ -237,11 +260,19 @@ courses/<id>/<learner>.json (courses.ts) ─► core ◄─ inputs ── game.t
     the room's desk).
   - Day summary card after sleeping: earned, mix-ups, food, rent (or "not paid"), change, wallet.
   - Menu: saved games (tui's `sessionLines`), export / import a save line (tui's
-    `encodeSave` / `decodeSave`, same `st1:` lines as tui-web and the terminal game), new game,
-    sound on / off, how to play.
-  - Name prompt, mentor button, sleep button (at home only).
+    `encodeSave` / `decodeSave`, same `st1:` lines as tui-web and the terminal game), new game
+    (the start flow again), Settings, sound on / off, Hide / Show guide, how to play.
+  - Name prompt (only a save without a name: new games are named in the start flow), mentor
+    button, sleep button (at home only).
+  - Hint chips: every bubble line and reply option carries its meaning hidden under a small "?"
+    (`start/hint-chip.ts`); tap to peek, it closes again (6 s). The word popup stays as it was.
+  - One look: `start/start.css`'s tokens (lacquer, ink, paper, jade, gold; 2 px ink borders,
+    radius 14, the hard ink under-shadow, buttons that press, Lilita One / Noto Serif SC) over the
+    HUD, bubble, reply sheet, lists, menu, settings, notebook and day card (`page.css`).
 - `src/anim.ts` + `src/actor.ts`: character animation (see Animation).
-- `src/strings.ts`: text in two layers. `s(id)`: strings the learner FTL doesn't have yet.
+- `src/strings.ts`: text in two layers. `s(id)`: strings the learner FTL doesn't have yet, in
+  the chrome's UI language (the reading language, or `?ui=bn` / `?ui=zh` to preview): `locale/<ui>.json`
+  `game`, else the English here.
   `display(t)`: learner messages reworded for 3D (`TEXT_3D`: the TUI's "Press [w] … [s]" becomes
   "Tap a word … the “…” button"). A `w3d-<id>` message in the learner FTL overrides either. A test
   checks that no learner text the 3D world shows has a TUI key hint.
@@ -313,21 +344,21 @@ case).
 | number keys in a scene (pick) | tap a reply, or 1-4 | `reply` |
 | tile numbers, backspace, enter (tiles) | tap tiles in order, Undo (Backspace), Say it (Enter); Give up sends an empty reply | `replyTiles` |
 | [w] word help, then a number | tap a word in the bubble; "?" then a word in a reply | `helpWord` |
-| [s] whole sentence (in word help) | the "…" button on the bubble (not logged as help, as in the TUI) | none |
+| [s] whole sentence (in word help) | the "…" button on the bubble (not logged as help, as in the TUI); the line's meaning also sits hidden under its "?" hint chip | none |
 | menu "Ask <mentor> about the language" | the mentor button, or talking to the mentor | `visitMentor` |
-| name prompt | name dialog | `setName` |
+| name prompt | the start flow's name step (a new game; core's `cleanName` rules), Menu → Settings → name; the name dialog only for a save without a name | `setName` |
 | menu "Sleep" | the bed in your room (prompt / tap), or the Sleep button at home; day summary card after | `sleep` |
 | [n] notebook, [↑↓] scroll | Notebook button, N, or the notebook on the room's desk; scrolls natively | none |
 | menu "Save and quit" / [q] | nothing to do: every accepted input is saved | none |
-| tui-web New game | Menu → New game | none |
+| tui-web New game | Menu → New game: the start flow again (choices preselected), then the fly-over | none |
 | tui-web Games (resume) | Menu → Games | none |
 | tui-web Export / Import | Menu → Export (copy the `st1:` line) / Import (paste one; added as a new game) | none |
 | status line (day, slot, wallet, rank, rent due) | HUD chips + the objective line's rent timer | none |
 | status line "· parcel", menu "You have a parcel to deliver." | parcel chip naming where it goes, the objective line, the bag in the player's hands (carry clips) | none |
 | menu "<npc>: <scene> · needs ¥N" (a scene waiting for money) | the same line as a toast on talking to that NPC; a reply's price in the reply panel | none |
-| start list "Choose a course" (several courses, none remembered) | the start dialog before the street loads (`src/ui/start.ts`); a failed load says so and the list stays | none |
-| settings remembered (`silver-tongue:settings`: course, reading language) | the same key and helpers (`loadWebSettings` / `saveWebSettings`, `chooseStart`, `learnerFor`) | none |
-| [o] settings: switch course, reading language, sound | not yet: sound is the ♪ chip / Menu → Sound; course and reading language follow the remembered settings (switch them in the browser TUI) | none |
+| start list "Choose a course" (several courses, none remembered) | the start flow's "I speak…" / "I want to learn…" cards (`src/start/flow.ts`), while the town loads underneath; a returning player with a save skips it | none |
+| settings remembered (`silver-tongue:settings`: course, reading language) | the same key and helpers (`loadWebSettings` / `saveWebSettings`, `chooseStart`, `learnerFor`, via `courses.ts` `resumePick` / `applyStart`) | none |
+| [o] settings: switch course, reading language, sound | Menu → Settings: reading language, course, name, sound, music volume, replay the six words (switching goes through `courses.ts` `applyStart`, as tui-web's `switchTo`) | none |
 | [m] sound on / off; bottom right "♪ [m]" / "♪ off [m]" / "no audio" | the ♪ chip in the HUD (tap: on / off; "no audio" when there's none), Menu → Sound, or M | `setSound` (not logged; `state.sound`) |
 | lines said as they come (line clips; reactions in each NPC's voice, `reactionAudio`; the player's reply, picked or right tiles) | the same, through `src/audio.ts` (one element, clips in order with a 300 ms beat, slow repeats at 0.8) | none |
 | [r] say the last line again (slowly after a slow repeat) | ▶ on the bubble, or R | none |
@@ -447,8 +478,95 @@ first course's reading language, and nothing is remembered until one is chosen. 
 under the course's old ids (`aliases`: 0.12's `zh-china-en`) to its own keys, so an old save plays
 on as the last game. The page's `lang` is the reading language, and the learner text uses its
 locale. The page needs a web server (it fetches its course); the build copies the repo's
-`dist/courses/` into `dist/courses/`. Switching course or reading language in play ([o] in the
-TUI) isn't there yet.
+`dist/courses/` into `dist/courses/`. Since the start flow: a player with no saved game for the
+remembered (or only) course picks the reading language and the course on its cards
+(`applyStart` fetches the file, migrates old ids and remembers both under the same key); one with
+a save goes straight in (`resumePick`). Menu → Settings switches either in play as tui-web's
+`switchTo`: another reading language goes on with the game as played (the save is the course's),
+another course plays its last game.
+
+## Start flow
+
+`src/start/flow.ts` (make-it-in-china `design/start/`, see its README for the config and hooks),
+mounted in `#start` over the loading screen once the catalog is in, while the town's GLBs load:
+
+1. **Title**: Ken Burns over six frames of the fly-over (`assets/ui/title/`, JPEG q80, from
+   `town_layout/cutscene_frames`), "Tap to start". That tap is the first gesture: it unlocks the
+   mixer and starts `title_theme`.
+2. **I speak…**: every reading language in the catalog (one card today: English). The chrome
+   switches to the pick (en / bn / zh start strings; the game chrome's bn / zh partial, see below).
+3. **I want to learn…**: the courses for that reader, and `COMING_SOON` (ja, ko, es) greyed.
+4. **Name**: core's `cleanName` rules (1-20 code points, no control / format characters, no player
+   mark), six suggestions. Continue fetches the course (`applyStart`: remembered from here).
+5. **Six words** (skippable): `locale/intro-<language>.json`, meanings for the reader (else the
+   course's gloss), each hidden under the hint chip; Listen says the course's clips for it.
+6. `start:done` → a new game named so (`setName`, saved as any input), then the fly-over.
+
+A returning player (a saved game) skips it; Menu → New game runs it again with the choices so far
+preselected. `?ui=bn` / `?ui=zh` previews the chrome in another UI language. Chrome coverage:
+start flow en / bn / zh in full; the game chrome (`strings.ts`) in bn / zh: menu, notebook,
+settings, guide, prompts, reply tools, cutscene skip, walk hints, day card, sound; the objective
+lines, place banners and everything from the course stay in the course's reading language
+(English today) until a course reads in bn or zh.
+
+## Settings (Menu → Settings)
+
+Reading language (the course's `learners`), course (the catalog, with the coming-soon languages
+greyed), name (`setName`), sound on / off (music, ambience, effects and the word clips: core's
+`setSound` follows), music volume, replay the six words. Sound, volume and the guide's Hide /
+Show are kept in `silver-tongue:world3d:prefs` (`src/prefs.ts`).
+
+## Audio buses
+
+`src/audio.ts`: word clips stay on the `AudioPlayer` (tui-web's element). Music, ambience and
+effects (make-it-in-china `tools/audio/make_audio.py`, vendored in `assets/audio/` with its
+`manifest.json`) play on a `SoundMixer` over Web Audio (iOS ignores an element's volume): master →
+music / ambient / sfx gains. `pickFormat` takes `.ogg` where `canPlayType` says Vorbis, else
+`.m4a`; an entry the build shipped in one format falls back to it (`fileFor`). Nothing plays
+before the first gesture (`unlock()` makes / resumes the context inside it); the mute and the
+music volume persist (prefs). The choices are pure (`test/sound.test.ts`):
+
+| bus | what | when |
+| --- | --- | --- |
+| music | `title_theme` | the start flow (from its first tap) |
+| music | `cutscene_flyover` | the fly-over |
+| music | `town_day` / `town_evening` | in play, by daylight (`EVENING_AT` 0.6 of the day's slots); 1.5 s crossfades; inside a building −6 dB |
+| ambient | `canal_water` | outdoors, 1 − d / 25 m to the nearest water vertex of the walk grid (heights under −0.6 m: canal, lake; `waterDistance`, a chamfer transform) |
+| ambient | `birds_day` / `crickets_evening` | outdoors, by daylight |
+| ambient | `market_murmur` | core's place is `market` |
+| sfx | `ui_tap` / `ui_confirm` / `ui_back` / `ui_page` / `ui_reveal` | the start flow's hooks; every button in the overlay (`data-sfx` names another: close / cancel `ui_back`) ; a hint chip opening |
+| sfx | `bubble_open` / `bubble_close` | the bubble shown / hidden |
+| sfx | `tile_place` / `tile_undo` | a tile tapped / Undo |
+| sfx | `coin` | `walletChanged` shopping (a shop's price paid) or wages |
+| sfx | `success_jingle` | `sceneEnded` |
+| sfx | `fail_soft` | `actionPerformed` not matched / wrong tiles (a mix-up) |
+| sfx | `door_open` / `door_close` | walking into / out of a building (the fade's swap) |
+| sfx | `notebook_open` | the notebook opens |
+| sfx | `cutscene_skip` | the fly-over skipped |
+| sfx | `bell_temple` | a tap within 2 m of the great tree's altar (`altar_top` anchor) |
+| sfx | `step_<surface>_1..4` | footsteps, one every half stride of the walk clip (`StrideClock`, the rig's `stride_m`), one of four at random, ±10 % pitch; surface: grid class 1 grass, 2-4 stone, the stone arch stone, the wooden bridge and the pier wood, indoors wood |
+
+`world3d.sound()` shows what the mixer wants now; `world3d.sfx(id)` plays one.
+
+## First-steps guide
+
+`src/guide.ts`, from core state alone (the objective's scene, the log of accepted inputs, the scenes
+done) plus whether the player is in talk range of the target; no new core inputs. While a step is
+on, the objective line shows it with a gold "Guide" tag and a toon arrow + ring (`src/marker.ts`)
+floats over its target:
+
+| step | line | target / highlight | until |
+| --- | --- | --- | --- |
+| walk | Walk to Old Wang | marker over the objective scene's NPC | in talk range |
+| talk | Talk: tap Old Wang | marker over them | the scene starts |
+| reply | Reply: pick a line | the reply sheet glows (once) | the first reply of the game |
+| word | Tap a word to see its meaning | the line's first word pulses (once) | the first word look-up |
+| go | Go to Noodle Shop | marker on its door | there (Wang's other two scenes come first: walk / talk again) |
+| do | Ask about work: tap Cook | marker over the cook | its scene is done |
+
+Then the normal objective line takes over (a story scene away from the start place done, or day 2).
+The brief's "Eat" step is the noodle shop's first scene: the course has no eating scene (food is
+taken at night). Menu → Hide guide / Show guide (remembered). Strings in en / bn / zh.
 
 ## Tests (DOM-free, `npm test`)
 
@@ -485,6 +603,16 @@ TUI) isn't there yet.
 - `test/courses.test.ts`: picking the course as tui-web does (the only course, the start list and a
   failed load, a remembered course and reading language, no catalog), a 0.12 save under
   `zh-china-en` loading as the last game, readings as the TUI shows them, spaced tiles.
+- `test/start.test.ts`: the start flow on a small fake DOM (`test/fake-dom.ts`): title → speak →
+  learn → name → intro and its result remembered under the shared settings key; the chrome
+  following the reading language; coming soon; core's name rules; a returning player skipping it;
+  the six words against the course; the hint chip hidden by default in a bubble line; the bn / zh
+  tables naming only English keys with the same slots.
+- `test/guide.test.ts`: the guide's steps from a scripted new game (walk → talk → reply → word →
+  Wang's next scenes → go to the noodle shop → its scene → handed over), hidden, day 2.
+- `test/sound.test.ts`: the buses' pure choices: format by `canPlayType`, music by phase /
+  daylight / interior, ambience by the real town's water distance / daylight / zone, footstep
+  surfaces on the real grid and decks, the stride clock, event effects; the vendored manifest; prefs.
 - `test/anim.test.ts`: the animation state machine and `CharacterActor`.
 - `test/input.test.ts`: joystick maths (vector from the touch offset, dead zone, clamp at the
   rim), tap vs drag, keys and joystick feeding one vector, the phone outline width.
@@ -504,9 +632,6 @@ TUI) isn't there yet.
   ledger.
 
 ## Stubbed in this slice
-
-- **Settings:** no in-game switch of course or reading language (the TUI's [o]); the start list is
-  a plain dialog.
 
 - **Gestures:** no gesture on `npcReacted` beyond the mix-up shrug; `actionPerformed` has no prop
   animation, only narration.

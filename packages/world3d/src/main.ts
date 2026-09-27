@@ -1,27 +1,55 @@
-// Bootstraps the 3D front end: the course (courses.ts, picked and loaded as the browser TUI does),
+// Bootstraps the 3D front end: the catalog, then the start flow (start/flow.ts: title, "I speak…",
+// "I want to learn…", name, the six words; a returning player with a save skips it) while the town
+// loads underneath, the course (courses.ts, loaded and remembered as the browser TUI does),
 // storage (same keys as the browser TUI), every scene space (the canal town and the interiors),
 // the player, the camera, the overlay, the fly-over of a new game (cutscene.ts), and the frame loop
 // that ties walking to core (zones / doors -> goTo through SpaceNav, NPC taps / E -> the scene
 // start sequence in game.ts, prompts -> talk / enter / leave / sleep / notebook). Input: keys and
 // the touch joystick feed one MoveInput vector (input.ts); clicks and taps go through touch.ts.
+// Sound: word clips on the AudioPlayer, music / ambience / effects on the SoundMixer (audio.ts),
+// chosen every frame from the phase, the daylight, the space and the player's position. The
+// first-steps guide (guide.ts) drives the objective line and a 3D marker over its target.
 import * as THREE from "three";
+import { cleanName, type CatalogEntry, type Course } from "@silver-tongue/core";
 import { decodeSave, encodeSave, sessionLines } from "@silver-tongue/tui";
 import { fromLocalStorage, type KeyValue } from "@silver-tongue/tui-web/src/web-storage";
-import { createAudioPlayer, unlockAudioOnGesture } from "./audio";
+import { COMING_SOON, NATIVE_NAMES } from "../locale";
+import {
+  ambientFor,
+  createAudioPlayer,
+  footstep,
+  musicFor,
+  pickFormat,
+  sfxForEvent,
+  SoundMixer,
+  StrideClock,
+  surfaceFor,
+  unlockAudioOnGesture,
+  waterDistance,
+  type AudioPlayer,
+  type SoundEntry,
+  type SoundPhase,
+} from "./audio";
 import { CAMERA, CameraRig, outlineScale } from "./camera";
 import { PlayerCarry } from "./carry";
-import { pickCourse } from "./courses";
+import { applyStart, loadCatalog, rememberedStart, resumePick, type Picked } from "./courses";
 import { CameraPathPlayer, Letterbox } from "./cutscene";
 import { openSession, type Game, type UiModel } from "./game";
+import { Guide, type GuideStep } from "./guide";
 import { MoveInput, toGround } from "./input";
-import { LAYOUT, LayoutIndex, STREET, type AssetIndex, type Stand } from "./layout";
+import { deckAt, gridClass, LAYOUT, LayoutIndex, STREET, type AssetIndex, type Stand } from "./layout";
 import { Player } from "./player";
+import { loadPrefs, savePrefs } from "./prefs";
 import { nearestPrompt, promptTargets, SpaceNav, TALK_RANGE, type Arrival, type PromptTarget } from "./spaces";
+import { mountStartFlow, type IntroSource, type StartConfig, type StartResult } from "./start/flow";
+import { clipsFor, courseIntro } from "./start/intro";
+import * as startText from "./start/strings";
+import { uiLanguage } from "./strings";
 import { PointerControls } from "./touch";
 import { Overlay } from "./ui/overlay";
-import { showCourseChoice } from "./ui/start";
 import type { Insets } from "./ui/viewport";
 import { AssetCache, drawCalls, SceneSpace, setOutlineScale } from "./world";
+import { GuideMarker } from "./marker";
 import type { WebSessions } from "@silver-tongue/tui-web/src/web-storage";
 
 /**
@@ -30,6 +58,8 @@ import type { WebSessions } from "@silver-tongue/tui-web/src/web-storage";
  */
 declare const __AUDIO_ROOT__: string;
 const ASSETS = "./assets"; // relative: the page works under a subpath (GitHub Pages /world3d/)
+/** a tap on the ground this close (m) to the great tree's altar rings its bell */
+const ALTAR_TAP_M = 2;
 
 // Private windows and blocked site data make localStorage throw: play on without saving.
 const noStorage: KeyValue = {
@@ -51,6 +81,10 @@ try {
 
 const loading = document.querySelector<HTMLElement>("#loading")!;
 const uiRoot = document.querySelector<HTMLElement>("#ui")!;
+const startRoot = document.querySelector<HTMLElement>("#start")!;
+/** `?ui=bn` / `?ui=zh`: the chrome in that UI language whatever the reading language (a preview until such a course exists). */
+const uiOverride = new URLSearchParams(location.search).get("ui") ?? undefined;
+const prefs = loadPrefs(kv);
 
 // Phones: no pinch / double-tap zoom (iOS ignores user-scalable=no), no pull-to-refresh (page.css
 // touch-action / overscroll-behavior); the first gesture unlocks audio.
@@ -76,56 +110,203 @@ function safeInsets(): Insets {
 }
 
 async function main() {
-  // The course first (the start list, when there are several and none is remembered), then the street.
-  let picked: Awaited<ReturnType<typeof pickCourse>>;
+  // The catalog first: no reading language to say anything in before it (as tui-web).
+  let catalog: CatalogEntry[];
   try {
-    picked = await pickCourse({ fetchJson, kv, choose: (choice) => showCourseChoice(document.body, choice) });
+    catalog = await loadCatalog(fetchJson);
   } catch (e) {
-    // No course text has loaded, so there is no reading language to say this in (as tui-web).
     loading.textContent = "The game could not load. Serve this page from a web server and reload.";
     console.error(e);
     return;
   }
-  const { course, entry } = picked;
-  document.documentElement.lang = course.learner;
-  // One audio player for the page (every game shares it), loading clips by URL as they are said.
-  const audio = createAudioPlayer({
-    base: `${__AUDIO_ROOT__}courses/${entry.id}/audio/`,
-    audio: typeof Audio === "undefined" ? undefined : new Audio(),
-    wait: (ms, cb) => {
-      const h = setTimeout(cb, ms);
-      return { cancel: () => clearTimeout(h) };
+
+  // Music, ambience and effects: one mixer for the page; it starts at the first gesture.
+  const probe = typeof Audio === "undefined" ? undefined : new Audio();
+  const canPlayType = probe ? (m: string) => probe.canPlayType(m) : undefined;
+  const manifest = await fetchJson<SoundEntry[]>(`${ASSETS}/audio/manifest.json`).catch(() => [] as SoundEntry[]);
+  const mixer = new SoundMixer({
+    base: "./",
+    manifest,
+    format: pickFormat(canPlayType),
+    canPlayType,
+    context: () => {
+      const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      return Ctx ? new Ctx() : null;
     },
+    fetchBytes: async (url) => {
+      const r = await fetch(url);
+      if (!r.ok) throw new Error(`${url}: ${r.status}`);
+      return r.arrayBuffer();
+    },
+    muted: !prefs.sound,
+    musicVolume: prefs.music,
   });
-  unlockAudioOnGesture(audio);
+  const unlockEvents = ["pointerup", "touchend", "click", "keydown"] as const;
+  const unlockMixer = () => {
+    mixer.unlock();
+    if (mixer.unlocked) for (const ev of unlockEvents) window.removeEventListener(ev, unlockMixer, true);
+  };
+  for (const ev of unlockEvents) window.addEventListener(ev, unlockMixer, true);
+  const sfx = (id: string) => mixer.sfx(id);
 
-  const index = (await (await fetch(`${ASSETS}/index.json`)).json()) as AssetIndex;
-  const L = new LayoutIndex(LAYOUT, index);
+  // The town loads while the start flow runs (it needs no course).
+  const worldReady = (async () => {
+    const index = (await (await fetch(`${ASSETS}/index.json`)).json()) as AssetIndex;
+    const L = new LayoutIndex(LAYOUT, index);
+    const renderer = new THREE.WebGLRenderer({ antialias: window.devicePixelRatio < 2, powerPreference: "high-performance" });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    document.querySelector("#stage")!.append(renderer.domElement);
+    const assets = new AssetCache(ASSETS, L);
+    await assets.preload((done, total) => {
+      loading.textContent = `Loading ${done}/${total}`;
+    });
+    // Every space is built up front (a few MB of shared templates): walking through a door is instant.
+    const spaces = new Map<string, SceneSpace>();
+    for (const id of L.spaceIds()) spaces.set(id, await SceneSpace.create(L, assets, id));
+    const player = new Player(await assets.actor(LAYOUT.player.character), spaces.get("street")!.area);
+    // The parcel of an errand, in the player's hands while core has one (state.errand).
+    const bagSpec = LAYOUT.player.errandProp;
+    const bagAsset = typeof bagSpec === "string" ? bagSpec : bagSpec?.asset;
+    const carry = new PlayerCarry(player.actor, bagAsset ? await assets.instance(bagAsset) : null, bagSpec);
+    return { L, renderer, spaces, player, carry };
+  })();
+  worldReady.catch(() => {}); // reported where it is awaited
 
-  const renderer = new THREE.WebGLRenderer({ antialias: window.devicePixelRatio < 2, powerPreference: "high-performance" });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  document.querySelector("#stage")!.append(renderer.domElement);
+  // The course: a returning player (a saved game) goes straight in; anyone else runs the start flow.
+  const deps = { fetchJson, kv, now: Date.now };
+  /** a course the start flow's intro step already fetched and remembered */
+  let pendingPick: Picked | null = null;
+  /** the start flow is on screen: the world takes no input */
+  let startOpen = false;
+  /** the word clips for the course being played */
+  let audio: AudioPlayer | null = null;
+  let audioCourse = "";
+  /** The word clips' player for a course (made once per course: it unlocks on the next gesture). */
+  const wordAudio = (entry: CatalogEntry) => {
+    if (audio && audioCourse === entry.id) return audio;
+    audio?.stop();
+    audioCourse = entry.id;
+    const a = createAudioPlayer({
+      base: `${__AUDIO_ROOT__}courses/${entry.id}/audio/`,
+      audio: typeof Audio === "undefined" ? undefined : new Audio(),
+      wait: (ms, cb) => {
+        const h = setTimeout(cb, ms);
+        return { cancel: () => clearTimeout(h) };
+      },
+    });
+    unlockAudioOnGesture(a);
+    return a;
+  };
 
-  const assets = new AssetCache(ASSETS, L);
-  await assets.preload((done, total) => {
-    loading.textContent = `Loading ${done}/${total}`;
-  });
-  // Every space is built up front (a few MB of shared templates): walking through a door is instant.
-  const spaces = new Map<string, SceneSpace>();
-  for (const id of L.spaceIds()) spaces.set(id, await SceneSpace.create(L, assets, id));
+  /**
+   * Mounts the start flow and resolves with its result (the intro step fetches and remembers the
+   * course, courses.ts applyStart). `opts.intro` replays the six words only (Settings).
+   */
+  function runStartFlow(remembered: StartConfig["remembered"], opts: { introOnly?: StartConfig["intro"] } = {}): Promise<StartResult> {
+    startOpen = true;
+    move.clear();
+    pointers?.reset();
+    /** the course the six words are said from */
+    let introCourse: Course | null = picked?.course ?? null;
+    const intro: IntroSource =
+      opts.introOnly ??
+      (async (pick) => {
+        pendingPick = await applyStart(deps, catalog, pick);
+        // The pick's clips play the Listen buttons (the same player goes on into the game).
+        audio = wordAudio(pendingPick.entry);
+        introCourse = pendingPick.course;
+        return courseIntro(pendingPick.course);
+      });
+    const flow = mountStartFlow(startRoot, {
+      catalog,
+      remembered,
+      comingSoon: COMING_SOON,
+      intro,
+      startAt: opts.introOnly ? "intro" : "title",
+      assetBase: `${ASSETS}/ui/title/`,
+      uiOverride,
+      hooks: {
+        sfx,
+        music: (id) => mixer.setMusic(id),
+        say: (wordId) => {
+          const c = introCourse;
+          const w = c && courseIntro(c)?.words.find((x) => x.id === wordId);
+          if (c && w) audio?.play([{ clips: clipsFor(c, w.text) }]);
+        },
+      },
+    });
+    if (!opts.introOnly) mixer.setMusic("title_theme");
+    return flow.result.then((r) => {
+      flow.destroy();
+      startOpen = false;
+      return r;
+    });
+  }
+
+  /** The start flow until its pick loads: the course played, and the name to give the new game. */
+  async function startFlowPick(remembered: StartConfig["remembered"]): Promise<{ picked: Picked; name: string }> {
+    for (;;) {
+      pendingPick = null;
+      const r = await runStartFlow(remembered);
+      try {
+        const got = pendingPick as Picked | null; // set by the intro step
+        const p = got && got.entry.id === r.course && got.course.learner === r.learner ? got : await applyStart(deps, catalog, r);
+        return { picked: p, name: r.name };
+      } catch (e) {
+        console.error("start flow: the course didn't load; choose again", e);
+        remembered = { ...remembered, name: r.name };
+      }
+    }
+  }
+
+  let picked: Picked | null = await resumePick(deps, catalog);
+  let startName: string | null = null;
+  // move / pointers exist before the flow can reset them (declared below, used by runStartFlow)
+  let pointers: PointerControls | undefined;
+  const move = new MoveInput();
+  if (!picked) {
+    const r = await startFlowPick({ ...rememberedStart(kv) });
+    picked = r.picked;
+    startName = r.name;
+  }
+  let { course, entry } = picked;
+  document.documentElement.lang = course.learner;
+  audio = wordAudio(entry);
+
+  let world: Awaited<typeof worldReady>;
+  try {
+    world = await worldReady;
+  } catch (e) {
+    loading.textContent = `Couldn't start: ${(e as Error).message}`;
+    console.error(e);
+    return;
+  }
+  const { L, renderer, spaces, player, carry } = world;
   const street = spaces.get("street")!;
-
-  const player = new Player(await assets.actor(LAYOUT.player.character), street.area);
-  // The parcel of an errand, in the player's hands while core has one (state.errand).
-  const bagSpec = LAYOUT.player.errandProp;
-  const bagAsset = typeof bagSpec === "string" ? bagSpec : bagSpec?.asset;
-  const carry = new PlayerCarry(player.actor, bagAsset ? await assets.instance(bagAsset) : null, bagSpec);
   const rig = new CameraRig(renderer.domElement);
 
   // Where a tap sent the player: a small ring on the ground.
   const marker = new THREE.Mesh(new THREE.RingGeometry(0.18, 0.26, 24), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8 }));
   marker.rotation.x = -Math.PI / 2;
   marker.visible = false;
+  // The guide's marker over its target (an NPC, a door): a floating arrow and a ring, toon style.
+  const guideMarker = new GuideMarker();
+  let guide = new Guide(course);
+  guide.hidden = prefs.guideHidden;
+  let guideStep: GuideStep | null = null;
+  const waterAt = waterDistance(LAYOUT.town.grid);
+  const stride = new StrideClock(player.actor.strideM);
+  const lastFoot = new THREE.Vector2(player.position.x, player.position.z);
+  let rngSeed = Date.now() >>> 0;
+  const rng = () => ((rngSeed = (rngSeed * 1664525 + 1013904223) >>> 0) / 4294967296);
+  /** the great tree's altar: a tap there rings the bell */
+  let altar: [number, number] | null = null;
+  try {
+    const a = L.point("great_tree", "altar_top");
+    altar = [a[0], a[2]];
+  } catch {
+    altar = null;
+  }
 
   let game: Game | undefined;
   let sessions: WebSessions | undefined;
@@ -142,14 +323,17 @@ async function main() {
   /** the fly-over while it plays (a new game), with its letterbox */
   let flyover: { path: CameraPathPlayer; bars: Letterbox } | null = null;
 
-  /** Puts the player (and the marker) into a space at a stand. */
-  function enterSpace(id: string, stand: Stand) {
+  /** Puts the player (and the markers) into a space at a stand; `door`: walked there (a door's sound). */
+  function enterSpace(id: string, stand: Stand, door = false) {
     const next = spaces.get(id)!;
-    space.scene.remove(player.root, marker);
+    // Through a door: it opens going in, and closes behind you coming out.
+    if (door && next !== space && next.layout.interior !== space.layout.interior) sfx(next.layout.interior ? "door_open" : "door_close");
+    space.scene.remove(player.root, marker, guideMarker.root);
     space = next;
-    space.scene.add(player.root, marker);
+    space.scene.add(player.root, marker, guideMarker.root);
     player.area = space.area;
     player.place(stand.pos[0], stand.pos[2], new THREE.Vector3(...stand.facing));
+    lastFoot.set(stand.pos[0], stand.pos[2]);
     rig.setDistance(space.layout.camera.distance);
     rig.snap(player.position);
     marker.visible = false;
@@ -164,10 +348,45 @@ async function main() {
     space.setDaylight(h.slots ? h.slot / h.slots : 0);
   }
 
+  /** The chrome's UI language for a course: its reading language (or `?ui=`). */
+  const uiFor = (c: Course) => uiLanguage(uiOverride ?? c.learner);
+
+  /** Makes a loaded course the page's (the start flow's pick, Settings): its text, clips and guide. */
+  function useCourse(p: Picked) {
+    ({ course, entry } = p);
+    picked = p;
+    document.documentElement.lang = course.learner;
+    audio = wordAudio(entry);
+    overlay.setCourse(course);
+    overlay.lang = uiFor(course);
+    guide = new Guide(course);
+    guide.hidden = prefs.guideHidden;
+  }
+
+  /** Sound on / off everywhere: music, ambience, effects (the mixer) and the word clips (core's setSound). */
+  function setSound(on: boolean) {
+    prefs.sound = on;
+    savePrefs(kv, prefs);
+    mixer.setMuted(!on);
+    if (game && game.model.hud.sound !== "none" && (game.model.hud.sound === "on") !== on) game.setSound(on);
+  }
+
+  /** A language's name for the Settings lists, in the chrome's language. */
+  const languageName = (code: string) => {
+    const ui = uiFor(course);
+    return startText.has(ui, `lang.${code}`) ? startText.t(ui, `lang.${code}`) : (NATIVE_NAMES[code] ?? code);
+  };
+
   const overlay = new Overlay(uiRoot, course, {
-    // The current game stays saved (it is listed under the same keys the browser TUI uses).
+    // The current game stays saved (it is listed under the same keys the browser TUI uses). A new
+    // game runs the start flow again (the choices so far preselected), then flies over the town.
     onNewGame: () => {
-      if (game && window.confirm(game.s("new-game-confirm"))) boot({ fresh: true });
+      if (!game || !window.confirm(game.s("new-game-confirm"))) return;
+      void (async () => {
+        const r = await startFlowPick({ learner: course.learner, course: course.id, name: game?.core.state.player ?? "" });
+        if (r.picked.course !== course) useCourse(r.picked);
+        boot({ fresh: true, name: r.name });
+      })();
     },
     games: () => {
       if (!sessions || !game) return [];
@@ -188,7 +407,59 @@ async function main() {
     onPrompt: () => {
       if (prompt) use(prompt);
     },
+    sfx,
+    onSound: setSound,
+    guide: {
+      hidden: () => guide.hidden,
+      active: () => !!game && guide.active(game.core.state),
+      setHidden: (on) => {
+        guide.hidden = on;
+        prefs.guideHidden = on;
+        savePrefs(kv, prefs);
+      },
+    },
+    settings: {
+      current: () => ({
+        learners: entry.learners.map((code) => ({ code, label: entry.learnerNames[code] ?? NATIVE_NAMES[code] ?? code })),
+        learner: course.learner,
+        courses: [
+          ...catalog.map((e) => ({ id: e.id, label: languageName(e.language) })),
+          ...COMING_SOON.filter((l) => !catalog.some((e) => e.language === l)).map((l) => ({ id: `soon:${l}`, label: languageName(l), soon: true })),
+        ],
+        course: course.id,
+        name: game?.core.state.player ?? "",
+        sound: prefs.sound,
+        music: prefs.music,
+      }),
+      // As tui-web's switchTo: another reading language goes on with the game as played (its
+      // save is the course's, whatever the reading language); another course plays its last game.
+      switchTo: async (id, learner) => {
+        let p: Picked;
+        try {
+          p = await applyStart(deps, catalog, { course: id, learner });
+        } catch {
+          return game?.s("settings-switch-failed") ?? "";
+        }
+        useCourse(p);
+        boot({});
+        return null;
+      },
+      setName: (name) => {
+        if (!game) return null;
+        return cleanName(name) && game.setName(name) ? null : game.s("settings-name-bad");
+      },
+      setMusic: (v) => {
+        prefs.music = v;
+        savePrefs(kv, prefs);
+        mixer.setMusicVolume(v);
+      },
+      replayIntro: () => {
+        const intro = courseIntro(course);
+        if (intro) void runStartFlow({ learner: course.learner, course: course.id, name: game?.core.state.player ?? "" }, { introOnly: intro });
+      },
+    },
   });
+  overlay.lang = uiFor(course);
 
   /** World side of the model: the space for core's place, the scene lock and walk to the talk stand, talk / shrug clips, daylight. */
   function syncWorld(m: UiModel) {
@@ -219,26 +490,37 @@ async function main() {
     }
   }
 
-  function boot(opts: { fresh?: boolean; id?: string }) {
+  /** Opens a game (new, chosen, or the last played); `name`: the start flow's, given to a new game. */
+  function boot(opts: { fresh?: boolean; id?: string; name?: string }) {
     sceneNpc = null;
     pendingTalk = null;
     pendingUse = null;
     arriving = null;
     player.locked = false;
-    audio.stop();
+    audio?.stop();
     let ready = false; // the first render happens once the overlay has this game
     const opened = openSession(course, kv, {
       now: Date.now,
       fresh: opts.fresh,
       id: opts.id,
-      audio,
+      audio: audio ?? undefined,
+      ui: uiFor(course),
       onChange: (m) => {
         if (!ready) return;
         overlay.render(m);
         syncWorld(m);
       },
+      // Game events with a sound: a scene done, a mix-up, money paid or earned.
+      onEvent: (e) => {
+        const id = ready ? sfxForEvent(e) : null;
+        if (id) sfx(id);
+      },
     });
     game = opened.game;
+    // The start flow's name (core cleanName rules, saved with the game as the name dialog's was).
+    if (opts.name && course.needsName && !game.core.state.player) game.setName(opts.name);
+    // The sound setting holds across games: a save made with the word clips off follows it.
+    if (game.model.hud.sound !== "none" && (game.model.hud.sound === "on") !== prefs.sound) game.setSound(prefs.sound);
     sessions = opened.sessions;
     mixupSeq = game.model.mixups?.seq ?? 0;
     // A save made inside the noodle shop resumes inside it.
@@ -261,11 +543,14 @@ async function main() {
     if (flyover) return;
     if (!LAYOUT.town.camera.keys.length) return overlay.hold(false);
     const touch = overlay.touch || !!window.matchMedia?.("(pointer: coarse)").matches;
-    const bars = new Letterbox(document.body, game!.s(touch ? "cutscene-skip" : "cutscene-skip-key"), () => flyover?.path.skip());
+    const bars = new Letterbox(document.body, game!.s(touch ? "cutscene-skip" : "cutscene-skip-key"), () => {
+      sfx("cutscene_skip");
+      flyover?.path.skip();
+    });
     flyover = { path: new CameraPathPlayer(LAYOUT.town.camera), bars };
     overlay.hold(true);
     move.clear();
-    pointers.reset();
+    pointers?.reset();
   }
 
   /** Hands over to the game camera at the player (the path's last key is that very pose, so no jump). */
@@ -336,7 +621,7 @@ async function main() {
 
   /** A tap / click on the canvas (touch.ts told it from a joystick drag): talk to an NPC, use a thing, or walk there. */
   function tap(cx: number, cy: number) {
-    if (!game || overlay.blocking || transitioning) return;
+    if (!game || overlay.blocking || transitioning || startOpen) return;
     const r = canvas.getBoundingClientRect();
     const ndc = new THREE.Vector2(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1);
     const hit = space.pick(ndc, rig.camera);
@@ -355,16 +640,17 @@ async function main() {
       return;
     }
     pendingUse = null;
+    // The great tree's altar: its bell rings (the player walks up to it as to any spot).
+    if (altar && nav.space === STREET && Math.hypot(hit.ground.x - altar[0], hit.ground.z - altar[1]) <= ALTAR_TAP_M) sfx("bell_temple");
     player.walkTo(hit.ground.x, hit.ground.z);
     showMarker(hit.ground.x, hit.ground.z);
   }
 
-  // The one movement input: keys and the touch joystick write it, the frame loop reads it.
-  const move = new MoveInput();
+  // The one movement input (`move`, made before the start flow): keys and the touch joystick write it, the frame loop reads it.
   const canvas = renderer.domElement;
-  const pointers = new PointerControls(canvas, uiRoot, move, {
+  pointers = new PointerControls(canvas, uiRoot, move, {
     onTap: tap,
-    enabled: () => !!game && !overlay.blocking && !transitioning && !flyover,
+    enabled: () => !!game && !overlay.blocking && !transitioning && !flyover && !startOpen,
     stickZone: () => overlay.screen.stickZone,
     onTouch: () => overlay.setTouch(),
   });
@@ -372,7 +658,7 @@ async function main() {
 
   // Keys: overlay first (replies, lists, notebook), then walking and E.
   window.addEventListener("keydown", (e) => {
-    if (!game || flyover || e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+    if (!game || flyover || startOpen || e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
     if (overlay.key(e)) return e.preventDefault();
     if (overlay.blocking) return;
     if (move.press(e.key)) e.preventDefault();
@@ -381,7 +667,7 @@ async function main() {
   window.addEventListener("keyup", (e) => move.release(e.key));
   window.addEventListener("blur", () => {
     move.clear();
-    pointers.reset();
+    pointers?.reset();
   });
 
   function resize() {
@@ -398,7 +684,9 @@ async function main() {
   window.addEventListener("orientationchange", () => setTimeout(resize, 120)); // some browsers report the old size first
   resize();
 
-  boot({});
+  // A start-flow pick plays a new game under that name (a first one, or after a "New game");
+  // a returning player's last game resumes.
+  boot(startName !== null ? { fresh: true, name: startName } : {});
   loading.remove();
 
   const clock = new THREE.Clock();
@@ -410,9 +698,68 @@ async function main() {
     return { x: ((v.x + 1) / 2) * window.innerWidth, y: ((1 - v.y) / 2) * window.innerHeight, visible: v.z < 1 && Math.abs(v.x) <= 1 && Math.abs(v.y) <= 1 };
   };
   const still = new THREE.Vector2();
+
+  /** Music and ambience for this moment (audio.ts musicFor / ambientFor); the mixer acts on changes only. */
+  function updateSound() {
+    const phase: SoundPhase = startOpen ? "title" : flyover ? "cutscene" : "game";
+    const h = game?.model.hud;
+    const scene = {
+      phase,
+      daylight: h && h.slots ? h.slot / h.slots : 0,
+      interior: space.layout.interior,
+      place: game?.core.state.place,
+      waterDistance: nav.space === STREET ? waterAt(player.position.x, player.position.z) : Infinity,
+    };
+    // The start flow's music is its own (title_theme from the first tap); a replayed intro keeps the town's.
+    if (!startOpen || !game) {
+      const m = musicFor(scene);
+      mixer.setMusic(m.track, m.gain);
+    }
+    mixer.setAmbient(ambientFor(scene));
+  }
+
+  /** Footsteps in step with the walk clip, by the surface underfoot. */
+  function updateFootsteps() {
+    const p = player.position;
+    const moved = Math.hypot(p.x - lastFoot.x, p.z - lastFoot.y);
+    lastFoot.set(p.x, p.z);
+    if (moved < 1e-4 || moved > 2 || transitioning || flyover) return stride.reset();
+    const n = stride.advance(moved);
+    if (!n) return;
+    const town = nav.space === STREET;
+    const deck = town ? deckAt(LAYOUT.town.decks, p.x, p.z) : null;
+    const surface = surfaceFor({ gridClass: town ? gridClass(LAYOUT.town.grid, p.x, p.z) : 0, deck: deck?.deck ?? null, interior: space.layout.interior });
+    const f = footstep(surface, rng);
+    mixer.sfx(f.id, { rate: f.rate, gain: 0.55 });
+  }
+
+  /** The guide's step (objective line) and its marker over the target NPC or door. */
+  function updateGuide(dt: number) {
+    guideStep = null;
+    if (game && !flyover && !startOpen) {
+      const scene = course.scenes.find((x) => x.id === game!.model.objective.scene);
+      const near = !!scene && space.npcs.has(scene.npc) && flat(player.position, L.npcStand(scene.npc).pos) <= TALK_RANGE + 0.5;
+      guideStep = guide.step(game.core.state, { scene: scene?.id, near }, game.t, game.s);
+    }
+    overlay.setGuide(guideStep);
+    const t = guideStep?.target;
+    let at: THREE.Vector3 | null = null;
+    if (t?.kind === "npc" && space.npcs.has(t.npc) && !game?.model.scene) {
+      const n = L.npcStand(t.npc).pos;
+      at = new THREE.Vector3(n[0], n[1], n[2]);
+    } else if (t?.kind === "place") {
+      const tr = L.space(nav.space).triggers.find((x) => x.place === t.place && (x.kind === "door" || x.kind === "stay" || x.kind === "zone"));
+      if (tr) at = new THREE.Vector3(tr.at[0], space.area.heightAt(tr.at[0], tr.at[2]), tr.at[2]);
+    }
+    guideMarker.update(dt, at);
+  }
+
   renderer.setAnimationLoop(() => {
     const dt = Math.min(0.05, clock.getDelta());
+    updateSound();
     if (!game) return;
+    updateGuide(dt);
+    updateFootsteps();
     // The fly-over: the camera on its path, the town living (walkers, pets, NPCs), the player idle at the spawn.
     if (flyover) {
       const done = flyover.path.update(dt, rig.camera, rig.fov / CAMERA.fovDeg);
@@ -428,7 +775,7 @@ async function main() {
       transitioning = true;
       player.stop();
       overlay.fadeThrough(() => {
-        enterSpace(a.space, a.stand);
+        enterSpace(a.space, a.stand, true);
         transitioning = false;
       });
     }
@@ -556,7 +903,15 @@ async function main() {
       /** last frame's draw calls (frustum-culled) and the space's static batching: draw calls before / after merging, unculled */
       info: () => ({ calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, batching: { ...space.batching, now: drawCalls(space.scene) }, pixelRatio: renderer.getPixelRatio(), cutscene: flyover ? { t: flyover.path.t, duration: flyover.path.duration } : null }),
       /** touch input: the last joystick vector, pointers down, whether the stick is out; the layout in use */
-      touch: () => ({ ...pointers.debug(), touchUi: overlay.touch, layout: overlay.screen }),
+      touch: () => ({ ...pointers!.debug(), touchUi: overlay.touch, layout: overlay.screen }),
+      /** sound: unlocked, muted, music volume, the music bed and ambient gains wanted now */
+      sound: () => ({ unlocked: mixer.unlocked, muted: mixer.muted, musicVolume: mixer.musicVolume, ...mixer.playing }),
+      /** play one sound effect by id (checks) */
+      sfx: (id: string) => mixer.sfx(id),
+      /** the first-steps guide's step (null: none / over / hidden) */
+      guide: () => (guideStep ? { id: guideStep.id, text: guideStep.text, target: guideStep.target } : null),
+      /** the start flow is on screen */
+      starting: () => startOpen,
     },
   });
 }

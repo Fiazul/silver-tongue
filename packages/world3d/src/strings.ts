@@ -2,8 +2,11 @@
 // - FALLBACK: strings the learner FTL (packages/tui UI_KEYS) doesn't have yet, read with `s(id)`.
 // - TEXT_3D: learner messages whose TUI wording doesn't fit here (key hints like "Press [w]"), read
 //   through `display(t)`, the Text every 3D view uses.
-// A learner language overrides either with a `w3d-<id>` message; until then the English here shows.
+// A learner language overrides either with a `w3d-<id>` message. Under that, the chrome's UI
+// language (the reading language picked at the start, `?ui=` to preview another) has its own table
+// in locale/<ui>.json `game` (bn and zh partial); a key it lacks falls back to the English here.
 import type { Text } from "@silver-tongue/tui";
+import { FALLBACK_UI, UI_LOCALES } from "../locale";
 
 const FALLBACK: Record<string, string> = {
   notebook: "Notebook",
@@ -83,12 +86,44 @@ const FALLBACK: Record<string, string> = {
   "day-card-wallet": "Wallet",
   "day-card-change": "Change today",
   "day-card-next": "Next day",
+  // settings (Menu → Settings)
+  settings: "Settings",
+  "settings-title": "Settings",
+  "settings-reading": "I speak (menus and meanings)",
+  "settings-course": "I'm learning",
+  "settings-soon": "Coming soon",
+  "settings-name": "Your name",
+  "settings-name-save": "Save",
+  "settings-name-saved": "Name saved",
+  "settings-name-bad": "That name can't be used.",
+  "settings-sound": "Sound",
+  "settings-sound-on": "On",
+  "settings-sound-off": "Off",
+  "settings-music": "Music volume",
+  "settings-intro": "Replay the six words",
+  "settings-guide": "First-steps guide",
+  "settings-switch-failed": "That course didn't load; this one goes on.",
+  // the first-steps guide (guide.ts)
+  "guide-hide": "Hide guide",
+  "guide-show": "Show guide",
+  "guide-label": "Guide",
+  "guide-walk": "Walk to {npc}",
+  "guide-talk": "Talk: tap {npc}",
+  "guide-reply": "Reply: pick a line",
+  "guide-word": "Tap a word to see its meaning",
+  "guide-go": "Go to {place}",
+  "guide-do": "{task}: tap {npc}",
 };
+
+/** The UI language the chrome can show: `ui` when locale/ has it, else English. */
+export function uiLanguage(ui: string | undefined): string {
+  return ui && UI_LOCALES[ui] ? ui : FALLBACK_UI;
+}
 
 /** Learner messages reworded for the 3D world: the TUI's key hints become taps. */
 export const TEXT_3D: Record<string, string> = {
   "scene-street-hello-start":
-    "The old man pats the bench beside him and points at himself. He seems to have decided you need lessons: he says something, you answer. Stuck? Tap a word in his bubble to look it up, or the “…” button to see what the whole sentence means.",
+    "The old man pats the bench beside him and points at himself. He seems to have decided you need lessons: he says something, you answer. Stuck? Tap a word in his bubble to look it up, the little “?” at the end of the line to peek at what it means, or the “…” button for the whole sentence with its reading.",
   "tiles-title": "Your reply: tap the words in order, then Say it.",
   "reject-no-pick": "Tap one of the replies.",
   // the TUI's bottom-right "♪ [m]": the HUD's sound chip, tapped to turn it on or off
@@ -98,12 +133,17 @@ export const TEXT_3D: Record<string, string> = {
 
 const fill = (text: string, args: Record<string, string | number>) => text.replace(/\{(\w+)\}/g, (_, k: string) => String(args[k] ?? `{${k}}`));
 
-export function makeStrings(t: Text) {
+/** The chrome's strings: a `w3d-<id>` learner override, else the UI language's table, else English. */
+export function makeStrings(t: Text, ui?: string) {
+  const table = UI_LOCALES[uiLanguage(ui)].game ?? {};
   return (id: string, args: Record<string, string | number> = {}): string => {
     if (t.has(`w3d-${id}`)) return t(`w3d-${id}`, args);
-    return fill(FALLBACK[id] ?? id, args);
+    return fill(table[id] ?? FALLBACK[id] ?? id, args);
   };
 }
+
+/** Every English chrome key (tests: the bn / zh tables name no key that isn't here). */
+export const CHROME_KEYS: readonly string[] = Object.keys(FALLBACK);
 export type Strings = ReturnType<typeof makeStrings>;
 
 /**
