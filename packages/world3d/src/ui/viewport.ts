@@ -164,6 +164,36 @@ export function placeBubble(hx: number, hy: number, headVisible: boolean, w: num
   return { ...p, pinned: false };
 }
 
+/** The least height the bubble keeps when the toasts push it down (a name, a line, the tools). */
+export const BUBBLE_MIN_H = 110;
+
+/** The boxes other layers hold right now (CSS px, measured by Overlay): the visible toasts, the reply panel. */
+export interface TakenBands {
+  toasts?: Rect | null;
+  replies?: Rect | null;
+}
+
+const acrossX = (r: Rect, a: Rect) => r.x < right(a) && a.x < right(r);
+
+/**
+ * The speech bubble's area this frame: its layout rect with the bands the toasts (above: they
+ * push the bubble down) and the reply panel (below) hold taken out, wherever they share its
+ * columns (the landscape phone's reply panel sits in its own right third: no band taken), at every
+ * breakpoint. Only when that leaves under BUBBLE_MIN_H does the bubble rise back into the toasts'
+ * band (page.css draws the toasts over it then: they are the short-lived layer).
+ */
+export function bubbleArea(area: Rect, taken: TakenBands = {}): Rect {
+  const a = safeArea(area);
+  let top = a.y;
+  let bot = bottom(a);
+  const r = taken.replies;
+  if (r && finite(r.y) && acrossX(r, a) && r.y > a.y) bot = Math.min(bot, r.y - GAP);
+  const t = taken.toasts;
+  if (t && finite(t.y) && acrossX(t, a)) top = Math.max(top, bottom(t) + GAP);
+  if (bot - top < BUBBLE_MIN_H) top = Math.max(a.y, bot - BUBBLE_MIN_H);
+  return { x: a.x, y: top, w: a.w, h: Math.max(0, bot - top) };
+}
+
 /** The rects Overlay.layout writes as CSS custom properties. */
 export const LAYOUT_VARS = ["hud", "toasts", "replies", "choices", "actions", "actionButton", "bubble"] as const;
 

@@ -14,7 +14,7 @@ import { KEY_HINT, TUI_ONLY, display } from "../src/strings";
 import { ScatterMotion, WalkerMotion, WAIT_RANGE } from "../src/streetlife";
 import { placeBubble, screenLayout } from "../src/ui/viewport";
 import { AssetCache, SceneSpace } from "../src/world";
-import { ASSETS, assetIndex, countingCore, course, makeGame, playScene, rightOption, rightTiles } from "./helpers";
+import { ASSETS, assetIndex, readGlb, countingCore, course, makeGame, playScene, rightOption, rightTiles } from "./helpers";
 import { createCore } from "@silver-tongue/core";
 
 const named = () => ({ ...newGame(course), player: "Sam" });
@@ -467,12 +467,7 @@ describe("3D wording", () => {
 
 /** Same technique as scene.test.ts: real GLBs, read from disk instead of fetched (no network / DOM). */
 async function buildSpace(L: LayoutIndex, id: string): Promise<SceneSpace> {
-  const assets = new AssetCache(ASSETS, L);
-  const loader = (assets as unknown as { loader: { parseAsync(d: ArrayBuffer, p: string): Promise<unknown>; loadAsync(u: string): Promise<unknown> } }).loader;
-  loader.loadAsync = (url: string) => {
-    const buf = readFileSync(url);
-    return loader.parseAsync(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength), "");
-  };
+  const assets = new AssetCache(ASSETS, L, { read: readGlb });
   await assets.preload();
   return SceneSpace.create(L, assets, id);
 }

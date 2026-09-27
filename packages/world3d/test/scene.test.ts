@@ -10,19 +10,14 @@ import { CAMERA } from "../src/camera";
 import { blocked, PLAYER_RADIUS } from "../src/movement";
 import { ZONE_MARGIN } from "../src/spaces";
 import { AssetCache, SceneSpace } from "../src/world";
-import { ASSETS, assetIndex, course, makeGame } from "./helpers";
+import { ASSETS, assetIndex, readGlb, course, makeGame } from "./helpers";
 
 /** Every space built from the real GLBs, read from disk instead of fetched (once for the file). */
 let built: Promise<{ L: LayoutIndex; assets: AssetCache; spaces: Map<string, SceneSpace> }> | undefined;
 function buildAll() {
   built ??= (async () => {
     const L = new LayoutIndex(LAYOUT, assetIndex!);
-    const assets = new AssetCache(ASSETS, L);
-    const loader = (assets as unknown as { loader: { parseAsync(d: ArrayBuffer, p: string): Promise<unknown>; loadAsync(u: string): Promise<unknown> } }).loader;
-    loader.loadAsync = (url: string) => {
-      const buf = readFileSync(url);
-      return loader.parseAsync(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength), "");
-    };
+    const assets = new AssetCache(ASSETS, L, { read: readGlb });
     await assets.preload();
     const spaces = new Map<string, SceneSpace>();
     for (const id of L.spaceIds()) spaces.set(id, await SceneSpace.create(L, assets, id));
@@ -75,8 +70,27 @@ describe.skipIf(!assetIndex)("scene spaces from the real GLBs", () => {
     });
     const fog = street.scene.fog as THREE.Fog;
     expect(fog.near).toBeGreaterThanOrEqual(100); // the plateau is 140 m across: no haze on the town
-    expect(fog.far).toBeGreaterThan(800);
+    // full before the sky dome (r 800 m): the ground's far ring (horizon.ts skirt) fades into its horizon band
+    expect(fog.far).toBeLessThan(800);
     expect((400 - fog.near) / (fog.far - fog.near)).toBeLessThan(0.5); // mountains stay readable
+    // the far edge (horizon.ts): mountains once more, turned; the clouds up and out, unfogged as the dome
+    const echo = street.scene.getObjectByName("mountains_far_echo")!;
+    expect(echo).toBeDefined();
+    expect(echo.rotation.y).toBeCloseTo(Math.PI, 5);
+    const clouds: THREE.Mesh[] = [];
+    street.scene.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (m.isMesh && /cloud/.test((m.material as THREE.Material).name)) clouds.push(m);
+    });
+    expect(clouds.length).toBeGreaterThan(0);
+    for (const c of clouds) {
+      expect((c.material as THREE.MeshToonMaterial).fog).toBe(false);
+      c.geometry.computeBoundingBox();
+      expect(c.geometry.boundingBox!.min.y).toBeGreaterThanOrEqual(120);
+    }
+    // the skirt: merged into the apron's far-grass batch (one material): a batch reaching 3 km out
+    const far = new THREE.Box3().setFromObject(street.scene.getObjectByName("batch:grass_far") ?? street.scene);
+    expect(far.max.x).toBeGreaterThanOrEqual(3000);
     expect(CAMERA.far).toBeGreaterThan(800 + 400);
     expect(street.scene.getObjectByName("noodle_shop")).toBeDefined();
     expect(street.scene.getObjectByName("pier")).toBeDefined();

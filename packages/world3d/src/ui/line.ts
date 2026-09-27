@@ -1,6 +1,6 @@
 import type { Course, RenderedLine, WordId } from "@silver-tongue/core";
 import { sentenceReading } from "../game";
-import { el } from "./dom";
+import { el, nested } from "./dom";
 
 /**
  * A line as DOM: each token a tappable word span, the text between tokens (punctuation, the
@@ -21,10 +21,8 @@ export function lineNodes(line: RenderedLine, course: Course, opts: { onWord?: (
     else span.textContent = text;
     if (opts.onWord) {
       span.classList.add("tappable");
-      span.addEventListener("click", (e) => {
-        e.stopPropagation();
-        opts.onWord!(tk.word, span);
-      });
+      // a word inside a reply option (word help) or the bubble: its tap is the look-up, never the row's
+      nested(span).addEventListener("click", () => opts.onWord!(tk.word, span));
     }
     out.push(span);
     at = Math.max(at, tk.end);

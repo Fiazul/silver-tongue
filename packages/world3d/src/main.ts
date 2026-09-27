@@ -37,15 +37,17 @@ import { CameraPathPlayer, Letterbox } from "./cutscene";
 import { openSession, type Game, type UiModel } from "./game";
 import { Guide, type GuideStep } from "./guide";
 import { MoveInput, toGround } from "./input";
-import { deckAt, gridClass, LAYOUT, LayoutIndex, STREET, type AssetIndex, type Stand } from "./layout";
+import { deckAt, gridClass, heldProp, LAYOUT, LayoutIndex, STREET, type AssetIndex, type Stand } from "./layout";
+import { emptyLoad, loadPlan, loadSummary, reduceLoad } from "./loading";
 import { Player } from "./player";
 import { loadPrefs, savePrefs } from "./prefs";
 import { nearestPrompt, promptTargets, SpaceNav, TALK_RANGE, type Arrival, type PromptTarget } from "./spaces";
-import { mountStartFlow, type IntroSource, type StartConfig, type StartResult } from "./start/flow";
+import type { IntroSource, StartConfig, StartResult } from "./start/flow";
 import { clipsFor, courseIntro } from "./start/intro";
 import * as startText from "./start/strings";
 import { uiLanguage } from "./strings";
 import { PointerControls } from "./touch";
+import { LoadingScreen } from "./ui/loading";
 import { Overlay } from "./ui/overlay";
 import type { Insets } from "./ui/viewport";
 import { AssetCache, drawCalls, SceneSpace, setOutlineScale } from "./world";
@@ -79,7 +81,9 @@ try {
   // stays noStorage
 }
 
-const loading = document.querySelector<HTMLElement>("#loading")!;
+const loading = new LoadingScreen(document.querySelector<HTMLElement>("#loading")!);
+/** the loading screen's hold for the start (the town's first views); released at the first frame */
+const startHold = loading.hold();
 const uiRoot = document.querySelector<HTMLElement>("#ui")!;
 const startRoot = document.querySelector<HTMLElement>("#start")!;
 /** `?ui=bn` / `?ui=zh`: the chrome in that UI language whatever the reading language (a preview until such a course exists). */
@@ -110,12 +114,39 @@ function safeInsets(): Insets {
 }
 
 async function main() {
+  // The town loads first thing, while the catalog and the start flow run (it needs no course), and
+  // only what its first views show (loading.ts loadPlan): the rest streams in after the first frame.
+  let load = emptyLoad;
+  const worldReady = (async () => {
+    const index = await fetchJson<AssetIndex>(`${ASSETS}/index.json`);
+    const L = new LayoutIndex(LAYOUT, index);
+    const renderer = new THREE.WebGLRenderer({ antialias: window.devicePixelRatio < 2, powerPreference: "high-performance" });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    document.querySelector("#stage")!.append(renderer.domElement);
+    const assets = new AssetCache(ASSETS, L);
+    assets.onLoad = (e) => {
+      load = reduceLoad(load, e);
+      if (loading.visible) loading.render(loadSummary(load));
+    };
+    const bagSpec = LAYOUT.player.errandProp;
+    const bagAsset = heldProp(bagSpec)?.asset;
+    const plan = loadPlan(L, { character: LAYOUT.player.character, errandProp: bagAsset });
+    await assets.preload(plan.first);
+    // The town: its ground and everything that never moves now; its people stream in (SceneSpace.ready).
+    const spaces = new Map<string, SceneSpace>([[STREET, await SceneSpace.create(L, assets, STREET, { stream: true })]]);
+    const player = new Player(await assets.actor(LAYOUT.player.character), spaces.get(STREET)!.area);
+    // The parcel of an errand, in the player's hands while core has one (state.errand).
+    const carry = new PlayerCarry(player.actor, bagAsset ? await assets.instance(bagAsset) : null, bagSpec);
+    return { L, renderer, assets, plan, spaces, player, carry };
+  })();
+  worldReady.catch(() => {}); // reported where it is awaited
+
   // The catalog first: no reading language to say anything in before it (as tui-web).
   let catalog: CatalogEntry[];
   try {
     catalog = await loadCatalog(fetchJson);
   } catch (e) {
-    loading.textContent = "The game could not load. Serve this page from a web server and reload.";
+    loading.error("The game could not load. Serve this page from a web server and reload.");
     console.error(e);
     return;
   }
@@ -149,28 +180,6 @@ async function main() {
   for (const ev of unlockEvents) window.addEventListener(ev, unlockMixer, true);
   const sfx = (id: string) => mixer.sfx(id);
 
-  // The town loads while the start flow runs (it needs no course).
-  const worldReady = (async () => {
-    const index = (await (await fetch(`${ASSETS}/index.json`)).json()) as AssetIndex;
-    const L = new LayoutIndex(LAYOUT, index);
-    const renderer = new THREE.WebGLRenderer({ antialias: window.devicePixelRatio < 2, powerPreference: "high-performance" });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    document.querySelector("#stage")!.append(renderer.domElement);
-    const assets = new AssetCache(ASSETS, L);
-    await assets.preload((done, total) => {
-      loading.textContent = `Loading ${done}/${total}`;
-    });
-    // Every space is built up front (a few MB of shared templates): walking through a door is instant.
-    const spaces = new Map<string, SceneSpace>();
-    for (const id of L.spaceIds()) spaces.set(id, await SceneSpace.create(L, assets, id));
-    const player = new Player(await assets.actor(LAYOUT.player.character), spaces.get("street")!.area);
-    // The parcel of an errand, in the player's hands while core has one (state.errand).
-    const bagSpec = LAYOUT.player.errandProp;
-    const bagAsset = typeof bagSpec === "string" ? bagSpec : bagSpec?.asset;
-    const carry = new PlayerCarry(player.actor, bagAsset ? await assets.instance(bagAsset) : null, bagSpec);
-    return { L, renderer, spaces, player, carry };
-  })();
-  worldReady.catch(() => {}); // reported where it is awaited
 
   // The course: a returning player (a saved game) goes straight in; anyone else runs the start flow.
   const deps = { fetchJson, kv, now: Date.now };
@@ -202,7 +211,7 @@ async function main() {
    * Mounts the start flow and resolves with its result (the intro step fetches and remembers the
    * course, courses.ts applyStart). `opts.intro` replays the six words only (Settings).
    */
-  function runStartFlow(remembered: StartConfig["remembered"], opts: { introOnly?: StartConfig["intro"] } = {}): Promise<StartResult> {
+  async function runStartFlow(remembered: StartConfig["remembered"], opts: { introOnly?: StartConfig["intro"] } = {}): Promise<StartResult> {
     startOpen = true;
     move.clear();
     pointers?.reset();
@@ -217,7 +226,7 @@ async function main() {
         introCourse = pendingPick.course;
         return courseIntro(pendingPick.course);
       });
-    const flow = mountStartFlow(startRoot, {
+    const flow = (await import("./start/flow")).mountStartFlow(startRoot, {
       catalog,
       remembered,
       comingSoon: COMING_SOON,
@@ -277,11 +286,11 @@ async function main() {
   try {
     world = await worldReady;
   } catch (e) {
-    loading.textContent = `Couldn't start: ${(e as Error).message}`;
+    loading.error(`Couldn't start: ${(e as Error).message}`);
     console.error(e);
     return;
   }
-  const { L, renderer, spaces, player, carry } = world;
+  const { L, renderer, assets, plan, spaces, player, carry } = world;
   const street = spaces.get("street")!;
   const rig = new CameraRig(renderer.domElement);
 
@@ -322,8 +331,76 @@ async function main() {
   let prompt: PromptTarget | null = null;
   /** the fly-over while it plays (a new game), with its letterbox */
   let flyover: { path: CameraPathPlayer; bars: Letterbox } | null = null;
+  /** the fly-over's state for browser checks: playing, done (played out or skipped), null (never played: a loaded save) */
+  let flyoverState: "playing" | "done" | null = null;
 
-  /** Puts the player (and the markers) into a space at a stand; `door`: walked there (a door's sound). */
+  /** Each interior's build, started once: prefetched after the first frame, or when a door needs it first. */
+  const building = new Map<string, Promise<SceneSpace>>();
+  function ensureSpace(id: string): Promise<SceneSpace> {
+    const have = spaces.get(id);
+    if (have) return Promise.resolve(have);
+    let p = building.get(id);
+    if (!p) {
+      p = SceneSpace.create(L, assets, id).then((s) => {
+        spaces.set(id, s);
+        return s;
+      });
+      p.catch(() => building.delete(id)); // a failed room is tried again at the next door
+      building.set(id, p);
+    }
+    return p;
+  }
+  /** A space ready to go into: at once if it is built, else behind the loading screen (shown after 300 ms). */
+  async function openSpace(id: string): Promise<SceneSpace> {
+    if (spaces.has(id)) return spaces.get(id)!;
+    // the bar counts this room's files (some may be on their way already: the prefetch)
+    load = (plan.spaces.find((x) => x.id === id)?.assets ?? []).reduce(
+      (st, n) => reduceLoad(reduceLoad(st, { type: "start", name: n, bytes: L.asset(n).bytes }), assets.loaded.has(n) ? { type: "done", name: n } : { type: "progress", name: n, loaded: 0 }),
+      emptyLoad,
+    );
+    loading.render(loadSummary(load));
+    const release = loading.hold(300);
+    try {
+      return await ensureSpace(id);
+    } finally {
+      release();
+    }
+  }
+  /** After the first frame, idle: the town's people are streaming in; then every interior, nearest door first. */
+  function prefetch() {
+    const idle = (f: () => void) => ((window as { requestIdleCallback?: (f: () => void) => void }).requestIdleCallback ?? ((g: () => void) => setTimeout(g, 200)))(f);
+    void (async () => {
+      await street.ready.catch(() => {});
+      for (const s of plan.spaces) {
+        await new Promise<void>((r) => idle(r));
+        await ensureSpace(s.id).catch((e: unknown) => console.error(`${s.id}: didn't load`, e));
+      }
+    })();
+  }
+  /** Goes into a space at a stand once it is built (a fade when `door`). */
+  function goInto(id: string, stand: Stand, door: boolean) {
+    transitioning = true;
+    player.stop();
+    void openSpace(id).then(
+      () => {
+        if (door)
+          overlay.fadeThrough(() => {
+            enterSpace(id, stand, true);
+            transitioning = false;
+          });
+        else {
+          enterSpace(id, stand);
+          transitioning = false;
+        }
+      },
+      (e: unknown) => {
+        console.error(e);
+        transitioning = false;
+      },
+    );
+  }
+
+  /** Puts the player (and the markers) into a built space at a stand; `door`: walked there (a door's sound). */
   function enterSpace(id: string, stand: Stand, door = false) {
     const next = spaces.get(id)!;
     // Through a door: it opens going in, and closes behind you coming out.
@@ -492,6 +569,7 @@ async function main() {
 
   /** Opens a game (new, chosen, or the last played); `name`: the start flow's, given to a new game. */
   function boot(opts: { fresh?: boolean; id?: string; name?: string }) {
+    if (!flyover) flyoverState = null;
     sceneNpc = null;
     pendingTalk = null;
     pendingUse = null;
@@ -526,7 +604,9 @@ async function main() {
     // A save made inside the noodle shop resumes inside it.
     nav = new SpaceNav(L, game.core.state.place);
     const start = nav.jump(game.core.state.place);
-    enterSpace(start.space, start.stand);
+    // A save inside a room whose build hasn't landed yet: it goes in as soon as it has.
+    if (spaces.has(start.space)) enterSpace(start.space, start.stand);
+    else goInto(start.space, start.stand, false);
     ready = true;
     // A new game opens with the fly-over over the town; a loaded save starts straight in. The
     // overlay is held first, so the name dialog waits for the end of it.
@@ -548,6 +628,7 @@ async function main() {
       flyover?.path.skip();
     });
     flyover = { path: new CameraPathPlayer(LAYOUT.town.camera), bars };
+    flyoverState = "playing";
     overlay.hold(true);
     move.clear();
     pointers?.reset();
@@ -558,6 +639,7 @@ async function main() {
     if (!flyover) return;
     flyover.bars.close();
     flyover = null;
+    flyoverState = "done";
     overlay.hold(false);
     rig.snap(player.position);
   }
@@ -687,7 +769,8 @@ async function main() {
   // A start-flow pick plays a new game under that name (a first one, or after a "New game");
   // a returning player's last game resumes.
   boot(startName !== null ? { fresh: true, name: startName } : {});
-  loading.remove();
+  startHold();
+  prefetch();
 
   const clock = new THREE.Clock();
   const dir = new THREE.Vector2();
@@ -772,12 +855,7 @@ async function main() {
     if (arriving && !transitioning) {
       const a = arriving;
       arriving = null;
-      transitioning = true;
-      player.stop();
-      overlay.fadeThrough(() => {
-        enterSpace(a.space, a.stand, true);
-        transitioning = false;
-      });
+      goInto(a.space, a.stand, true);
     }
     // keys / joystick: one screen-space vector onto the ground; held movement cancels a tap's errand
     const held = transitioning ? { x: 0, y: 0 } : move.vector();
@@ -833,7 +911,7 @@ async function main() {
       const found = !!space.head(npc, head);
       if (found) head.y += 0.25;
       const p = found ? project(head) : { x: 0, y: 0, visible: false };
-      overlay.bubble.position(p.x, p.y, p.visible, overlay.screen.bubble);
+      overlay.bubble.position(p.x, p.y, p.visible, overlay.bubbleArea());
     }
     renderer.render(space.scene, rig.camera);
   });
@@ -841,7 +919,8 @@ async function main() {
   // For scripted browser checks: read the model, drive the game without pixel-hunting.
   Object.assign(window, {
     world3d: {
-      model: () => game?.model,
+      /** the game's model plus `cutscene`: the fly-over playing / done / null (never played) */
+      model: () => (game ? { ...game.model, cutscene: flyoverState } : undefined),
       state: () => game?.core.state,
       player: () => player.position.toArray(),
       space: () => nav.space,
@@ -901,7 +980,7 @@ async function main() {
       /** accepted goTo inputs in core's log (a place-trigger thrash shows as a burst here) */
       goToCount: () => game?.core.state.log.filter((l) => l.input.type === "goTo").length ?? 0,
       /** last frame's draw calls (frustum-culled) and the space's static batching: draw calls before / after merging, unculled */
-      info: () => ({ calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, batching: { ...space.batching, now: drawCalls(space.scene) }, pixelRatio: renderer.getPixelRatio(), cutscene: flyover ? { t: flyover.path.t, duration: flyover.path.duration } : null }),
+      info: () => ({ calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, batching: { ...space.batching, now: drawCalls(space.scene) }, pixelRatio: renderer.getPixelRatio(), cutscene: flyover ? { t: flyover.path.t, duration: flyover.path.duration } : null, cutsceneState: flyoverState }),
       /** touch input: the last joystick vector, pointers down, whether the stick is out; the layout in use */
       touch: () => ({ ...pointers!.debug(), touchUi: overlay.touch, layout: overlay.screen }),
       /** sound: unlocked, muted, music volume, the music bed and ambient gains wanted now */
@@ -917,6 +996,6 @@ async function main() {
 }
 
 main().catch((e: unknown) => {
-  loading.textContent = `Couldn't start: ${(e as Error).message}`;
+  loading.error(`Couldn't start: ${(e as Error).message}`);
   console.error(e);
 });

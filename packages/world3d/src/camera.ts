@@ -3,7 +3,7 @@
 // closing in on player + NPC during a scene. Jamil's spec asks for orbit: set CAMERA.mode to
 // "orbit" (the one-line switch) to let the player drag the view round.
 import * as THREE from "three";
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import type { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
 export const CAMERA = {
   mode: "fixed" as "fixed" | "orbit",
@@ -49,11 +49,15 @@ export class CameraRig {
     const az = (CAMERA.azimuthDeg * Math.PI) / 180;
     // The camera sits in front (+z) and to the right (+x) of what it looks at, looking down.
     this.offsetDir = new THREE.Vector3(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el));
-    if (CAMERA.mode === "orbit") {
-      this.controls = new OrbitControls(this.camera, dom);
-      this.controls.enablePan = false;
-      this.controls.maxPolarAngle = Math.PI * 0.45;
-    }
+    // the orbit camera only when switched on: its own chunk, never fetched by the fixed camera
+    if (CAMERA.mode === "orbit")
+      void import("three/examples/jsm/controls/OrbitControls.js").then(({ OrbitControls }) => {
+        const c = new OrbitControls(this.camera, dom);
+        c.enablePan = false;
+        c.maxPolarAngle = Math.PI * 0.45;
+        c.target.copy(this.aim);
+        this.controls = c;
+      });
   }
 
   /** Screen-space walking axes on the ground: [right, up-the-screen] as x/z unit vectors. */

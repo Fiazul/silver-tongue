@@ -7,7 +7,7 @@ import type { Course, RenderedLine, WordId } from "@silver-tongue/core";
 import type { Bubble } from "../game";
 import type { Strings } from "../strings";
 import { createHintChip } from "../start/hint-chip";
-import { el } from "./dom";
+import { el, nested } from "./dom";
 import { lineNodes } from "./line";
 import { placeBubble, type Rect } from "./viewport";
 
@@ -46,24 +46,18 @@ export class BubbleView {
     this.seq = b.seq;
     const text = el("div", { className: `bubble-line${b.slow ? " slow" : ""}` }, ...lineNodes(b.line, this.course, { onWord: this.hooks.onWord, ruby: b.slow, fresh: b.fresh }));
     if (b.line.meaning) {
-      const chip = createHintChip(b.line.meaning, { inline: true, lang: this.hooks.lang, sfx: this.hooks.sfx });
+      const chip = nested(createHintChip(b.line.meaning, { inline: true, lang: this.hooks.lang, sfx: this.hooks.sfx }));
       chip.dataset.sfx = "none"; // it plays ui_reveal itself
       text.append(chip);
     }
     const tools = el("div", { className: "bubble-tools" });
     if (b.line.meaning) {
-      const m = el("button", { className: "icon", title: this.s("sentence"), textContent: "…" });
-      m.addEventListener("click", (e) => {
-        e.stopPropagation();
-        this.hooks.onSentence(b.line, m);
-      });
+      const m = nested(el("button", { className: "icon", title: this.s("sentence"), textContent: "…" }));
+      m.addEventListener("click", () => this.hooks.onSentence(b.line, m));
       tools.append(m);
     }
-    const replay = el("button", { className: "icon", title: this.s("replay"), textContent: "▶", disabled: !b.audio.length });
-    replay.addEventListener("click", (e) => {
-      e.stopPropagation();
-      this.hooks.onReplay();
-    });
+    const replay = nested(el("button", { className: "icon", title: this.s("replay"), textContent: "▶", disabled: !b.audio.length }));
+    replay.addEventListener("click", () => this.hooks.onReplay());
     tools.append(replay);
     this.node.replaceChildren(el("div", { className: `bubble-name ${b.kind}`, textContent: b.npcName }), text, tools);
     this.node.classList.remove("pop");

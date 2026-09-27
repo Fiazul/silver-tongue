@@ -3,11 +3,13 @@
 // one anchor helper, with blockers, picking, street life and the time-of-day light. The town adds
 // its landscape (at the origin), the sky dome, the sun from town.json and a far haze.
 import * as THREE from "three";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import type { GLTF, GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { mergeGeometries, mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { CharacterActor, type ActorOptions } from "./actor";
 import { turnToward } from "./anim";
+import { HORIZON, moveClouds, skirtGeometry } from "./horizon";
+import { CHARACTER_KINDS, type LoadEvent } from "./loading";
 import { anchorToWorld, heldProp, yawFor, type Blocker, type Box2, type HeldPropSpec, type LayoutIndex, type Placement, type SpaceLayout, type Vec3 } from "./layout";
 import type { WalkArea } from "./player";
 import { ScatterMotion, WalkerMotion } from "./streetlife";
@@ -235,32 +237,72 @@ const NO_OUTLINE_SETS = new Set(["tiles", "landscape"]);
 const isFlat = (name: string) => /^(road_|pavement_|manhole|drain_grate)/.test(name);
 
 export class AssetCache {
-  private loader = new GLTFLoader();
+  /**
+   * The GLTF loader with three's meshopt decoder (the GLBs are meshopt-compressed: scripts/meshopt.mjs),
+   * imported on first use: its own chunk (build.mjs splitting), fetched while the page starts up.
+   */
+  private loader: Promise<GLTFLoader> | null = null;
   private templates = new Map<string, Promise<THREE.Object3D>>();
   readonly toon = new Toon();
+  /** the templates loaded so far */
+  readonly loaded = new Set<string>();
+  /** every file's progress (the loading screen's reducer, loading.ts) */
+  onLoad?: (e: LoadEvent) => void;
 
+  /** `read`: the file's bytes from somewhere else than fetch (the tests read the GLBs from disk) */
   constructor(
     private base: string,
     private L: LayoutIndex,
+    private opts: { read?: (url: string) => ArrayBuffer | Promise<ArrayBuffer> } = {},
   ) {}
+
+  private gltfLoader(): Promise<GLTFLoader> {
+    this.loader ??= Promise.all([import("three/examples/jsm/loaders/GLTFLoader.js"), import("three/examples/jsm/libs/meshopt_decoder.module.js")]).then(
+      ([{ GLTFLoader }, { MeshoptDecoder }]) => new GLTFLoader().setMeshoptDecoder(MeshoptDecoder),
+    );
+    return this.loader;
+  }
+
+  private async fetchGltf(url: string, name: string): Promise<GLTF> {
+    const loader = await this.gltfLoader();
+    const read = this.opts.read;
+    if (read) return loader.parseAsync(await read(url), "");
+    return loader.loadAsync(url, (ev) => this.onLoad?.({ type: "progress", name, loaded: ev.loaded, total: ev.lengthComputable ? ev.total : undefined }));
+  }
 
   /** The processed template for an asset, loaded once. */
   template(name: string): Promise<THREE.Object3D> {
     let p = this.templates.get(name);
     if (!p) {
       const entry = this.L.asset(name);
-      p = this.loader.loadAsync(`${this.base}/${entry.path}`).then((gltf) => {
-        const root = gltf.scene;
-        root.name = name;
-        root.animations = gltf.animations; // kept through clone(): the actor's clips
-        // Characters and what they hold move, so they can't be batched: one mesh each instead.
-        if (entry.set === "characters") mergePrimitives(root);
-        this.toon.apply(root, !NO_OUTLINE_SETS.has(entry.set) && !isFlat(name));
-        return root;
-      });
+      this.onLoad?.({ type: "start", name, bytes: entry.bytes });
+      const url = `${this.base}/${entry.path}`;
+      const loaded = this.fetchGltf(url, name);
+      p = loaded.then(
+        (gltf) => {
+          const root = gltf.scene;
+          root.name = name;
+          root.animations = gltf.animations; // kept through clone(): the actor's clips
+          // Characters and what they hold move, so they can't be batched: one mesh each instead.
+          if (entry.set === "characters") mergePrimitives(root);
+          this.toon.apply(root, !NO_OUTLINE_SETS.has(entry.set) && !isFlat(name));
+          this.loaded.add(name);
+          this.onLoad?.({ type: "done", name });
+          return root;
+        },
+        (e: unknown) => {
+          this.onLoad?.({ type: "fail", name });
+          throw e;
+        },
+      );
       this.templates.set(name, p);
     }
     return p;
+  }
+
+  /** Whether an asset's template is loaded (or loading). */
+  has(name: string): boolean {
+    return this.templates.has(name);
   }
 
   /**
@@ -277,9 +319,8 @@ export class AssetCache {
     return { strideM: e.rig?.stride_m, headTopY: (e.anchors?.head_top as Vec3 | undefined)?.[1] ?? (e.anchors?.top as Vec3 | undefined)?.[1] };
   }
 
-  /** Loads every template in parallel (the layout's assets), reporting progress. */
-  async preload(onProgress?: (done: number, total: number) => void) {
-    const names = this.L.assetNames();
+  /** Loads templates in parallel, in the order given (the fetches start in that order): by default every asset the layout uses. */
+  async preload(names: string[] = this.L.assetNames(), onProgress?: (done: number, total: number) => void) {
     let done = 0;
     await Promise.all(names.map((n) => this.template(n).then(() => onProgress?.(++done, names.length))));
   }
@@ -408,8 +449,6 @@ const NPC_TURN_RATE = 5; // 1/s, yaw easing
 const WALKER_TURN_RATE = 8;
 
 /** Asset kinds (index.json) that are characters: animated with an actor, idle when standing about. */
-const CHARACTER_KINDS = new Set(["human", "recolour", "pet"]);
-
 /** Pick proxies: raycast, never drawn. */
 const pickMaterial = new THREE.MeshBasicMaterial({ visible: false });
 
@@ -496,11 +535,23 @@ export class SceneSpace {
     this.sunHoriz = this.layout.town ? sunHoriz(this.layout.town.sun.azimuthDeg) : SUN_HORIZ;
   }
 
-  static async create(L: LayoutIndex, assets: AssetCache, id: string): Promise<SceneSpace> {
+  /**
+   * Builds a space. Its ground and everything that never moves first (batched: the first frame
+   * needs it); then its characters (NPCs nearest the spawn first, walkers, pets, with what they
+   * hold), each added as it lands. `stream`: resolve after the first part, the characters keep
+   * coming (`ready` resolves when they are all in); else resolve with everything in.
+   */
+  static async create(L: LayoutIndex, assets: AssetCache, id: string, opts: { stream?: boolean } = {}): Promise<SceneSpace> {
     const w = new SceneSpace(L, assets, id);
-    await w.build();
+    await w.buildStatic();
+    w.ready = w.populate();
+    if (!opts.stream) await w.ready;
+    else w.ready.catch((e: unknown) => console.error(`${id}: a character didn't load`, e));
     return w;
   }
+
+  /** resolves once every character of the space is in the scene */
+  ready: Promise<void> = Promise.resolve();
 
   /** The walking area for the player (player.ts). */
   get area(): WalkArea {
@@ -518,7 +569,7 @@ export class SceneSpace {
     obj.scale.setScalar(p.scale ?? 1);
   }
 
-  private async build() {
+  private async buildStatic() {
     const { L, scene, layout } = this;
     scene.background = this.background.clone();
     const town = layout.town;
@@ -537,10 +588,12 @@ export class SceneSpace {
       for (const name of town.landscape) {
         const o = await this.assets.instance(name);
         o.name = name;
+        if (name === "clouds") this.placeClouds(o);
         scene.add(o);
         statics.push(o);
       }
       if (town.sky) await this.addSky(town.sky);
+      await this.addHorizon(statics);
     } else if (!layout.interior) {
       // Endless ground under everything, then the mock-up's forecourt / road-extension boxes.
       const floor = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), this.assets.toon.flat("#C8C1B2"));
@@ -574,47 +627,14 @@ export class SceneSpace {
       if (blocker) this.blockers.push(blocker);
     }
     this.blockers.push(...layout.blockers); // the town's own (oriented rects)
+    // Static dressing (the characters among it animate: populate()).
     for (const d of layout.dressing) {
       const e = L.asset(d.asset);
-      if (e.set === "characters" && CHARACTER_KINDS.has(e.kind ?? "")) {
-        const a = await this.assets.actor(d.asset);
-        this.place(a.root, d);
-        scene.add(a.root);
-        if (d.behaviour === "scatter") this.scatterers.push({ actor: a, motion: new ScatterMotion([d.pos[0], d.pos[2]], d.rotY * DEG) });
-        else this.extras.push(a);
-        continue;
-      }
+      if (e.set === "characters" && CHARACTER_KINDS.has(e.kind ?? "")) continue;
       const o = await this.assets.instance(d.asset);
       this.place(o, d);
       scene.add(o);
       statics.push(o);
-    }
-    for (const w of layout.walkers) {
-      const a = await this.assets.actor(w.character);
-      await this.holdProp(a, w.heldProp);
-      const motion = new WalkerMotion(w.path, w.speed);
-      a.root.position.set(motion.x, L.heightAt(this.id, motion.x, motion.z), motion.z);
-      a.root.rotation.y = motion.yaw;
-      scene.add(a.root);
-      this.walkers.push({ actor: a, motion });
-    }
-    for (const npc of layout.npcs) {
-      const n = L.npc(npc);
-      const stand = L.npcStand(npc);
-      const actor = await this.assets.actor(n.character);
-      const o = actor.root;
-      o.position.set(...stand.pos);
-      o.rotation.y = yawFor(stand.facing);
-      await this.holdProp(actor, n.heldProp);
-      // A generous invisible cylinder to tap, so a thumb doesn't have to hit the thin model.
-      const proxy = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 2.1, 8), pickMaterial);
-      proxy.position.y = 1.05;
-      o.add(proxy);
-      o.traverse((c) => (c.userData.npc = npc));
-      scene.add(o);
-      this.pickables.push(proxy);
-      this.npcs.set(npc, { npc, actor, homeYaw: o.rotation.y });
-      this.blockers.push({ min: [stand.pos[0] - 0.25, stand.pos[2] - 0.25], max: [stand.pos[0] + 0.25, stand.pos[2] + 0.25] });
     }
     // Things to use (bed, notebook): a tap box each, with the prompt target's id.
     layout.interactables.forEach((x, i) => {
@@ -624,10 +644,127 @@ export class SceneSpace {
       scene.add(proxy);
       this.pickables.push(proxy);
     });
-    // Characters (NPCs, walkers, extras, pigeons) and what they hold stay separate: they animate.
     this.batching.before = drawCalls(scene);
     this.batching.merged = mergeStatic(scene, statics);
     this.batching.after = drawCalls(scene);
+    this.staticCalls = { before: this.batching.before, after: this.batching.after };
+  }
+
+  /** draw calls of the static part before / after batching (populate adds the characters' to both) */
+  private staticCalls = { before: 0, after: 0 };
+
+  /**
+   * The characters: NPCs (nearest the town's spawn first), walkers, pets and extras, each with what
+   * it holds, added to the scene (and to picking, blockers, NpcView) as each one lands. The fetches
+   * start in that order and run in parallel.
+   */
+  private async populate() {
+    const { L, scene, layout } = this;
+    const spawn = layout.town ? L.spawn(layout.defaultPlace).pos : null;
+    const near = (p: Vec3) => (spawn ? Math.hypot(p[0] - spawn[0], p[2] - spawn[2]) : 0);
+    const npcs = [...layout.npcs].sort((a, b) => near(L.npcStand(a).pos) - near(L.npcStand(b).pos));
+    const jobs: Promise<void>[] = [];
+    for (const npc of npcs)
+      jobs.push(
+        (async () => {
+          const n = L.npc(npc);
+          const stand = L.npcStand(npc);
+          const actor = await this.assets.actor(n.character);
+          const o = actor.root;
+          o.position.set(...stand.pos);
+          o.rotation.y = yawFor(stand.facing);
+          await this.holdProp(actor, n.heldProp);
+          // A generous invisible cylinder to tap, so a thumb doesn't have to hit the thin model.
+          const proxy = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 2.1, 8), pickMaterial);
+          proxy.position.y = 1.05;
+          o.add(proxy);
+          o.traverse((c) => (c.userData.npc = npc));
+          scene.add(o);
+          this.pickables.push(proxy);
+          this.npcs.set(npc, { npc, actor, homeYaw: o.rotation.y });
+          this.blockers.push({ min: [stand.pos[0] - 0.25, stand.pos[2] - 0.25], max: [stand.pos[0] + 0.25, stand.pos[2] + 0.25] });
+        })(),
+      );
+    for (const w of layout.walkers)
+      jobs.push(
+        (async () => {
+          const a = await this.assets.actor(w.character);
+          await this.holdProp(a, w.heldProp);
+          const motion = new WalkerMotion(w.path, w.speed);
+          a.root.position.set(motion.x, L.heightAt(this.id, motion.x, motion.z), motion.z);
+          a.root.rotation.y = motion.yaw;
+          scene.add(a.root);
+          this.walkers.push({ actor: a, motion });
+        })(),
+      );
+    for (const d of layout.dressing) {
+      const e = L.asset(d.asset);
+      if (!(e.set === "characters" && CHARACTER_KINDS.has(e.kind ?? ""))) continue;
+      jobs.push(
+        (async () => {
+          const a = await this.assets.actor(d.asset);
+          this.place(a.root, d);
+          scene.add(a.root);
+          if (d.behaviour === "scatter") this.scatterers.push({ actor: a, motion: new ScatterMotion([d.pos[0], d.pos[2]], d.rotY * DEG) });
+          else this.extras.push(a);
+        })(),
+      );
+    }
+    await Promise.all(jobs);
+    // Characters (NPCs, walkers, extras, pigeons) and what they hold stay separate: they animate.
+    const chars = drawCalls(scene) - this.staticCalls.after;
+    this.batching.before = this.staticCalls.before + chars;
+    this.batching.after = this.staticCalls.after + chars;
+  }
+
+  /**
+   * The town's far edge (horizon.ts): a skirt of the apron's far grass out past the haze, a cap on
+   * every open end where two landscape pieces meet at different heights, and mountains_far again,
+   * turned, where the first ring leaves the horizon open. All static: batched with the rest.
+   */
+  private async addHorizon(statics: THREE.Object3D[]) {
+    const town = this.layout.town!;
+    // the skirt in the apron's own far-grass colour (the same palette key: one toon material, one batch)
+    const skirt = new THREE.Mesh(skirtGeometry(), this.assets.toon.material(new THREE.MeshStandardMaterial({ color: HORIZON.skirt.colour })));
+    skirt.name = "horizon_skirt";
+    this.scene.add(skirt);
+    statics.push(skirt);
+    for (const c of HORIZON.caps) {
+      const w = Math.hypot(c.to[0] - c.from[0], c.to[2] - c.from[2]);
+      const h = c.to[1] - c.from[1];
+      const cap = new THREE.Mesh(new THREE.PlaneGeometry(w, h), this.assets.toon.material(new THREE.MeshStandardMaterial({ color: c.colour })));
+      cap.position.set((c.from[0] + c.to[0]) / 2, (c.from[1] + c.to[1]) / 2, (c.from[2] + c.to[2]) / 2);
+      cap.lookAt(cap.position.x + c.facing[0], cap.position.y + c.facing[1], cap.position.z + c.facing[2]);
+      cap.name = c.name;
+      this.scene.add(cap);
+      statics.push(cap);
+    }
+    const echo = HORIZON.mountainEcho;
+    if (town.landscape.includes(echo.asset)) {
+      const o = await this.assets.instance(echo.asset);
+      o.name = `${echo.asset}_echo`;
+      o.rotation.y = echo.rotYDeg * DEG;
+      o.scale.setScalar(echo.scale);
+      this.scene.add(o);
+      statics.push(o);
+    }
+  }
+
+  /**
+   * The clouds (one merged object, five clusters at index.json's cloud_slots) moved to HORIZON's
+   * slots, high and far off every camera's path, and unfogged like the sky dome.
+   */
+  private placeClouds(root: THREE.Object3D) {
+    const slots = (this.L.asset("clouds").anchors?.cloud_slots ?? []) as Vec3[];
+    root.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh || mesh.userData.outline) return;
+      mesh.geometry = mesh.geometry.clone();
+      if (slots.length) moveClouds(mesh.geometry, slots, HORIZON.clouds);
+      const m = (mesh.material as THREE.MeshToonMaterial).clone();
+      m.fog = false;
+      mesh.material = m;
+    });
   }
 
   /**

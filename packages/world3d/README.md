@@ -28,26 +28,63 @@ doesn't ship), so the build and the tests need nothing outside the repo. They ar
 make-it-in-china `tools/blender/build_all.py` and `tools/blender/town_layout.py`; don't hand-edit
 them. After the library changes or a layout starts using a new asset, refresh them with
 `npm run assets:sync -w @silver-tongue/world3d` (copies from `WORLD3D_ASSETS`, default `../assets`
-next to the repo checkout, and re-ports the town: see Outdoors). `WORLD3D_ASSETS` also overrides
-the build's and the tests' source. GLBs are served as files, never inlined. The one-off build
-(`npm run build`), measured 2026-09-27:
+next to the repo checkout, meshopt-compresses every GLB on the way, and re-ports the town: see
+Outdoors). `WORLD3D_ASSETS` also overrides the build's and the tests' source. GLBs are served as
+files, never inlined.
+
+**Meshopt.** Every GLB ships with `EXT_meshopt_compression` (`scripts/meshopt.mjs`, on
+meshoptimizer's own encoder, the package `@types/three` already pulls in; gltfpack and
+gltf-transform can't be installed here): index buffers through the TRIANGLES codec (lossless),
+float vertex attributes and animation outputs through the EXPONENTIAL filter (15-bit mantissa, one
+exponent per component: a step of at most extent / 32768, 4 mm on the plateau, 0.06 mm on a
+character) then the ATTRIBUTES codec, key times and inverse bind matrices lossless. Already
+compressed files are left alone, so it is safe to re-run. `sync-assets` and the build
+(`scripts/used-assets.mjs copyUsed`) both run it, so a raw library (`WORLD3D_ASSETS=...`) builds
+the same; `node scripts/meshopt.mjs <dir|file.glb>` compresses in place. The page decodes with
+three's `MeshoptDecoder` (`world.ts AssetCache`). Without meshoptimizer installed the GLBs ship
+raw, with a warning. GitHub Pages already gzips GLBs (`content-encoding: gzip` on
+`model/gltf-binary`, checked 2026-09-27): meshopt + gzip is what goes over the wire. The shipped
+`index.json` carries each file's `bytes` (the loading screen's sizes).
+
+The one-off build (`npm run build`), measured 2026-09-27:
 
 | part | KB | note |
 | --- | ---: | --- |
-| GLBs (`assets/`, 116) | 10,550 | the town's landscape, buildings and props, five rooms, 18 rigged characters and pets (humans ~0.4 MB each) |
+| GLBs (`assets/`, 116, meshopt) | 5,470 | 1,569 KB gzipped; raw 10,471 (2,885 gzipped) before meshopt |
 | music (`assets/audio/music`, .ogg only) | 2,469 | the .m4a (2,677 KB) stays behind: with it the total passes 15 MB (`build.mjs` MUSIC_OGG_ONLY) |
 | ambience (.ogg + .m4a) | 2,419 | |
 | effects (.ogg + .m4a) | 384 | |
 | title backdrop (`assets/ui/title`) | 291 | six JPEGs |
-| main.js | 935 | three.js, the ported town (106 KB), the start flow (+53 KB with guide and mixer) |
-| index.html | 38 | start.css + page.css inlined |
+| main.js + chunks/ | 251 + 702 | chunks: three core 579, GLTF loader 43, meshopt decoder 26, shared 41 (all modulepreloaded); start flow 13 and orbit camera 19 lazy |
+| index.html | 41 | start.css + page.css inlined |
 | courses/ | 344 | |
-| **total** | **17,387** | was 11,765 before the sound and the start flow (+5.6 MB); `WORLD3D_AUDIO=bundle` (music in both formats, and the word clips): 27,173 |
+| **total** | **12,429** | was 17,387 before meshopt |
 
-Over the 15 MB budget: the next saving is gltf-transform `optimize --compress meshopt` in
-`scripts/sync-assets.mjs` with three's MeshoptDecoder (the GLBs are the bulk), then the ambience as
-.ogg only. A browser without Vorbis (older Safari) has no music in the one-off build; its
-ambience and effects play from the .m4a.
+A browser without Vorbis (older Safari) has no music in the one-off build; its ambience and
+effects play from the .m4a. The next saving (both music formats under 15 MB): the ambience as
+.ogg only.
+
+## Loading and streaming
+
+`src/loading.ts` (pure) decides what loads when; `src/ui/loading.ts` is the screen.
+
+- **First frame** (`loadPlan().first`): the town's ground and everything on it that never moves
+  (landscape, sky, tiles, buildings, props, static dressing) plus the player and the parcel bag:
+  1,757 KB (627 KB gzipped) of the 5,470. The first views (the fly-over's first key, the spawn)
+  see all of it.
+- **Streamed after it** (`SceneSpace.create(..., { stream: true })`, `space.ready`): the town's
+  people, NPCs nearest the spawn first, walkers, pets and what they hold; each appears as it
+  lands. Input is never blocked; an NPC not in yet can't be talked to until it is.
+- **Interiors**: built on first need (`ensureSpace`) and prefetched when idle after the town's
+  people are in, nearest door first. A door whose room hasn't landed waits behind the loading
+  screen, shown only after 300 ms; a save made inside a room goes in once it lands.
+- **Audio** never waits: the mixer fetches nothing before the first gesture (audio.ts); its
+  manifest is fetched after the town load has started.
+- **Screen**: title, a bar with percent and MB (bytes from `index.json`, the loader's progress per
+  file; a count when a size is unknown: `reduceLoad` / `loadSummary`), the file loading now;
+  z-order under the start flow, over the game and the fly-over's bars.
+- **Chunks**: esbuild splitting (`build.mjs`); the GLTF loader and meshopt decoder are imported on
+  first use and modulepreloaded with main.js's own chunks.
 
 **Audio clips** (`content/audio/<language>`, for zh 870 clips, all referenced by the course, about
 7.1 MB) would take dist/ further past the 15 MB budget, so a one-off build doesn't copy
@@ -223,8 +260,9 @@ courses/<id>/<learner>.json (courses.ts) ─► core ◄─ inputs ── game.t
     interactables, then the ground: in the town settled onto the walking height), NPCs, extras,
     walkers and scatterers, the day tint (`setDaylight`) and shrugs. The town adds its landscape
     GLBs at the origin, the sky dome (unlit, unfogged, drawn first), the sun at town.json's bearing
-    and elevation, and a far haze. Every space is built at start, so a door is instant behind a
-    0.7 s fade.
+    and elevation, a far haze and its far edge (`src/horizon.ts`, see Outdoors). A space builds its
+    statics first (batched), then its characters stream in (`ready`); interiors build on first need
+    or idle prefetch (see Loading and streaming).
 - `src/player.ts` + `src/movement.ts`:
   - Walking: tap to walk in a straight line, sliding along blockers, or WASD/arrows relative to the
     screen. The player walks in the current space's `WalkArea` (bounds, blockers, oriented rects
@@ -429,8 +467,8 @@ wooden one, a lake with a pier to the west, hills, and mountains 360-400 m out u
   radius (the bridge slots, class 5, only there). The canal and the lake are unwalkable except on
   the decks; the town's edge is the grid's.
 - **Look:** the landscape and the town's props are toon-shaded and batched with everything else;
-  the sky dome is unlit and unfogged; the haze starts 110 m out and is full at 950 m, so the town
-  stays clear and the mountains read through a veil (the old street's 26-90 m depth fog would have
+  the sky dome is unlit and unfogged; the haze starts 110 m out and is full at 780 m (before the
+  dome, r 800), so the town stays clear and the mountains read through a veil (the old street's 26-90 m depth fog would have
   greyed them out). Its colour is the dome's horizon, tinted with the dome through the day
   (`DAY.skyTint`). The sun sits at town.json's bearing and reaches its elevation at midday.
 - **The fly-over** (`src/cutscene.ts`): a new game opens with town.json's 22 s camera path (cubic
@@ -440,6 +478,18 @@ wooden one, a lake with a pier to the west, hills, and mountains 360-400 m out u
   36°, 19 m, fov 30°, aim 1 m over the plaza), so the hand-over to `CameraRig.snap` doesn't jump
   (`test/cutscene.test.ts`, to 1e-3, landscape and portrait). The overlay (and the name dialog)
   waits underneath.
+- **Far edge** (`src/horizon.ts`, checked by `test/horizon.test.ts`; `npx tsx
+  packages/world3d/scripts/horizon-report.ts` prints the tables): the apron ends at r 760 m and
+  mountains_far only covers the bearings 300°-140°, so the fly-over saw a floating disc. world3d
+  adds a flat skirt of the apron's far grass (r 757 to 3200 m, fogged, one batch with the apron),
+  mountains_far again turned 180° and scaled 1.1 (every bearing covered), and a cap on the canal's
+  east end (its bed at -1.4 m met the apron's rim at 0: a 5 m slot). The clouds (one GLB, five
+  clusters) are moved per cluster to 150-190 m up, 420-470 m out, off the fly-over's path, and
+  drawn unfogged like the dome. The checks run the gameplay camera at the spawn and the outermost
+  walkable cell of 36 bearings, the fly-over at 24 fps and every key, on desktop, phone portrait
+  and phone landscape: no ray below the horizon crosses the ground's edge under 99 % haze, no cloud
+  within 150 m or at the frame's centre. A Blender follow-up could bake the same into
+  `tools/blender/sets/landscape.py` (then drop the world3d side).
 - **Street life:** seven walkers on the paths (the promenade, loop_south, the east spoke to the
   east loop, the north spoke, loop_north, the west loop over the stone bridge, the gate), a cat by
   the noodle shop, a dog on the lake shore, three pigeons on the plaza (they scatter).
@@ -447,7 +497,9 @@ wooden one, a lake with a pier to the west, hills, and mountains 360-400 m out u
 ## Seeing it (street life, interiors, the day)
 
 - The fly-over: a new game plays it; `world3d.cutscene("play")` again (in the town),
-  `world3d.cutscene("skip")`. `world3d.info().cutscene` is its time while it plays.
+  `world3d.cutscene("skip")`. `world3d.info().cutscene` is its time while it plays;
+  `world3d.info().cutsceneState` and `world3d.model().cutscene` say `"playing"`, `"done"` (played
+  out or skipped) or `null` (never played: a loaded save).
 - Interiors: walk up to the noodle shop's door (south bank, right of its front), the rented room's
   door or the corner shop's door (pad_ne), or the tea house's (pad_nw): "E · Enter …" shows, and
   stepping into the door box goes in behind a fade. Walk back out through the open front (towards
@@ -613,12 +665,22 @@ taken at night). Menu → Hide guide / Show guide (remembered). Strings in en / 
 - `test/sound.test.ts`: the buses' pure choices: format by `canPlayType`, music by phase /
   daylight / interior, ambience by the real town's water distance / daylight / zone, footstep
   surfaces on the real grid and decks, the stride clock, event effects; the vendored manifest; prefs.
+- `test/horizon.test.ts`: the far edge and the clouds against every view (above; it also checks
+  that the old edge and the old cloud fail it), the seams between the landscape GLBs.
+- `test/nested.test.ts`: controls nested in a tappable row (`ui/dom.ts nested` / `tappable`: a
+  reply option's hint chip, ▶ and words; the bubble's chip, "…", ▶ and words) never pick the row
+  by click, a pointer / touch press that lifts on the row, or Enter / Space; the row itself does.
+- `test/loading.test.ts`: the load plan (every asset once, the first frame's set, NPCs by distance,
+  nearest door first) and the progress reducer (bytes, count fallback, server length).
 - `test/anim.test.ts`: the animation state machine and `CharacterActor`.
 - `test/input.test.ts`: joystick maths (vector from the touch offset, dead zone, clamp at the
   rim), tap vs drag, keys and joystick feeding one vector, the phone outline width.
 - `test/viewport.test.ts`: the phone layout at 390x844 and 844x390 (and smaller, with and without
   notch insets): no panel outside the viewport / safe area, no overlap between panels shown
-  together, 56 px thumb targets, the bubble clamped for any head position. These check the rects
+  together, 56 px thumb targets, the bubble clamped for any head position and kept out of the
+  visible toasts' and the reply sheet's boxes at desktop, portrait and landscape
+  (`bubbleArea`: one band per layer; page.css's z-order puts toasts and HUD over the bubble, the
+  fade over all; every hint chip's hit area is at least 44 px). These check the rects
   page.css places the compact panels from; the rendered page is checked in a mobile browser.
 
 ## Gaps in core (mapped, not changed)

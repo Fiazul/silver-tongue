@@ -123,8 +123,12 @@ const PETS = [
   { asset: "pigeon", pos: [1.6, 0.05, -1.6], rotY: 260, behaviour: "scatter" },
 ];
 
-/** Outdoor fog for a 140 m plateau under mountains 360-400 m out: clear over the town, a haze on the far ring. */
-const FOG = { near: 110, far: 950 };
+/**
+ * Outdoor fog for a 140 m plateau under mountains 360-600 m out: clear over the town, a haze on the
+ * far ring, full before the sky dome (r 800 m), so the ground's far ring fades into the dome's
+ * horizon band (world3d src/horizon.ts: the skirt runs on under it).
+ */
+const FOG = { near: 110, far: 780 };
 
 // ---------------------------------------------------------------------------------------------
 // The port

@@ -7,7 +7,7 @@ import type { ReplyPanel } from "../game";
 import type { Strings } from "../strings";
 import type { Text } from "@silver-tongue/tui";
 import { createHintChip } from "../start/hint-chip";
-import { el } from "./dom";
+import { el, nested, tappable } from "./dom";
 import { lineNodes } from "./line";
 
 export interface ReplyHooks {
@@ -86,19 +86,17 @@ export class RepliesView {
     const rows = r.options.map((o, i) => {
       const row = el("div", { className: "option", tabIndex: 0 });
       row.setAttribute("role", "button");
-      const replay = el("button", { className: "icon", title: this.s("play"), textContent: "▶", disabled: !o.audio?.length });
-      replay.addEventListener("click", (e) => {
-        e.stopPropagation();
-        this.hooks.onHear(o.audio);
-      });
+      const replay = nested(el("button", { className: "icon", title: this.s("play"), textContent: "▶", disabled: !o.audio?.length }));
+      replay.addEventListener("click", () => this.hooks.onHear(o.audio));
       const text = el("span", { className: "option-text" }, ...lineNodes(o, this.course, { onWord: this.helpMode ? this.hooks.onWord : undefined }));
       if (o.meaning) {
-        const chip = createHintChip(o.meaning, { inline: true, lang: this.hooks.lang, sfx: this.hooks.sfx });
+        const chip = nested(createHintChip(o.meaning, { inline: true, lang: this.hooks.lang, sfx: this.hooks.sfx }));
         chip.dataset.sfx = "none";
         text.append(chip);
       }
       row.append(el("span", { className: "key", textContent: String(i + 1) }), text, replay);
-      row.addEventListener("click", () => {
+      // the chip, the ▶ and (in word help) the words are nested: tapping them never picks the reply
+      tappable(row, () => {
         if (!this.helpMode) this.hooks.onPick(i);
       });
       return row;

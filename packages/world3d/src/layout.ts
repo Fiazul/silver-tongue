@@ -255,6 +255,8 @@ export interface AssetEntry {
   /** rigged characters: metres covered by one loop of the walk clip */
   rig?: { stride_m?: number };
   wall_piece?: boolean;
+  /** the file's size as shipped (build: scripts/used-assets.mjs), for the loading screen */
+  bytes?: number;
 }
 export interface AssetIndex {
   assets: AssetEntry[];

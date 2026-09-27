@@ -1,7 +1,9 @@
-// Builds dist/: index.html (CSS inlined), main.js (the app with three.js), courses/ (the catalog
+// Builds dist/: index.html (CSS inlined), main.js (the app with three.js) and chunks/ (split off:
+// the start flow, the GLTF loader + meshopt decoder, the orbit camera), courses/ (the catalog
 // and every course file, copied from the repo's dist/courses/ as packages/tui-web's build does; the
 // page fetches the course it plays, so it needs a web server), assets/ (only the GLBs layout.json
-// and town.json use, plus a matching index.json), manifest.webmanifest and icons/. GLBs are copied, never
+// and town.json use, meshopt-compressed by scripts/meshopt.mjs, plus a matching index.json with
+// each file's bytes), manifest.webmanifest and icons/. GLBs are copied, never
 // inlined. Every URL is relative, so dist/ works at any path (GitHub Pages serves it under /world3d/).
 //
 //   node build.mjs          one-off build
@@ -25,7 +27,7 @@
 // library by `npm run assets:sync`); WORLD3D_ASSETS overrides it (any library dir with index.json).
 import { context } from "esbuild";
 import { cpSync, copyFileSync, existsSync, rmSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { copyUsed } from "./scripts/used-assets.mjs";
 
@@ -43,7 +45,7 @@ const bundleAudio = dev || process.env.WORLD3D_AUDIO === "bundle";
 const audioRoot = bundleAudio ? "" : "../";
 if (!existsSync(join(assetsSrc, "index.json"))) throw new Error(`no asset library at ${assetsSrc} (set WORLD3D_ASSETS)`);
 
-/** Copies the GLBs layout.json and town.json use and an index.json listing only those (scripts/used-assets.mjs). */
+/** Copies the GLBs layout.json and town.json use (meshopt-compressed) and an index.json listing only those (scripts/used-assets.mjs). */
 function copyAssets() {
   return copyUsed(assetsSrc, join(dist, "assets"), [join(here, "src", "layout.json"), join(here, "src", "town.json")]);
 }
@@ -163,6 +165,31 @@ function writeHtml() {
   writeFileSync(join(dist, "index.html"), html);
 }
 
+/**
+ * <link rel="modulepreload"> in index.html for every chunk main.js imports, and for the GLTF
+ * loader's and the meshopt decoder's (imported on first use, needed at once): the browser fetches
+ * them alongside main.js instead of after it. The start flow and the orbit camera stay lazy.
+ */
+function preloadChunks(meta) {
+  const main = Object.entries(meta.outputs).find(([, o]) => o.entryPoint?.endsWith("src/main.ts"))?.[0];
+  if (!main) return;
+  const want = new Set();
+  const walk = (out) => {
+    for (const imp of meta.outputs[out]?.imports ?? []) {
+      const lazy = imp.kind === "dynamic-import";
+      if (lazy && !/GLTFLoader|meshopt_decoder/.test(imp.path)) continue;
+      if (want.has(imp.path)) continue;
+      want.add(imp.path);
+      walk(imp.path);
+    }
+  };
+  walk(main);
+  const rel = (p) => "./" + relative(dist, resolve(p)).split(sep).join("/");
+  const links = [...want].map((p) => `    <link rel="modulepreload" href="${rel(p)}" />`).join("\n");
+  const f = join(dist, "index.html");
+  writeFileSync(f, readFileSync(f, "utf8").replace("  </head>", `${links}\n  </head>`));
+}
+
 /** Total bytes under a directory. */
 function size(dir) {
   let n = 0;
@@ -175,7 +202,7 @@ function size(dir) {
 }
 
 mkdirSync(dist, { recursive: true });
-const glbs = copyAssets();
+const glbs = await copyAssets();
 copyStatic();
 writeHtml();
 const catalog = copyCourses();
@@ -188,9 +215,15 @@ if (MUSIC_OGG_ONLY) {
   rmSync(join(dist, "assets", "ui"), { recursive: true, force: true });
   sounds = copySounds(true);
 }
+rmSync(join(dist, "chunks"), { recursive: true, force: true });
 const ctx = await context({
   entryPoints: [join(here, "src", "main.ts")],
-  outfile: join(dist, "main.js"),
+  outdir: dist,
+  // main.js plus chunks/: what only some pages need (the start flow, a new player's; the GLTF
+  // loader and meshopt decoder, fetched while main.js starts up; the orbit camera, off) loads apart
+  entryNames: "[name]",
+  chunkNames: "chunks/[name]-[hash]",
+  splitting: true,
   bundle: true,
   format: "esm",
   target: "es2022",
@@ -198,6 +231,7 @@ const ctx = await context({
   sourcemap: dev ? "inline" : false,
   define: { __AUDIO_ROOT__: JSON.stringify(audioRoot) },
   legalComments: "none",
+  metafile: true,
   logLevel: dev ? "info" : "warning",
 });
 if (dev) {
@@ -205,10 +239,12 @@ if (dev) {
   const { hosts, port: p } = await ctx.serve({ servedir: dist, port, host: "0.0.0.0" });
   console.log(`world3d dev: ${glbs} GLBs copied; serving dist/ on http://localhost:${p}/ (also ${hosts.join(", ")})`);
 } else {
-  await ctx.rebuild();
+  const result = await ctx.rebuild();
   await ctx.dispose();
+  preloadChunks(result.metafile);
   const kb = (n) => `${Math.round(n / 1024)} KB`;
+  const chunks = existsSync(join(dist, "chunks")) ? readdirSync(join(dist, "chunks")).map((f) => `${f} ${kb(statSync(join(dist, "chunks", f)).size)}`) : [];
   console.log(
-    `built packages/world3d/dist: sound + title ${kb(sounds)}${MUSIC_OGG_ONLY ? ` (music .ogg only: over the 15 MB budget with both, -${kb(musicM4aBytes())})` : " (.ogg + .m4a)"}, courses/ ${catalog.map((e) => `${e.id} (${e.learners.join(", ")})`).join(", ")}, audio ${clips ? `${clips[0]} clips in courses/<course>/audio/ (${kb(clips[1])}${clips[2] ? `, ${clips[2]} missing` : ""})` : `loaded from ${audioRoot}courses/<course>/audio/`}, index.html ${kb(statSync(join(dist, "index.html")).size)}, main.js ${kb(statSync(join(dist, "main.js")).size)}, assets/ ${kb(size(join(dist, "assets")))} (${glbs} GLBs); total ${kb(size(dist))}`,
+    `built packages/world3d/dist: sound + title ${kb(sounds)}${MUSIC_OGG_ONLY ? ` (music .ogg only: over the 15 MB budget with both, -${kb(musicM4aBytes())})` : " (.ogg + .m4a)"}, courses/ ${catalog.map((e) => `${e.id} (${e.learners.join(", ")})`).join(", ")}, audio ${clips ? `${clips[0]} clips in courses/<course>/audio/ (${kb(clips[1])}${clips[2] ? `, ${clips[2]} missing` : ""})` : `loaded from ${audioRoot}courses/<course>/audio/`}, index.html ${kb(statSync(join(dist, "index.html")).size)}, main.js ${kb(statSync(join(dist, "main.js")).size)} + chunks/ ${chunks.join(", ") || "none"}, assets/ ${kb(size(join(dist, "assets")))} (${glbs} GLBs); total ${kb(size(dist))}`,
   );
 }

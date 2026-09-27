@@ -5,7 +5,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { clampBox, placeBubble, screenLayout, SMALL_TARGET, TOUCH_TARGET, NO_INSETS, type Insets, type Rect, type ScreenLayout } from "../src/ui/viewport";
+import { BUBBLE_MIN_H, BUBBLE_TAIL, bubbleArea, clampBox, placeBubble, screenLayout, SMALL_TARGET, TOUCH_TARGET, NO_INSETS, type Insets, type Rect, type ScreenLayout } from "../src/ui/viewport";
 
 const inside = (r: Rect, outer: Rect) => r.x >= outer.x - 1e-9 && r.y >= outer.y - 1e-9 && r.x + r.w <= outer.x + outer.w + 1e-9 && r.y + r.h <= outer.y + outer.h + 1e-9;
 const overlap = (a: Rect, b: Rect) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
@@ -179,5 +179,36 @@ describe("page.css: shared touch-target rule for dialog / list buttons", () => {
     const coarseRule = css.slice(css.indexOf("@media (pointer: coarse)"));
     for (const sel of [".choice", ".option", ".actions button", "dialog button"]) expect(coarseRule, sel).toContain(sel);
     expect(coarseRule).toMatch(new RegExp(`min-height:\\s*${SMALL_TARGET}px`));
+  });
+});
+
+describe("one band per layer: the toasts and the reply sheet push the bubble out of theirs", () => {
+  const sizes: [string, number, number][] = [
+    ["desktop", 1280, 800],
+    ["phone portrait", 390, 844],
+    ["phone landscape", 844, 390],
+  ];
+  for (const [name, w, h] of sizes)
+    it(`${name} ${w}x${h}: a bubble placed for any head stays out of the toasts' and the replies' boxes`, () => {
+      const l = screenLayout(w, h);
+      // a two-line narration toast at the top of its band (the live-27 case), a three-option reply sheet
+      const toasts: Rect = { ...l.toasts, h: 84 };
+      const rh = Math.min(l.replies.h, 190);
+      const replies: Rect = { ...l.replies, y: l.replies.y + l.replies.h - rh, h: rh };
+      const area = bubbleArea(l.bubble, { toasts, replies });
+      expect(area.h).toBeGreaterThanOrEqual(BUBBLE_MIN_H);
+      for (const head of [[w / 2, l.bubble.y], [20, h / 3], [w - 20, h / 2], [w / 2, h]] as const) {
+        const bw = Math.min(300, area.w);
+        const p = placeBubble(head[0], head[1], true, bw, 100, area);
+        const b: Rect = { x: p.x, y: p.y, w: bw, h: 100 + BUBBLE_TAIL };
+        expect(overlap(b, toasts), `head ${head} vs toasts`).toBe(false);
+        expect(overlap(b, replies), `head ${head} vs replies`).toBe(false);
+      }
+      expect(bubbleArea(l.bubble)).toEqual(l.bubble);
+    });
+  it("a band too short for the bubble: it keeps BUBBLE_MIN_H, reaching up into the toasts (drawn over it)", () => {
+    const a = bubbleArea({ x: 0, y: 70, w: 300, h: 200 }, { toasts: { x: 0, y: 70, w: 300, h: 170 } });
+    expect(a.h).toBe(BUBBLE_MIN_H);
+    expect(a.y + a.h).toBe(270);
   });
 });

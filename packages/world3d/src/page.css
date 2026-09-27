@@ -20,7 +20,32 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #edd9b8; col
 .replies, .choices, dialog, .nb-body, .bubble-line, textarea { touch-action: pan-y; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
 #ui { position: fixed; inset: 0; pointer-events: none; }
 #ui > * { pointer-events: auto; }
-#loading { position: fixed; inset: 0; display: grid; place-items: center; font-family: var(--font-display); font-size: 1.4rem; letter-spacing: 0.03em; color: var(--paper); background: var(--ink); }
+/* One z-order for the overlay's layers that share a band (ui/viewport.ts; Overlay.bubbleArea moves the
+   bubble out of the toasts' and the reply sheet's bands every frame, at every breakpoint): the bubble
+   under the reply sheet and the lists, the place banner under the toasts, the toasts and the HUD over
+   all of them (only on a screen too short for both does the bubble reach into the toasts' band). The
+   gloss popover (30), the fly-over's bars (50), the loading screen (55), the start flow (60) above. */
+.bubble { z-index: 6; }
+.banner { z-index: 7; }
+.replies, .choices { z-index: 8; }
+.toasts, .hud { z-index: 9; }
+/* the door / night fade covers every one of them */
+.fade { z-index: 20; }
+/* the loading screen (ui/loading.ts): title, a bar with percent and bytes, the file loading now; over the
+   game and the fly-over's bars, under the start flow (which runs while the town loads) */
+#loading { position: fixed; inset: 0; z-index: 55; display: grid; place-items: center; padding: 24px; color: var(--paper); background: var(--ink); font-family: var(--font-body); }
+#loading[hidden] { display: none; }
+.ld-card { width: min(420px, 86vw); text-align: center; }
+.ld-title { margin: 0 0 0.7em; font-family: var(--font-display); font-weight: 400; font-size: clamp(2rem, 9vw, 3.2rem); letter-spacing: 0.02em; color: var(--paper); text-shadow: 0 4px 0 var(--lacquer-dark); }
+.ld-bar { height: 22px; border: 2px solid var(--paper); border-radius: 999px; background: var(--ink-soft); overflow: hidden; box-shadow: 0 4px 0 #000; }
+.ld-fill { width: 0; height: 100%; background: var(--lacquer); border-right: 2px solid var(--paper-deep); transition: width var(--t-med) ease; }
+.ld-line { display: flex; justify-content: space-between; align-items: baseline; margin: 0.7em 0 0; font-weight: 700; }
+.ld-pct { font-family: var(--font-display); font-weight: 400; font-size: 1.25rem; color: var(--gold); }
+.ld-bytes { color: var(--paper-deep); font-variant-numeric: tabular-nums; }
+.ld-item { min-height: 1.3em; margin: 0.35em 0 0; font-size: 0.85rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#loading.error .ld-bar, #loading.error .ld-line { display: none; }
+#loading.error .ld-item { color: var(--paper); font-size: 1rem; white-space: normal; }
+@media (prefers-reduced-motion: reduce) { .ld-fill { transition: none; } }
 /* the start flow (start/flow.ts) over everything, the loading screen included (the town loads underneath) */
 #start.st-root { z-index: 60; }
 #start:empty { display: none; }
@@ -79,6 +104,11 @@ h2, h3 { font-family: var(--font-display); font-weight: 400; letter-spacing: 0.0
 .bubble-name.reaction { color: var(--bad); opacity: 1; }
 .bubble-line { font-family: var(--font-hanzi); font-size: 1.6rem; line-height: 1.5; }
 .bubble-line .hint-chip, .option-text .hint-chip { font-family: var(--font-body); }
+/* every hint chip's hit area is at least 44 px whatever the breakpoint: the 30 px chip's ::before reaches
+   9 px round it (start.css, 48 px), the inline 24 px chip's 10 px (44 px); a press on a nested control
+   (ui/dom.ts nested: a chip, a ▶, a word) doesn't press the reply row round it */
+.hint-chip.inline::before { inset: -10px; }
+.option:has([data-nested]:active) { transform: none; box-shadow: var(--shadow); }
 .bubble-line.slow { letter-spacing: 0.08em; }
 .bubble-tools { display: flex; justify-content: flex-end; gap: 6px; margin-top: 2px; }
 .tok.tappable { cursor: pointer; border-bottom: 2px dotted rgba(42, 35, 32, 0.35); }
@@ -116,7 +146,7 @@ rt { font-size: 0.45em; color: var(--accent); }
 .note { font-size: 0.9rem; margin: 0.4em 0.3em; }
 
 /* toasts */
-.toasts { position: fixed; top: 52px; left: 50%; transform: translateX(-50%); width: min(92vw, 520px); display: flex; flex-direction: column; gap: 6px; pointer-events: none !important; }
+.toasts { position: fixed; top: var(--toasts-y, 52px); left: 50%; transform: translateX(-50%); width: min(92vw, 520px); display: flex; flex-direction: column; gap: 6px; pointer-events: none !important; }
 .toast { background: var(--paper); border: var(--border); border-left-width: 7px; border-radius: var(--radius-sm); padding: 0.4em 0.7em; box-shadow: var(--chip-lift), 0 6px 14px rgba(29, 23, 20, 0.2); font-size: 0.95rem; transition: opacity 0.5s, transform 0.5s; }
 .toast.out { opacity: 0; transform: translateY(-8px); }
 .toast.good { border-color: var(--good); }
@@ -255,7 +285,7 @@ html:not(.touch) .action-btn { display: none !important; }
 .compact .obj-sub::before { content: " · "; }
 .compact .toasts { left: var(--toasts-x); top: var(--toasts-y); width: var(--toasts-w); max-height: var(--toasts-h); overflow: hidden; transform: none; }
 .compact .bubble { max-width: var(--bubble-w); }
-.compact .bubble-line { font-size: 1.4rem; max-height: calc(var(--bubble-h) - 5.5em); overflow-y: auto; }
+.compact .bubble-line { font-size: 1.4rem; max-height: calc(var(--bubble-h) - 5.5em); overflow-y: auto; padding: 10px; margin: -10px; } /* the padding: room for the inline chips' 44 px hit areas inside the scroller */
 .compact .replies { left: var(--replies-x); width: var(--replies-w); top: auto; bottom: var(--replies-bottom); max-height: var(--replies-h); overflow-y: auto; transform: none; }
 .compact .option { font-size: 1.15rem; padding: 0.4em 0.5em; }
 .compact .choices { left: var(--choices-x); top: var(--choices-y); width: var(--choices-w); max-height: var(--choices-h); overflow-y: auto; transform: none; }

@@ -1,7 +1,8 @@
 // Refreshes the vendored assets/ from the make-it-in-china asset library: the town's sources
 // (town_layout/town.json and the walk grid it names), then src/town.json ported from them
-// (scripts/port-town.mjs), then only the GLBs src/layout.json and src/town.json use, plus an
-// index.json listing only those; the music, ambience and effects (audio/: every .ogg and .m4a in
+// (scripts/port-town.mjs), then only the GLBs src/layout.json and src/town.json use, meshopt-
+// compressed on the way (scripts/meshopt.mjs), plus an index.json listing only those (with each
+// file's bytes); the music, ambience and effects (audio/: every .ogg and .m4a in
 // the library's manifest.json, and the manifest); and the title screen's backdrop (ui/title/: the
 // fly-over's frames TITLE_FRAMES as JPEG q80, at most 1280 px wide, via Pillow). Run after the
 // library is rebuilt (tools/blender/build_all.py, tools/blender/town_layout.py,
@@ -27,7 +28,7 @@ const { town, grid, index } = readTownSources(src);
 const ported = portTown(town, grid, index);
 writeFileSync(join(here, "src", "town.json"), townJsonText(ported));
 
-const n = copyUsed(src, out, [join(here, "src", "layout.json"), join(here, "src", "town.json")]);
+const n = await copyUsed(src, out, [join(here, "src", "layout.json"), join(here, "src", "town.json")]);
 // The town's sources, so `npm run port-town` and the staleness test run from the repo alone.
 const townFiles = [join("town_layout", "town.json"), town.walkable.grid.replace(/\.json$/, "") + ".json"];
 for (const f of townFiles) {

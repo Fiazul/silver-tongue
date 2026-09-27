@@ -16,6 +16,12 @@ export const course = buildCourse(CONTENT, "zh-china").course as Course;
 const indexPath = `${ASSETS}/index.json`;
 export const assetIndex: AssetIndex | undefined = existsSync(indexPath) ? JSON.parse(readFileSync(indexPath, "utf8")) : undefined;
 
+/** A GLB's bytes from disk (AssetCache's `read`: the tests load the real GLBs without a server). */
+export function readGlb(path: string): ArrayBuffer {
+  const buf = readFileSync(path);
+  return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
+}
+
 /** A core that counts the inputs sent to it, by type. */
 export function countingCore(core: Core): Core & { sent: Input[] } {
   const sent: Input[] = [];

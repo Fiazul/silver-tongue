@@ -14,7 +14,7 @@ import { el } from "./dom";
 import { HudView } from "./hud";
 import { notebookNodes } from "./notebook";
 import { RepliesView } from "./replies";
-import { clampBox, layoutVars, NO_INSETS, screenLayout, type Insets, type Rect, type ScreenLayout } from "./viewport";
+import { bubbleArea, clampBox, layoutVars, NO_INSETS, screenLayout, type Insets, type Rect, type ScreenLayout } from "./viewport";
 
 export interface SavedGame {
   label: string;
@@ -169,6 +169,21 @@ export class Overlay {
     if (this.game) this.hint.textContent = this.game.s("walk-hint-touch");
   }
 
+  /**
+   * Where the speech bubble may sit this frame: the layout's bubble rect under the toasts on screen
+   * now and above the reply panel (viewport.ts bubbleArea: one band each, at every breakpoint).
+   */
+  bubbleArea(): Rect {
+    const box = (e: Element): Rect => {
+      const r = e.getBoundingClientRect();
+      return { x: r.left, y: r.top, w: r.width, h: r.height };
+    };
+    const live = [...this.toasts.children].filter((c) => !c.classList.contains("out"));
+    const toasts = live.length ? box(this.toasts) : null;
+    const replies = this.replies && !this.replies.node.classList.contains("hidden") ? box(this.replies.node) : null;
+    return bubbleArea(this.screen.bubble, { toasts, replies });
+  }
+
   /** The safe area shrunk by a margin: where floating things (prompt, gloss) are kept. */
   private keepIn(margin = 8): Rect {
     const r = this.screen.safe;
@@ -255,6 +270,10 @@ export class Overlay {
       this.place = m.hud.place;
       this.showBanner(m.hud.place, m.hud.placeName);
     }
+    // One layer per band: a line on screen takes the banner's band (it goes at once), the reply
+    // sheet the walk hint's (bottom centre).
+    if (m.bubble) this.banner.classList.add("out");
+    if (m.reply) this.hint.classList.add("gone");
     if (m.dayChanges !== this.dayChanges) {
       this.dayChanges = m.dayChanges;
       this.fade.classList.remove("night");
