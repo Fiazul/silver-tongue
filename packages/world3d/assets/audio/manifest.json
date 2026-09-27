@@ -6,9 +6,10 @@
     "file_m4a": "assets/audio/music/title_theme.m4a",
     "seconds": 53.333,
     "loop": true,
-    "gain_db": 1.6,
+    "gain_db": 1.11,
     "bpm": 72,
-    "key": "C gong"
+    "key": "C gong",
+    "description": "Title screen: koto and shakuhachi over a soft pad in C gong pentatonic, looping."
   },
   {
     "id": "town_day",
@@ -17,9 +18,10 @@
     "file_m4a": "assets/audio/music/town_day.m4a",
     "seconds": 66.667,
     "loop": true,
-    "gain_db": 2.7,
+    "gain_db": 2.58,
     "bpm": 72,
-    "key": "C gong"
+    "key": "C gong",
+    "description": "Town by day: sparse shakuhachi melody, koto arpeggios, a steady pad and drone."
   },
   {
     "id": "town_evening",
@@ -28,9 +30,10 @@
     "file_m4a": "assets/audio/music/town_evening.m4a",
     "seconds": 80.0,
     "loop": true,
-    "gain_db": 2.74,
+    "gain_db": 2.43,
     "bpm": 60,
-    "key": "A yu"
+    "key": "A yu",
+    "description": "Town in the evening: slower, darker A yu pentatonic bed."
   },
   {
     "id": "cutscene_flyover",
@@ -41,7 +44,8 @@
     "loop": false,
     "gain_db": 0.86,
     "bpm": 72,
-    "key": "C gong"
+    "key": "C gong",
+    "description": "Fly-over cutscene: rises to a held chord that crossfades into town_day."
   },
   {
     "id": "canal_water",
@@ -50,7 +54,8 @@
     "file_m4a": "assets/audio/ambient/canal_water.m4a",
     "seconds": 24.0,
     "loop": true,
-    "gain_db": 0.73
+    "gain_db": 5.3,
+    "description": "Gentle canal water: soft low wash with small laps, no upper hiss."
   },
   {
     "id": "birds_day",
@@ -59,7 +64,8 @@
     "file_m4a": "assets/audio/ambient/birds_day.m4a",
     "seconds": 26.0,
     "loop": true,
-    "gain_db": 3.01
+    "gain_db": 3.9,
+    "description": "A few songbirds, sparse chirps over a faint air bed."
   },
   {
     "id": "crickets_evening",
@@ -68,7 +74,8 @@
     "file_m4a": "assets/audio/ambient/crickets_evening.m4a",
     "seconds": 24.0,
     "loop": true,
-    "gain_db": 7.46
+    "gain_db": 7.5,
+    "description": "Evening crickets, three pulsing layers that breathe in and out."
   },
   {
     "id": "market_murmur",
@@ -77,7 +84,48 @@
     "file_m4a": "assets/audio/ambient/market_murmur.m4a",
     "seconds": 24.0,
     "loop": true,
-    "gain_db": 7.93
+    "gain_db": 19.0,
+    "description": "Distant, low-density voices (vowel-like hum, no words), a soft bicycle bell twice; no engines."
+  },
+  {
+    "id": "willow_wind",
+    "kind": "ambient",
+    "file_ogg": "assets/audio/ambient/willow_wind.ogg",
+    "file_m4a": "assets/audio/ambient/willow_wind.m4a",
+    "seconds": 30.0,
+    "loop": true,
+    "gain_db": 9.1,
+    "description": "Soft wind through willows: low band-limited air in slow gusts with light leaf rustle."
+  },
+  {
+    "id": "temple_bell_far",
+    "kind": "ambient",
+    "file_ogg": "assets/audio/ambient/temple_bell_far.ogg",
+    "file_m4a": "assets/audio/ambient/temple_bell_far.m4a",
+    "seconds": 30.0,
+    "loop": true,
+    "gain_db": 0.6,
+    "description": "A distant temple bell struck once every 30 s, ringing out; near the great tree."
+  },
+  {
+    "id": "cicadas_day",
+    "kind": "ambient",
+    "file_ogg": "assets/audio/ambient/cicadas_day.ogg",
+    "file_m4a": "assets/audio/ambient/cicadas_day.m4a",
+    "seconds": 28.0,
+    "loop": true,
+    "gain_db": 26.8,
+    "description": "Light afternoon cicadas: a few calls swelling in and out, long rests between."
+  },
+  {
+    "id": "boat_creak",
+    "kind": "ambient",
+    "file_ogg": "assets/audio/ambient/boat_creak.ogg",
+    "file_m4a": "assets/audio/ambient/boat_creak.m4a",
+    "seconds": 24.0,
+    "loop": true,
+    "gain_db": 14.5,
+    "description": "A moored wooden boat: water lapping at the hull and an occasional slow timber creak."
   },
   {
     "id": "ui_tap",
@@ -86,7 +134,8 @@
     "file_m4a": "assets/audio/sfx/ui_tap.m4a",
     "seconds": 0.05,
     "loop": false,
-    "gain_db": 1.26
+    "gain_db": 1.26,
+    "description": "UI tap: tiny wooden click."
   },
   {
     "id": "ui_confirm",
@@ -95,7 +144,8 @@
     "file_m4a": "assets/audio/sfx/ui_confirm.m4a",
     "seconds": 0.18,
     "loop": false,
-    "gain_db": 0.04
+    "gain_db": 0.04,
+    "description": "UI confirm: short rising tone."
   },
   {
     "id": "ui_back",
@@ -104,7 +154,8 @@
     "file_m4a": "assets/audio/sfx/ui_back.m4a",
     "seconds": 0.18,
     "loop": false,
-    "gain_db": 0.03
+    "gain_db": 0.03,
+    "description": "UI back / close: short falling tone."
   },
   {
     "id": "ui_error",
@@ -113,7 +164,8 @@
     "file_m4a": "assets/audio/sfx/ui_error.m4a",
     "seconds": 0.28,
     "loop": false,
-    "gain_db": -2.89
+    "gain_db": -3.24,
+    "description": "UI error: one soft low tone with a gentle droop."
   },
   {
     "id": "ui_page",
@@ -122,7 +174,8 @@
     "file_m4a": "assets/audio/sfx/ui_page.m4a",
     "seconds": 0.28,
     "loop": false,
-    "gain_db": 6.78
+    "gain_db": 6.78,
+    "description": "UI page turn: paper swish."
   },
   {
     "id": "ui_reveal",
@@ -131,7 +184,8 @@
     "file_m4a": "assets/audio/sfx/ui_reveal.m4a",
     "seconds": 1.4,
     "loop": false,
-    "gain_db": -1.89
+    "gain_db": -1.89,
+    "description": "UI reveal: rising pentatonic bell shimmer."
   },
   {
     "id": "tile_place",
@@ -140,7 +194,8 @@
     "file_m4a": "assets/audio/sfx/tile_place.m4a",
     "seconds": 0.14,
     "loop": false,
-    "gain_db": -0.94
+    "gain_db": -0.94,
+    "description": "Word tile placed: small wooden knock."
   },
   {
     "id": "tile_undo",
@@ -149,7 +204,8 @@
     "file_m4a": "assets/audio/sfx/tile_undo.m4a",
     "seconds": 0.14,
     "loop": false,
-    "gain_db": 1.41
+    "gain_db": 1.41,
+    "description": "Word tile undone: reversed soft knock."
   },
   {
     "id": "bubble_open",
@@ -158,7 +214,8 @@
     "file_m4a": "assets/audio/sfx/bubble_open.m4a",
     "seconds": 0.15,
     "loop": false,
-    "gain_db": 0.27
+    "gain_db": 0.27,
+    "description": "Speech bubble shown: soft rising blip."
   },
   {
     "id": "bubble_close",
@@ -167,7 +224,8 @@
     "file_m4a": "assets/audio/sfx/bubble_close.m4a",
     "seconds": 0.12,
     "loop": false,
-    "gain_db": 0.39
+    "gain_db": 0.39,
+    "description": "Speech bubble hidden: soft falling blip."
   },
   {
     "id": "coin",
@@ -176,7 +234,8 @@
     "file_m4a": "assets/audio/sfx/coin.m4a",
     "seconds": 0.4,
     "loop": false,
-    "gain_db": -4.33
+    "gain_db": -4.33,
+    "description": "Money paid / earned: two small coin dings."
   },
   {
     "id": "success_jingle",
@@ -185,7 +244,8 @@
     "file_m4a": "assets/audio/sfx/success_jingle.m4a",
     "seconds": 1.5,
     "loop": false,
-    "gain_db": 2.1
+    "gain_db": 2.1,
+    "description": "Scene done: plucked pentatonic run into a bell chord."
   },
   {
     "id": "fail_soft",
@@ -194,7 +254,8 @@
     "file_m4a": "assets/audio/sfx/fail_soft.m4a",
     "seconds": 0.35,
     "loop": false,
-    "gain_db": -0.91
+    "gain_db": -0.91,
+    "description": "Mix-up: soft low falling tone."
   },
   {
     "id": "door_open",
@@ -203,7 +264,8 @@
     "file_m4a": "assets/audio/sfx/door_open.m4a",
     "seconds": 0.5,
     "loop": false,
-    "gain_db": 13.34
+    "gain_db": 13.34,
+    "description": "Door opens: wooden creak-swish."
   },
   {
     "id": "door_close",
@@ -212,7 +274,8 @@
     "file_m4a": "assets/audio/sfx/door_close.m4a",
     "seconds": 0.3,
     "loop": false,
-    "gain_db": -0.86
+    "gain_db": -0.86,
+    "description": "Door closes: low wooden thud with a latch click."
   },
   {
     "id": "bridge_step",
@@ -221,7 +284,8 @@
     "file_m4a": "assets/audio/sfx/bridge_step.m4a",
     "seconds": 0.22,
     "loop": false,
-    "gain_db": 0.44
+    "gain_db": 0.44,
+    "description": "A step on a wooden bridge: hollow knock."
   },
   {
     "id": "water_splash",
@@ -230,7 +294,8 @@
     "file_m4a": "assets/audio/sfx/water_splash.m4a",
     "seconds": 0.6,
     "loop": false,
-    "gain_db": 2.52
+    "gain_db": 2.52,
+    "description": "Small splash with droplets."
   },
   {
     "id": "bell_temple",
@@ -239,7 +304,8 @@
     "file_m4a": "assets/audio/sfx/bell_temple.m4a",
     "seconds": 1.5,
     "loop": false,
-    "gain_db": -1.49
+    "gain_db": -1.49,
+    "description": "The great tree's altar bell, tapped: one clear bell strike."
   },
   {
     "id": "cutscene_skip",
@@ -248,7 +314,8 @@
     "file_m4a": "assets/audio/sfx/cutscene_skip.m4a",
     "seconds": 0.3,
     "loop": false,
-    "gain_db": 0.03
+    "gain_db": 5.99,
+    "description": "Cutscene skipped: soft air whoosh with a blip."
   },
   {
     "id": "notebook_open",
@@ -257,7 +324,8 @@
     "file_m4a": "assets/audio/sfx/notebook_open.m4a",
     "seconds": 0.35,
     "loop": false,
-    "gain_db": 8.25
+    "gain_db": 8.25,
+    "description": "Notebook opens: paper swish."
   },
   {
     "id": "step_stone_1",
@@ -266,7 +334,8 @@
     "file_m4a": "assets/audio/sfx/step_stone_1.m4a",
     "seconds": 0.12,
     "loop": false,
-    "gain_db": 1.62
+    "gain_db": 2.78,
+    "description": "Footstep on stone (1 of 4)."
   },
   {
     "id": "step_stone_2",
@@ -275,7 +344,8 @@
     "file_m4a": "assets/audio/sfx/step_stone_2.m4a",
     "seconds": 0.12,
     "loop": false,
-    "gain_db": 1.38
+    "gain_db": 1.93,
+    "description": "Footstep on stone (2 of 4)."
   },
   {
     "id": "step_stone_3",
@@ -284,7 +354,8 @@
     "file_m4a": "assets/audio/sfx/step_stone_3.m4a",
     "seconds": 0.12,
     "loop": false,
-    "gain_db": 1.27
+    "gain_db": 2.98,
+    "description": "Footstep on stone (3 of 4)."
   },
   {
     "id": "step_stone_4",
@@ -293,7 +364,8 @@
     "file_m4a": "assets/audio/sfx/step_stone_4.m4a",
     "seconds": 0.12,
     "loop": false,
-    "gain_db": 0.03
+    "gain_db": 2.05,
+    "description": "Footstep on stone (4 of 4)."
   },
   {
     "id": "step_grass_1",
@@ -302,7 +374,8 @@
     "file_m4a": "assets/audio/sfx/step_grass_1.m4a",
     "seconds": 0.12,
     "loop": false,
-    "gain_db": 2.6
+    "gain_db": 5.43,
+    "description": "Footstep on grass (1 of 4)."
   },
   {
     "id": "step_grass_2",
@@ -311,7 +384,8 @@
     "file_m4a": "assets/audio/sfx/step_grass_2.m4a",
     "seconds": 0.12,
     "loop": false,
-    "gain_db": 4.37
+    "gain_db": 5.61,
+    "description": "Footstep on grass (2 of 4)."
   },
   {
     "id": "step_grass_3",
@@ -320,7 +394,8 @@
     "file_m4a": "assets/audio/sfx/step_grass_3.m4a",
     "seconds": 0.12,
     "loop": false,
-    "gain_db": 4.16
+    "gain_db": 5.49,
+    "description": "Footstep on grass (3 of 4)."
   },
   {
     "id": "step_grass_4",
@@ -329,7 +404,8 @@
     "file_m4a": "assets/audio/sfx/step_grass_4.m4a",
     "seconds": 0.12,
     "loop": false,
-    "gain_db": 4.4
+    "gain_db": 4.49,
+    "description": "Footstep on grass (4 of 4)."
   },
   {
     "id": "step_wood_1",
@@ -338,7 +414,8 @@
     "file_m4a": "assets/audio/sfx/step_wood_1.m4a",
     "seconds": 0.16,
     "loop": false,
-    "gain_db": 0.45
+    "gain_db": 0.31,
+    "description": "Footstep on wood (1 of 4)."
   },
   {
     "id": "step_wood_2",
@@ -347,7 +424,8 @@
     "file_m4a": "assets/audio/sfx/step_wood_2.m4a",
     "seconds": 0.16,
     "loop": false,
-    "gain_db": 1.39
+    "gain_db": 1.5,
+    "description": "Footstep on wood (2 of 4)."
   },
   {
     "id": "step_wood_3",
@@ -356,7 +434,8 @@
     "file_m4a": "assets/audio/sfx/step_wood_3.m4a",
     "seconds": 0.16,
     "loop": false,
-    "gain_db": 0.87
+    "gain_db": 0.92,
+    "description": "Footstep on wood (3 of 4)."
   },
   {
     "id": "step_wood_4",
@@ -365,6 +444,7 @@
     "file_m4a": "assets/audio/sfx/step_wood_4.m4a",
     "seconds": 0.16,
     "loop": false,
-    "gain_db": 1.24
+    "gain_db": 0.75,
+    "description": "Footstep on wood (4 of 4)."
   }
 ]

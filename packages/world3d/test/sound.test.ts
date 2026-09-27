@@ -6,17 +6,23 @@ import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
+  AFTERNOON_AT,
+  AMBIENT_BEDS,
   ambientFor,
   CROSSFADE_S,
+  distanceToPath,
   dbToGain,
   EVENING_AT,
   fileFor,
   footstep,
   musicFor,
+  nearness,
+  PIER_RANGE_M,
   pickFormat,
   sfxForEvent,
   StrideClock,
   surfaceFor,
+  TREE_RANGE_M,
   waterDistance,
   WATER_RANGE_M,
   type SoundEntry,
@@ -75,17 +81,58 @@ describe("the ambient bus", () => {
     // the far north edge of the town: out of range
     expect(ambientFor({ phase: "game", daylight: 0, interior: false, waterDistance: water(40, -60) }).canal_water).toBe(0);
   });
-  it("birds by day, crickets in the evening, the market murmur in the market; nothing indoors or on the title", () => {
+  it("birds in the morning, fewer with cicadas in the afternoon, crickets in the evening, the soft murmur in the market; nothing indoors or on the title", () => {
     const day = ambientFor({ phase: "game", daylight: 0.2, interior: false, place: "street", waterDistance: 99 });
-    expect(day.birds_day).toBeGreaterThan(0);
+    expect(day.birds_day).toBe(0.6);
+    expect(day.cicadas_day).toBe(0);
     expect(day.crickets_evening).toBe(0);
     expect(day.market_murmur).toBe(0);
+    // the day's four slots: 0, 0.25 morning; 0.5 afternoon; 0.75 evening
+    const noon = ambientFor({ phase: "game", daylight: 0.5, interior: false, place: "street", waterDistance: 99 });
+    expect(0.5).toBeGreaterThanOrEqual(AFTERNOON_AT);
+    expect(noon.cicadas_day).toBeGreaterThan(0);
+    expect(noon.birds_day).toBeGreaterThan(0);
+    expect(noon.birds_day).toBeLessThan(day.birds_day);
+    expect(ambientFor({ phase: "game", daylight: 0.25, interior: false, waterDistance: 99 }).cicadas_day).toBe(0);
     const eve = ambientFor({ phase: "game", daylight: 0.8, interior: false, place: "market", waterDistance: 99 });
     expect(eve.birds_day).toBe(0);
+    expect(eve.cicadas_day).toBe(0);
     expect(eve.crickets_evening).toBeGreaterThan(0);
     expect(eve.market_murmur).toBeGreaterThan(0);
-    for (const s of [ambientFor({ phase: "game", daylight: 0.2, interior: true, place: "market", waterDistance: 0 }), ambientFor({ phase: "title", daylight: 0, interior: false, waterDistance: 0 })])
+    expect(eve.market_murmur).toBeLessThanOrEqual(0.5);
+    for (const s of [ambientFor({ phase: "game", daylight: 0.2, interior: true, place: "market", waterDistance: 0, treeDistance: 0, pierDistance: 0 }), ambientFor({ phase: "title", daylight: 0, interior: false, waterDistance: 0, treeDistance: 0, pierDistance: 0 })])
       expect(Object.values(s).every((v) => v === 0)).toBe(true);
+  });
+  it("every bed in every result; the willows and the distant bell by the great tree, the boat's creak by the pier", () => {
+    const far = ambientFor({ phase: "game", daylight: 0.2, interior: false, waterDistance: 99 });
+    expect(Object.keys(far).sort()).toEqual([...AMBIENT_BEDS].sort());
+    // wind in the willows everywhere outdoors, softly; stronger, with the bell, at the tree
+    expect(far.willow_wind).toBe(0.2);
+    expect(far.temple_bell_far).toBe(0);
+    expect(far.boat_creak).toBe(0);
+    const tree = town.buildings.find((b) => b.id === "great_tree")!;
+    const at = ambientFor({ phase: "game", daylight: 0.2, interior: false, waterDistance: 99, treeDistance: 0 });
+    expect(at.willow_wind).toBe(0.5);
+    expect(at.temple_bell_far).toBe(0.6);
+    // from the plaza's centre the tree is ~18 m off: the bell is heard, softer
+    const plaza = ambientFor({ phase: "game", daylight: 0.8, interior: false, waterDistance: 99, treeDistance: Math.hypot(tree.pos[0], tree.pos[2]) });
+    expect(plaza.temple_bell_far).toBeGreaterThan(0);
+    expect(plaza.temple_bell_far).toBeLessThan(at.temple_bell_far);
+    expect(ambientFor({ phase: "game", daylight: 0.2, interior: false, treeDistance: TREE_RANGE_M }).temple_bell_far).toBe(0);
+    // the pier: its deck path from the real town
+    const pier = town.decks.find((d) => d.kind === "pier")!;
+    const [ex, , ez] = pier.path[pier.path.length - 1];
+    expect(distanceToPath(pier.path, ex, ez)).toBeLessThan(1e-9);
+    const onPier = ambientFor({ phase: "game", daylight: 0.2, interior: false, pierDistance: distanceToPath(pier.path, ex, ez) });
+    expect(onPier.boat_creak).toBe(0.6);
+    expect(ambientFor({ phase: "game", daylight: 0.2, interior: false, pierDistance: distanceToPath(pier.path, 0, 0) }).boat_creak).toBe(0);
+    expect(distanceToPath(pier.path, 0, 0)).toBeGreaterThan(PIER_RANGE_M);
+    expect(nearness(undefined, 10)).toBe(0);
+    expect(nearness(5, 10)).toBe(0.5);
+    expect(nearness(-1, 10)).toBe(1);
+    expect(distanceToPath([[0, 0, 0], [10, 0, 0]], 5, 3)).toBeCloseTo(3);
+    expect(distanceToPath([[0, 0, 0], [10, 0, 0]], -4, 3)).toBeCloseTo(5);
+    expect(distanceToPath([], 0, 0)).toBe(Infinity);
   });
 });
 
@@ -152,7 +199,7 @@ describe("the vendored sounds", () => {
     const ids = new Set(manifest.map((e) => e.id));
     const used = [
       "title_theme", "cutscene_flyover", "town_day", "town_evening",
-      "canal_water", "birds_day", "crickets_evening", "market_murmur",
+      ...AMBIENT_BEDS,
       "ui_tap", "ui_confirm", "ui_back", "ui_page", "ui_reveal", "tile_place", "tile_undo", "bubble_open", "bubble_close",
       "coin", "success_jingle", "fail_soft", "door_open", "door_close", "notebook_open", "cutscene_skip", "bell_temple",
       ...["stone", "grass", "wood"].flatMap((s) => [1, 2, 3, 4].map((n) => `step_${s}_${n}`)),
@@ -160,7 +207,13 @@ describe("the vendored sounds", () => {
     for (const id of used) expect(ids, id).toContain(id);
     for (const e of manifest)
       for (const f of [e.file_ogg, e.file_m4a]) expect(existsSync(fileURLToPath(new URL(`../${f}`, import.meta.url))), f).toBe(true);
-    for (const id of ["town_day", "town_evening", "title_theme", "canal_water"]) expect(manifest.find((e) => e.id === id)!.loop, id).toBe(true);
+    for (const id of ["town_day", "town_evening", "title_theme", ...AMBIENT_BEDS]) expect(manifest.find((e) => e.id === id)!.loop, id).toBe(true);
+    // a peaceful canal town: nothing in the set is (or is named as) traffic, engines, horns or sirens
+    for (const e of manifest) {
+      expect(e.description, e.id).toBeTruthy();
+      const said = `${e.id} ${e.description}`.replace(/\bno [a-z]+/gi, ""); // "no engines" says what it isn't
+      expect(said, e.id).not.toMatch(/scooter|engine|horn|siren|traffic|\bcar\b|motor|ambulance/i);
+    }
   });
 });
 

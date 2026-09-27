@@ -22,6 +22,7 @@ import { turnToward } from "./anim";
 import { BarkPicker, spaceFigures, type Figure } from "./barks";
 import {
   ambientFor,
+  distanceToPath,
   createAudioPlayer,
   footstep,
   musicFor,
@@ -385,6 +386,10 @@ async function main() {
   } catch {
     altar = null;
   }
+  /** where the great tree's bell and willows are heard from (its altar, else the tree), and the pier's deck (boat_creak) */
+  const treeBuilding = LAYOUT.town.buildings.find((b) => b.id === "great_tree");
+  const treeAt: [number, number] | null = altar ?? (treeBuilding ? [treeBuilding.pos[0], treeBuilding.pos[2]] : null);
+  const pierPath = LAYOUT.town.decks.find((d) => d.kind === "pier")?.path ?? null;
 
   let game: Game | undefined;
   let sessions: WebSessions | undefined;
@@ -992,6 +997,8 @@ async function main() {
       interior: space.layout.interior,
       place: game?.core.state.place,
       waterDistance: nav.space === STREET ? waterAt(player.position.x, player.position.z) : Infinity,
+      treeDistance: nav.space === STREET && treeAt ? Math.hypot(player.position.x - treeAt[0], player.position.z - treeAt[1]) : Infinity,
+      pierDistance: nav.space === STREET && pierPath ? distanceToPath(pierPath, player.position.x, player.position.z) : Infinity,
     };
     // The start flow's music is its own (title_theme from the first tap); a replayed intro keeps the town's.
     if (!startOpen || !game) {

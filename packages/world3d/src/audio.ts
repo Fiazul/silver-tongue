@@ -135,8 +135,11 @@ export function unlockAudioOnGesture(player: Pick<AudioPlayer, "unlock" | "unloc
 // functions below (tests: test/audio.test.ts); SoundMixer only plays what they pick.
 //   music    title_theme → cutscene_flyover → town_day / town_evening by daylight, 1.5 s crossfades;
 //            inside a building the music ducks −6 dB
-//   ambient  canal_water by distance to the canal / lake (full at the edge, silent from 25 m),
-//            birds_day / crickets_evening by daylight, market_murmur in the market; outdoors only
+//   ambient  a quiet canal town, outdoors only: canal_water by distance to the canal / lake (full at
+//            the edge, silent from 25 m), boat_creak by the pier; birds_day by day (fewer, with
+//            cicadas_day, in the afternoon), crickets_evening in the evening; willow_wind everywhere,
+//            stronger near the great tree, whose temple_bell_far rings every 30 s within 30 m;
+//            market_murmur (distant voices, a bicycle bell; no traffic) in the market
 //   sfx      one-shots: ui_*, bubble, tiles, coin, jingle, fail, doors, notebook, skip, bell, steps
 // Nothing starts before the first gesture (unlock() inside it resumes the context). Word clips stay
 // on the AudioPlayer above (tui-web's element), untouched.
@@ -153,6 +156,8 @@ export interface SoundEntry {
   seconds: number;
   loop: boolean;
   gain_db?: number;
+  /** one line on what the clip is (make_audio.py DESCRIPTIONS) */
+  description?: string;
 }
 
 export const CROSSFADE_S = 1.5;
@@ -162,8 +167,16 @@ export const INTERIOR_DUCK_DB = -6;
 export const EVENING_AT = 0.6;
 /** canal_water is heard within this many metres of water */
 export const WATER_RANGE_M = 25;
+/** daylight from which the afternoon's cicadas sing (the third of four slots: 0.5) */
+export const AFTERNOON_AT = 0.4;
 /** the place whose zone plays market_murmur */
 export const MARKET_PLACE = "market";
+/** willow_wind swells and temple_bell_far is heard within this many metres of the great tree */
+export const TREE_RANGE_M = 30;
+/** boat_creak is heard within this many metres of the pier */
+export const PIER_RANGE_M = 15;
+/** every ambient loop ambientFor sets (all present in each result, 0 when silent) */
+export const AMBIENT_BEDS = ["canal_water", "birds_day", "cicadas_day", "crickets_evening", "willow_wind", "temple_bell_far", "market_murmur", "boat_creak"] as const;
 /** grid vertex heights (cm) below the waterline: the canal and the lake (terrain_town_walkable water_y −0.6 m) */
 export const WATER_BELOW_CM = -60;
 
@@ -198,6 +211,33 @@ export interface SoundScene {
   place?: string;
   /** metres to the nearest water (canal, lake) */
   waterDistance?: number;
+  /** metres to the great tree (its altar) */
+  treeDistance?: number;
+  /** metres to the pier's deck */
+  pierDistance?: number;
+}
+
+/** 1 at distance 0, falling linearly to 0 at `range` (and beyond; unknown distance: 0), 3 decimals. */
+export function nearness(d: number | undefined, range: number): number {
+  const m = d ?? Infinity;
+  return m >= range ? 0 : Math.round((1 - Math.max(0, m) / range) * 1000) / 1000;
+}
+
+/** Distance (m) from (x, z) to a polyline of [x, y, z] points (a deck's walk path), ignoring height. */
+export function distanceToPath(path: readonly (readonly number[])[], x: number, z: number): number {
+  if (path.length === 0) return Infinity;
+  if (path.length === 1) return Math.hypot(x - path[0][0], z - path[0][2]);
+  let best = Infinity;
+  for (let i = 0; i + 1 < path.length; i++) {
+    const [ax, , az] = path[i];
+    const [bx, , bz] = path[i + 1];
+    const dx = bx - ax;
+    const dz = bz - az;
+    const len2 = dx * dx + dz * dz;
+    const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / len2));
+    best = Math.min(best, Math.hypot(x - (ax + t * dx), z - (az + t * dz)));
+  }
+  return best;
 }
 
 /** The music bed for the moment, and its gain (interiors duck it). */
@@ -208,15 +248,32 @@ export function musicFor(s: SoundScene): { track: string; gain: number } {
   return { track, gain: s.interior ? dbToGain(INTERIOR_DUCK_DB) : 1 };
 }
 
-/** Each ambient loop's gain (0: silent) for the moment. */
+/**
+ * Each ambient loop's gain (0: silent) for the moment: a peaceful canal town, nothing urban.
+ *   canal_water      1 − d / 25 m to the nearest water
+ *   boat_creak       0.6 × nearness to the pier (15 m)
+ *   birds_day        0.6 in the morning, 0.4 in the afternoon (AFTERNOON_AT), none in the evening
+ *   cicadas_day      0.35 in the afternoon
+ *   crickets_evening 0.7 from EVENING_AT
+ *   willow_wind      0.2 everywhere outdoors, up to 0.5 at the great tree (30 m)
+ *   temple_bell_far  0.6 × nearness to the great tree (30 m)
+ *   market_murmur    0.5 in the market (in play)
+ */
 export function ambientFor(s: SoundScene): Record<string, number> {
-  const out: Record<string, number> = { canal_water: 0, birds_day: 0, crickets_evening: 0, market_murmur: 0 };
+  const out: Record<string, number> = Object.fromEntries(AMBIENT_BEDS.map((id) => [id, 0]));
   if (s.phase === "title" || s.interior) return out;
-  const d = s.waterDistance ?? Infinity;
-  out.canal_water = d >= WATER_RANGE_M ? 0 : Math.round((1 - Math.max(0, d) / WATER_RANGE_M) * 1000) / 1000;
+  const round = (v: number) => Math.round(v * 1000) / 1000;
+  out.canal_water = nearness(s.waterDistance, WATER_RANGE_M);
+  out.boat_creak = round(0.6 * nearness(s.pierDistance, PIER_RANGE_M));
   if (s.daylight >= EVENING_AT) out.crickets_evening = 0.7;
-  else out.birds_day = 0.6;
-  if (s.phase === "game" && s.place === MARKET_PLACE) out.market_murmur = 0.8;
+  else if (s.daylight >= AFTERNOON_AT) {
+    out.birds_day = 0.4;
+    out.cicadas_day = 0.35;
+  } else out.birds_day = 0.6;
+  const tree = nearness(s.treeDistance, TREE_RANGE_M);
+  out.willow_wind = round(0.2 + 0.3 * tree);
+  out.temple_bell_far = round(0.6 * tree);
+  if (s.phase === "game" && s.place === MARKET_PLACE) out.market_murmur = 0.5;
   return out;
 }
 

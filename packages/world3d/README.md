@@ -52,13 +52,13 @@ The one-off build (`npm run build`), measured 2026-09-27:
 | --- | ---: | --- |
 | GLBs (`assets/`, 116, meshopt) | 5,470 | 1,569 KB gzipped; raw 10,471 (2,885 gzipped) before meshopt |
 | music (`assets/audio/music`, .ogg only) | 2,469 | the .m4a (2,677 KB) stays behind: with it the total passes 15 MB (`build.mjs` MUSIC_OGG_ONLY) |
-| ambience (.ogg + .m4a) | 2,419 | |
+| ambience (.ogg + .m4a) | 3,404 | eight beds at Vorbis q2 / AAC 64k (measured after the peaceful-town audio; four beds at q4 / 96k were 2,419) |
 | effects (.ogg + .m4a) | 384 | |
 | title backdrop (`assets/ui/title`) | 291 | six JPEGs |
 | main.js + chunks/ | 251 + 702 | chunks: three core 579, GLTF loader 43, meshopt decoder 26, shared 41 (all modulepreloaded); start flow 13 and orbit camera 19 lazy |
 | index.html | 41 | start.css + page.css inlined |
 | courses/ | 344 | |
-| **total** | **12,429** | was 17,387 before meshopt |
+| **total** | **12,429** | was 17,387 before meshopt; 14,570 now, with the barks (1,356) and the eight ambient beds |
 
 A browser without Vorbis (older Safari) has no music in the one-off build; its ambience and
 effects play from the .m4a. The next saving (both music formats under 15 MB): the ambience as
@@ -669,8 +669,13 @@ music volume persist (prefs). The choices are pure (`test/sound.test.ts`):
 | music | `cutscene_flyover` | the fly-over |
 | music | `town_day` / `town_evening` | in play, by daylight (`EVENING_AT` 0.6 of the day's slots); 1.5 s crossfades; inside a building −6 dB |
 | ambient | `canal_water` | outdoors, 1 − d / 25 m to the nearest water vertex of the walk grid (heights under −0.6 m: canal, lake; `waterDistance`, a chamfer transform) |
-| ambient | `birds_day` / `crickets_evening` | outdoors, by daylight |
-| ambient | `market_murmur` | core's place is `market` |
+| ambient | `boat_creak` | outdoors, 0.6 × (1 − d / 15 m) to the pier's deck path (`distanceToPath`) |
+| ambient | `birds_day` | outdoors: 0.6 in the morning, 0.4 in the afternoon (`AFTERNOON_AT` 0.4 of the day's slots) |
+| ambient | `cicadas_day` | outdoors in the afternoon, 0.35 |
+| ambient | `crickets_evening` | outdoors from `EVENING_AT`, 0.7 |
+| ambient | `willow_wind` | outdoors, 0.2, up to 0.5 at the great tree (1 − d / 30 m to its altar) |
+| ambient | `temple_bell_far` | outdoors, 0.6 × (1 − d / 30 m) to the great tree's altar: a far bell every 30 s |
+| ambient | `market_murmur` | core's place is `market`, 0.5: distant voices and a bicycle bell, no traffic |
 | sfx | `ui_tap` / `ui_confirm` / `ui_back` / `ui_page` / `ui_reveal` | the start flow's hooks; every button in the overlay (`data-sfx` names another: close / cancel `ui_back`) ; a hint chip opening |
 | sfx | `bubble_open` / `bubble_close` | the bubble shown / hidden |
 | sfx | `tile_place` / `tile_undo` | a tile tapped / Undo |
@@ -684,6 +689,12 @@ music volume persist (prefs). The choices are pure (`test/sound.test.ts`):
 | sfx | `step_<surface>_1..4` | footsteps, one every half stride of the walk clip (`StrideClock`, the rig's `stride_m`), one of four at random, ±10 % pitch; surface: grid class 1 grass, 2-4 stone, the stone arch stone, the wooden bridge and the pier wood, indoors wood |
 
 `world3d.sound()` shows what the mixer wants now; `world3d.sfx(id)` plays one.
+
+A quiet canal town: nothing in the set reads as urban, traffic or emergency (no engines, horns,
+sirens, broadband roar; the music's pads hold their pitch). How each clip was checked, and the
+generator rules that keep it so: make-it-in-china `tools/audio/README.md` ("Peaceful by
+construction"); the manifest's `description` says what each clip is, and `test/sound.test.ts`
+fails on an id or description naming traffic.
 
 ## First-steps guide
 
