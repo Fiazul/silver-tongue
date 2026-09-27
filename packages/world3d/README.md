@@ -574,6 +574,36 @@ wooden one, a lake with a pier to the west, hills, and mountains 360-400 m out u
   `world3d.seeThrough("off")` / `("on")`, `world3d.seeThrough(undefined, 3)` sets the radius;
   each returns `{ on, radius, feather, margin, ramp, lift, focusDepth, faded }`.
 
+## Promo capture
+
+Recording a trailer from the browser: a URL flag and console-only hooks, guarded so normal play is
+never touched.
+
+- `?promo=1`: skips the start flow outright (a fixed new game named "Mei", the remembered course /
+  reading language or the catalog's first, no six-words intro), skips the 5 s fly-over on open
+  (`world3d.promo("flyover")` plays the full one instead, on demand); the loading screen still
+  hides once the town has loaded, and sound still unlocks on the first gesture as always.
+- `world3d.promo(cmd, …)`, console-only:
+  - `promo("flyover")`: the full 22 s canonical fly-over (`src/town.json`'s `cameraFull`, ported
+    uncut by `scripts/port-town.mjs` alongside the game's own 5 s `camera` cut — `npm run
+    port-town` regenerates both) under an unskippable letterbox (no hint, no tap / click / key
+    skips it: a recording tool's stray input mustn't cut the trailer short), with the HUD, overlay,
+    toasts, markers, edge arrow and path trail all hidden — the same guards the game's own
+    fly-over already has (`flyover` truthy), just with `cutscene.ts`'s `Letterbox` built
+    `skippable: false`.
+  - `promo("hud", false | true)`: hides / shows every DOM chrome node and the wayfinding marker and
+    ground path (`page.css` `.promo-chrome-off`, `main.ts`'s `promoChromeOff`); a scene's speech
+    bubble and reply sheet stay exactly as the game has them (the trailer wants the dialogue seen).
+  - `promo("orbit", { x, z, radius, seconds })`: one slow turn of the game camera round a ground
+    point, at the game's own elevation angle (a hero shot: the great tree, the plaza).
+  - `promo("dolly", { from, to, lookAt, seconds })`: a straight, eased camera move.
+  - Orbit and dolly (`cutscene.ts` `OrbitPath` / `DollyPath`) take the camera over from
+    `CameraRig.update` for their duration and return a promise that resolves once done, restoring
+    the rig (`rig.snap`) at the player; `flyover` and `hud` are synchronous (poll
+    `world3d.info().cutscene` for the fly-over's time).
+- Checked (`test/town.test.ts`): `cameraFull` is the full canonical path (13 keys, 22 s); `camera`
+  is still the 5 s cut.
+
 ## Courses and reading languages
 
 As the browser TUI (0.13): `src/courses.ts` `pickCourse` fetches the catalog `courses/index.json`,

@@ -39,11 +39,11 @@ import {
 import { CAMERA, CameraRig, outlineScale } from "./camera";
 import { PlayerCarry } from "./carry";
 import { applyStart, loadCatalog, rememberedStart, resumePick, type Picked } from "./courses";
-import { CameraPathPlayer, Letterbox } from "./cutscene";
+import { CameraPathPlayer, DollyPath, Letterbox, OrbitPath } from "./cutscene";
 import { openSession, type Game, type UiModel } from "./game";
 import { Guide, type GuideStep } from "./guide";
 import { MoveInput, toGround } from "./input";
-import { deckAt, gridClass, heldProp, LAYOUT, LayoutIndex, STREET, type AssetIndex, type Stand } from "./layout";
+import { deckAt, gridClass, heldProp, LAYOUT, LayoutIndex, STREET, type AssetIndex, type CameraPath, type Stand, type Vec3 } from "./layout";
 import { emptyLoad, loadPlan, loadSummary, reduceLoad } from "./loading";
 import { Player } from "./player";
 import { loadPrefs, savePrefs } from "./prefs";
@@ -99,6 +99,13 @@ const uiRoot = document.querySelector<HTMLElement>("#ui")!;
 const startRoot = document.querySelector<HTMLElement>("#start")!;
 /** `?ui=bn` / `?ui=zh`: the chrome in that UI language whatever the reading language (a preview until such a course exists). */
 const uiOverride = new URLSearchParams(location.search).get("ui") ?? undefined;
+/**
+ * `?promo=1` (README "Promo capture"): a fixed new game ("Mei"), no start flow, no six-words intro,
+ * no 5 s fly-over on open (world3d.promo("flyover") plays the full one instead, on demand), the
+ * loading screen still hides once the town has loaded, sound still unlocks on the first gesture as
+ * always. Never reachable without the flag: normal play is untouched.
+ */
+const promoMode = new URLSearchParams(location.search).get("promo") === "1";
 const prefs = loadPrefs(kv);
 
 // Phones: no pinch / double-tap zoom (iOS ignores user-scalable=no), no pull-to-refresh (page.css
@@ -305,12 +312,19 @@ async function main() {
     }
   }
 
-  let picked: Picked | null = await resumePick(deps, catalog);
+  let picked: Picked | null = promoMode ? null : await resumePick(deps, catalog);
   let startName: string | null = null;
   // move / pointers exist before the flow can reset them (declared below, used by runStartFlow)
   let pointers: PointerControls | undefined;
   const move = new MoveInput();
-  if (!picked) {
+  if (promoMode) {
+    // ?promo=1: skip the start flow outright (the remembered course / reading language, or the
+    // catalog's first), a fixed name so a promo run is the same game every time.
+    const remembered = rememberedStart(kv);
+    const entry0 = catalog.find((e) => e.id === remembered.course) ?? catalog[0];
+    picked = await applyStart(deps, catalog, { learner: remembered.learner ?? entry0.learners[0], course: entry0.id });
+    startName = "Mei";
+  } else if (!picked) {
     const r = await startFlowPick({ ...rememberedStart(kv) });
     picked = r.picked;
     startName = r.name;
@@ -412,6 +426,11 @@ async function main() {
   const seeFocus: (THREE.Vector3 | null | undefined)[] = [null, null];
   /** the fly-over's state for browser checks: playing, done (played out or skipped), null (never played: a loaded save) */
   let flyoverState: "playing" | "done" | null = null;
+  /** promo capture only (world3d.promo("hud")): forces every DOM chrome node off (page.css .promo-chrome-off) and the wayfinding marker/trail off (folded into wayBusy below) */
+  let promoChromeOff = false;
+  /** promo capture only (world3d.promo("orbit" | "dolly")): drives rig.camera in place of CameraRig.update until it reports done */
+  let promoCam: OrbitPath | DollyPath | null = null;
+  let resolvePromoCam: (() => void) | null = null;
 
   /** Each interior's build, started once: prefetched after the first frame, or when a door needs it first. */
   const building = new Map<string, Promise<SceneSpace>>();
@@ -715,8 +734,9 @@ async function main() {
     else goInto(start.space, start.stand, false);
     ready = true;
     // A new game opens with the fly-over over the town; a loaded save starts straight in. The
-    // overlay is held first, so the name dialog waits for the end of it.
-    const fly = game.fresh && start.space === STREET;
+    // overlay is held first, so the name dialog waits for the end of it. Promo capture (?promo=1):
+    // never (world3d.promo("flyover") plays the full one instead, on demand).
+    const fly = game.fresh && start.space === STREET && !promoMode;
     if (fly) overlay.hold(true);
     overlay.setGame(game);
     syncWorld(game.model);
@@ -724,16 +744,27 @@ async function main() {
     else endFlyover();
   }
 
-  /** The fly-over (town.json camera_path): the overlay waits under the letterbox; any tap, click or key skips it. */
-  function playFlyover() {
+  /**
+   * The fly-over: the overlay waits under the letterbox; any tap, click or key skips it. Promo
+   * capture (world3d.promo("flyover")) reuses this with the full canonical path and `skippable:
+   * false` (bars with no hint, no tap / click / key skip: a recording tool's stray input mustn't cut
+   * the trailer's fly-over short).
+   */
+  function playFlyover(path: CameraPath = LAYOUT.town.camera, skippable = true) {
     if (flyover) return;
-    if (!LAYOUT.town.camera.keys.length) return overlay.hold(false);
+    if (!path.keys.length) return overlay.hold(false);
     const touch = overlay.touch || !!window.matchMedia?.("(pointer: coarse)").matches;
-    const bars = new Letterbox(document.body, game!.s(touch ? "cutscene-skip" : "cutscene-skip-key"), () => {
-      sfx("cutscene_skip");
-      flyover?.path.skip();
-    });
-    flyover = { path: new CameraPathPlayer(LAYOUT.town.camera), bars };
+    const hint = skippable ? game!.s(touch ? "cutscene-skip" : "cutscene-skip-key") : "";
+    const bars = new Letterbox(
+      document.body,
+      hint,
+      () => {
+        sfx("cutscene_skip");
+        flyover?.path.skip();
+      },
+      skippable,
+    );
+    flyover = { path: new CameraPathPlayer(path), bars };
     flyoverState = "playing";
     overlay.hold(true);
     move.clear();
@@ -1005,7 +1036,7 @@ async function main() {
    */
   function updateWayfinding(dt: number) {
     const st = game?.core.state;
-    wayBusy = !game || !st || !!flyover || startOpen || transitioning || overlay.blocking || game.model.mode !== "explore" || !!st.run || !!game.model.bark;
+    wayBusy = !game || !st || !!flyover || startOpen || transitioning || overlay.blocking || game.model.mode !== "explore" || !!st.run || !!game.model.bark || promoChromeOff;
     const o = game?.model.objective;
     wayTarget = !wayBusy && st ? resolveTarget(L, o?.goal, nav.space, st.place) : null;
     const at = wayTarget ? new THREE.Vector3(...wayTarget.at) : null;
@@ -1163,7 +1194,16 @@ async function main() {
       glance = move.active || !wayTarget || sceneNpc ? 0 : glance - dt;
       if (glance > 0 && wayTarget) focus.set(...wayTarget.at);
     }
-    rig.update(dt, focus, !!sceneNpc);
+    // Promo capture (world3d.promo("orbit" | "dolly")): the camera runs on its own path in place of
+    // the follow-cam until it reports done, then the rig snaps back to the player at once.
+    if (promoCam) {
+      if (promoCam.update(dt, rig.camera)) {
+        promoCam = null;
+        rig.snap(player.position);
+        resolvePromoCam?.();
+        resolvePromoCam = null;
+      }
+    } else rig.update(dt, focus, !!sceneNpc);
     updateEdge();
     // See-through: a hole round the player, and round the NPC in a scene (or the figure barking).
     seeFocus[0] = player.position;
@@ -1291,6 +1331,51 @@ async function main() {
         if (cmd !== undefined) see.on = cmd === true || cmd === "on";
         if (typeof radius === "number" && radius >= 0) see.radius = radius;
         return see.status(space.canopies);
+      },
+      /**
+       * Promo capture only (README "Promo capture"), console-only, never reached by normal play:
+       *   promo("flyover")                             the full 22 s canonical fly-over, unskippable
+       *   promo("hud", false | true)                    hide / show all DOM chrome and the wayfinding
+       *                                                 marker/trail (a scene's speech bubble and reply
+       *                                                 sheet stay as the game has them: the trailer
+       *                                                 shows dialogue)
+       *   promo("orbit", { x, z, radius, seconds })     one slow turn of the game camera round a ground
+       *                                                 point (a hero shot: the great tree, the plaza)
+       *   promo("dolly", { from, to, lookAt, seconds }) a straight, eased camera move
+       * orbit and dolly return a promise that resolves once the move is done and the CameraRig is
+       * restored; flyover and hud are synchronous (poll world3d.info().cutscene for the fly-over's time).
+       */
+      promo: (
+        cmd: "flyover" | "hud" | "orbit" | "dolly",
+        opt?: boolean | { x: number; z: number; radius: number; seconds: number } | { from: Vec3; to: Vec3; lookAt: Vec3; seconds: number },
+      ): Promise<void> | undefined => {
+        if (cmd === "flyover") {
+          if (nav.space !== STREET || flyover) return undefined;
+          const s = L.spawn(LAYOUT.defaultPlace);
+          player.place(s.pos[0], s.pos[2], new THREE.Vector3(...s.facing));
+          playFlyover(LAYOUT.town.cameraFull, false);
+          return undefined;
+        }
+        if (cmd === "hud") {
+          promoChromeOff = opt === false;
+          uiRoot.classList.toggle("promo-chrome-off", promoChromeOff);
+          return undefined;
+        }
+        if (flyover || promoCam) return Promise.resolve(); // one cinematic at a time
+        if (cmd === "orbit") {
+          const o = opt as { x: number; z: number; radius: number; seconds: number } | undefined;
+          if (!o || !(o.radius > 0) || !(o.seconds > 0)) return Promise.resolve();
+          return new Promise<void>((resolve) => {
+            promoCam = new OrbitPath([o.x, o.z], o.radius, o.seconds);
+            resolvePromoCam = resolve;
+          });
+        }
+        const o = opt as { from: Vec3; to: Vec3; lookAt: Vec3; seconds: number } | undefined;
+        if (!o || !(o.seconds > 0)) return Promise.resolve();
+        return new Promise<void>((resolve) => {
+          promoCam = new DollyPath(o.from, o.to, o.lookAt, o.seconds);
+          resolvePromoCam = resolve;
+        });
       },
     },
   });

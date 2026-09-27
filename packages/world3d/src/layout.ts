@@ -204,6 +204,8 @@ export interface TownLayout {
   sun: { azimuthDeg: number; elevationDeg: number };
   fog: { near: number; far: number };
   camera: CameraPath;
+  /** the full, uncut canonical fly-over (22 s, 13 keys); promo capture only, main.ts world3d.promo("flyover") */
+  cameraFull: CameraPath;
   places: Record<string, Partial<PlaceLayout>>;
   npcs: Record<string, Partial<NpcLayout>>;
   walkers: WalkerLayout[];

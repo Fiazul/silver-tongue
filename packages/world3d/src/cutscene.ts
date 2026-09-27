@@ -5,6 +5,7 @@
 // click or key; never played for a loaded save. The maths (CameraPathPlayer) is pure; Letterbox is
 // the DOM part.
 import * as THREE from "three";
+import { CAMERA } from "./camera";
 import type { CameraKey, CameraPath, Vec3 } from "./layout";
 
 export interface CameraPose {
@@ -87,6 +88,9 @@ export function apply(p: CameraPose, camera: THREE.PerspectiveCamera, fovScale =
 /**
  * The letterbox: two bars that slide in, and the skip hint. It covers the page while it shows, so
  * the tap that skips reaches nothing else; `onSkip` fires once, on the first tap / click / key.
+ * `skippable: false` (promo capture only, main.ts world3d.promo("flyover")): the bars show with no
+ * hint and no tap / click / key reaches `onSkip` (a recording tool's stray input mustn't cut the
+ * trailer's fly-over short); only `close()` ends it.
  */
 export class Letterbox {
   private root: HTMLElement;
@@ -101,11 +105,14 @@ export class Letterbox {
     parent: HTMLElement,
     hint: string,
     private onSkip: () => void,
+    private skippable = true,
   ) {
     this.root = document.createElement("div");
     this.root.className = "letterbox";
-    this.root.setAttribute("role", "button");
-    this.root.setAttribute("aria-label", hint);
+    if (this.skippable) {
+      this.root.setAttribute("role", "button");
+      this.root.setAttribute("aria-label", hint);
+    }
     const top = document.createElement("div");
     top.className = "letterbox-bar top";
     const bottom = document.createElement("div");
@@ -115,13 +122,15 @@ export class Letterbox {
     tip.textContent = hint;
     bottom.append(tip);
     this.root.append(top, bottom);
-    this.root.addEventListener("pointerdown", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      this.skip();
-    });
+    if (this.skippable) {
+      this.root.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.skip();
+      });
+      window.addEventListener("keydown", this.onKey, { capture: true });
+    } else this.root.style.pointerEvents = "none"; // covers nothing: a promo recording tool's clicks pass through to the canvas
     parent.append(this.root);
-    window.addEventListener("keydown", this.onKey, { capture: true });
     requestAnimationFrame(() => this.root.classList.add("on"));
   }
 
@@ -134,9 +143,77 @@ export class Letterbox {
   /** Bars out, then gone. */
   close() {
     this.skipped = true;
-    window.removeEventListener("keydown", this.onKey, { capture: true });
+    if (this.skippable) window.removeEventListener("keydown", this.onKey, { capture: true });
     this.root.classList.remove("on");
     this.root.style.pointerEvents = "none";
     setTimeout(() => this.root.remove(), 450);
+  }
+}
+
+/**
+ * Promo capture only (main.ts world3d.promo("orbit")): a slow orbit of the game camera round a
+ * ground point at the game's own elevation (CAMERA.elevationDeg over CAMERA.aimHeight), one full
+ * turn over `seconds`. `update` is called each frame (as CameraPathPlayer's); main.ts drives the
+ * camera with it in place of CameraRig.update while it runs, and restores the rig (`rig.snap`) once
+ * it reports done.
+ */
+export class OrbitPath {
+  private t = 0;
+
+  constructor(
+    private readonly centre: [number, number],
+    private readonly radius: number,
+    private readonly seconds: number,
+  ) {}
+
+  get duration(): number {
+    return this.seconds;
+  }
+
+  skip() {
+    this.t = this.seconds;
+  }
+
+  update(dt: number, camera: THREE.PerspectiveCamera): boolean {
+    this.t = Math.min(this.seconds, this.t + Math.max(0, dt));
+    const angle = (this.t / this.seconds) * Math.PI * 2;
+    const el = (CAMERA.elevationDeg * Math.PI) / 180;
+    const height = CAMERA.aimHeight + this.radius * Math.tan(el);
+    camera.position.set(this.centre[0] + Math.sin(angle) * this.radius, height, this.centre[1] + Math.cos(angle) * this.radius);
+    camera.lookAt(this.centre[0], CAMERA.aimHeight, this.centre[1]);
+    return this.t >= this.seconds;
+  }
+}
+
+/**
+ * Promo capture only (main.ts world3d.promo("dolly")): a straight, eased camera move from one point
+ * to another, looking at a fixed point throughout, over `seconds`. Same calling convention as
+ * OrbitPath.
+ */
+export class DollyPath {
+  private t = 0;
+
+  constructor(
+    private readonly from: Vec3,
+    private readonly to: Vec3,
+    private readonly lookAt: Vec3,
+    private readonly seconds: number,
+  ) {}
+
+  get duration(): number {
+    return this.seconds;
+  }
+
+  skip() {
+    this.t = this.seconds;
+  }
+
+  update(dt: number, camera: THREE.PerspectiveCamera): boolean {
+    this.t = Math.min(this.seconds, this.t + Math.max(0, dt));
+    const s = this.t / this.seconds;
+    const e = s * s * (3 - 2 * s); // smoothstep: eased in and out, as the fly-over's own ends
+    camera.position.set(...([0, 1, 2].map((i) => this.from[i] + (this.to[i] - this.from[i]) * e) as Vec3));
+    camera.lookAt(...this.lookAt);
+    return this.t >= this.seconds;
   }
 }

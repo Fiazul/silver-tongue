@@ -57,6 +57,10 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #edd9b8; col
 .letterbox.on .letterbox-bar { transform: none; }
 .letterbox-hint { color: #f3e7d3; font-size: 0.95rem; letter-spacing: 0.04em; opacity: 0.85; }
 #ui.under-cutscene { visibility: hidden; }
+/* Promo capture only (main.ts world3d.promo("hud", false)): every DOM chrome node hidden except the
+   speech bubble and reply sheet (a scene's dialogue is part of the trailer); the wayfinding marker
+   and ground path are hidden in Three.js itself (main.ts promoChromeOff), not by this rule. */
+#ui.promo-chrome-off > *:not(.bubble):not(.replies) { visibility: hidden; }
 .hidden { display: none !important; }
 button { font: inherit; font-weight: 700; color: var(--ink); background: var(--paper); border: var(--border); border-radius: var(--radius-sm); padding: 0.45em 0.9em; cursor: pointer; box-shadow: var(--shadow); transition: transform var(--t-fast) ease, box-shadow var(--t-fast) ease, background-color var(--t-fast) ease; }
 button:hover { background-color: #fff8ea; }

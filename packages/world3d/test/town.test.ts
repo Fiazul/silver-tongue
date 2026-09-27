@@ -26,6 +26,16 @@ describe.skipIf(!hasSources)("src/town.json", () => {
   });
 });
 
+// Checked in (no vendored sources needed): promo capture (main.ts world3d.promo("flyover")) plays
+// `cameraFull`, the full canonical path uncut; the game's own fly-over still plays `camera`, the cut.
+describe("the fly-over camera paths (src/main.ts world3d.promo)", () => {
+  it("cameraFull is the full canonical path (13 keys, 22 s), camera still the 5 s cut", () => {
+    expect(town.cameraFull.keys.length).toBe(13);
+    expect(town.cameraFull.duration).toBe(22);
+    expect(town.camera.duration).toBe(5);
+  });
+});
+
 describe.skipIf(!assetIndex)("the town as the outdoor space", () => {
   const L = new LayoutIndex(LAYOUT, assetIndex!);
   const free = (x: number, z: number) => !blocked(x, z, L.space(STREET).blockers, town.bounds, PLAYER_RADIUS, (a, b) => L.walkable(STREET, a, b));
