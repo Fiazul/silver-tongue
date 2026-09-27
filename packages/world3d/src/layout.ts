@@ -21,6 +21,8 @@ export interface Placement {
   scale?: number;
   /** street life: "scatter" moves away from the player (pigeons) */
   behaviour?: "scatter";
+  /** a character's bark role (src/barks.ts; default: its asset name, else passerby) */
+  role?: string;
 }
 export interface BuildingPlacement extends Placement {
   id: string;
@@ -146,6 +148,8 @@ export interface WalkerLayout {
   path: Vec2[];
   speed?: number;
   heldProp?: HeldPropSpec;
+  /** who they are when talked to (src/barks.ts; default: the character asset, else passerby) */
+  role?: string;
 }
 export interface Surfaces {
   default: number;

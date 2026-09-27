@@ -103,24 +103,42 @@ const TRAVEL_ONLY = {
   hospital: { npcs: ["doctor"], box: [21.9, 5.2, 24.8, 8.8] },
 };
 
-/** Ambient walkers, there and back along the paths (layout_hints paths, off their lanterns). */
+/**
+ * Ambient walkers, there and back along the paths (layout_hints paths, off their lanterns). `role`:
+ * who they are when talked to (barks/<language>.json roles, src/barks.ts).
+ */
 const WALKERS = [
-  { character: "customer_a_green", path: [[-22, 13.4], [22, 13.4]], speed: 1.1 },
-  { character: "customer_a", path: [[-26, 32.5], [26, 32.5]], speed: 1.25 },
-  { character: "customer_a_blue", path: [[11.5, 0.6], [27.4, 0.6], [27.4, 11]], speed: 1 },
-  { character: "kid", path: [[0.6, -11], [0.6, -26], [-6, -27.4]], speed: 1.4 },
-  { character: "customer_b", path: [[-24, -27.4], [24, -27.4]], speed: 0.9 },
-  { character: "customer_a_khaki", path: [[-27.4, -22], [-27.4, 12], [-27.6, 24], [-20, 24.6]], speed: 1 },
-  { character: "courier", path: [[-12, 36.2], [0.4, 36.2], [0.4, 46]], speed: 1.2 },
+  { character: "customer_a_green", role: "stroller", path: [[-22, 13.4], [22, 13.4]], speed: 1.1 },
+  { character: "customer_a", role: "shopper", path: [[-26, 32.5], [26, 32.5]], speed: 1.25 },
+  { character: "customer_a_blue", role: "worker", path: [[11.5, 0.6], [27.4, 0.6], [27.4, 11]], speed: 1 },
+  { character: "kid", role: "kid", path: [[0.6, -11], [0.6, -26], [-6, -27.4]], speed: 1.4 },
+  { character: "customer_b", role: "granny", path: [[-24, -27.4], [24, -27.4]], speed: 0.9 },
+  { character: "customer_a_khaki", role: "tourist", path: [[-27.4, -22], [-27.4, 12], [-27.6, 24], [-20, 24.6]], speed: 1 },
+  { character: "courier", role: "courier", path: [[-12, 36.2], [0.4, 36.2], [0.4, 46]], speed: 1.2 },
 ];
 
-/** Pets: the cat by the noodle shop, a dog on the lake shore, pigeons on the plaza (they scatter). */
+/** Pets: the cat by the noodle shop, a dog on the lake shore, pigeons on the plaza (they scatter). Their role is their asset (cat, dog, pigeon). */
 const PETS = [
   { asset: "cat", pos: [-13.6, 0, 29.7], rotY: 200 },
   { asset: "dog", pos: [-33.4, 0, 1.2], rotY: 120 },
   { asset: "pigeon", pos: [2.2, 0.05, -3.2], rotY: 30, behaviour: "scatter" },
   { asset: "pigeon", pos: [3.1, 0.05, -2.4], rotY: 160, behaviour: "scatter" },
   { asset: "pigeon", pos: [1.6, 0.05, -1.6], rotY: 260, behaviour: "scatter" },
+];
+
+/**
+ * People standing about who aren't in the course (they only say a line, src/barks.ts): the egg
+ * seller's stall on the south bank (a folding table with egg trays, in the gap between the phone
+ * shop and the shuttered shop, the seller behind it facing the promenade; the town has no egg stall
+ * of its own), and a boatman on the lake shore by the pier. The fruit stall already has its keeper
+ * (Miss Gao, outdoorNpcs). Dressing: not blocked (the town's blockers are town.json's own).
+ */
+const STANDING = [
+  { asset: "table_folding", pos: [-4, 0, 28.3], rotY: 0 },
+  { asset: "egg_tray", pos: [-4.3, 0.75, 28.25], rotY: 0 },
+  { asset: "egg_tray", pos: [-3.7, 0.75, 28.32], rotY: 12 },
+  { asset: "fruit_seller", role: "egg_seller", pos: [-4, 0, 27.55], rotY: 0 },
+  { asset: "bus_driver", role: "boatman", pos: [-33.8, -0.15, 3.1], rotY: 250 },
 ];
 
 /** Outdoor fog for a 140 m plateau under mountains 360-400 m out: clear over the town, a haze on the far ring. */
@@ -183,7 +201,7 @@ function walkChecks(out) {
         if (!walkable(x, z) || nearBlocker(x, z, 0.3)) problems.push(`walker ${w.character} at ${x.toFixed(2)},${z.toFixed(2)}`);
       }
     }
-  for (const p of out.dressing) if (!walkable(p.pos[0], p.pos[2]) || nearBlocker(p.pos[0], p.pos[2], 0.2)) problems.push(`pet ${p.asset} at ${p.pos}`);
+  for (const p of out.dressing) if (!walkable(p.pos[0], p.pos[2]) || nearBlocker(p.pos[0], p.pos[2], 0.2)) problems.push(`dressing ${p.asset} at ${p.pos}`);
   if (problems.length) throw new Error(`port-town: off the walkable ground or in a blocker:\n  ${problems.slice(0, 20).join("\n  ")}`);
 }
 
@@ -274,7 +292,7 @@ export function portTown(town, grid, index) {
     places,
     npcs,
     walkers: WALKERS,
-    dressing: PETS,
+    dressing: [...PETS, ...STANDING],
   };
   out.grid.cell = grid.cell_m;
   walkChecks(out);

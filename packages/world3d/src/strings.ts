@@ -113,6 +113,24 @@ const FALLBACK: Record<string, string> = {
   "guide-word": "Tap a word to see its meaning",
   "guide-go": "Go to {place}",
   "guide-do": "{task}: tap {npc}",
+  // barks (src/barks.ts): everyone outside the course says a line; the prompt names them by role
+  "bark-continue": "Carry on",
+  "bark-hint": "Everyone here will talk to you. The hint chip shows what they said in {native}.",
+  "role-passerby": "Passer-by",
+  "role-egg_seller": "Egg seller",
+  "role-stroller": "Stroller",
+  "role-shopper": "Shopper",
+  "role-worker": "Office worker",
+  "role-kid": "Kid",
+  "role-granny": "Granny",
+  "role-tourist": "Tourist",
+  "role-courier": "Courier",
+  "role-boatman": "Boatman",
+  "role-diner": "Diner",
+  "role-tea_guest": "Tea drinker",
+  "role-cat": "Cat",
+  "role-dog": "Dog",
+  "role-pigeon": "Pigeon",
 };
 
 /** The UI language the chrome can show: `ui` when locale/ has it, else English. */

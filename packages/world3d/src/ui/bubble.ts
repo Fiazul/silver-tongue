@@ -1,4 +1,4 @@
-// Speech bubble over the speaking NPC's head. The line as written; tap a word for its readings + gloss, tap
+// Speech bubble over the speaking NPC's head (or a bark's speaker: src/barks.ts, with its reading under the line). The line as written; tap a word for its readings + gloss, tap
 // "…" for the whole sentence (and hear it), ▶ to hear the line again. The line's native meaning
 // sits hidden under a hint chip ("?", start/hint-chip.ts) at its end: tap to peek, it closes again.
 // The line is said as it appears (game.ts queues it). The world projects the head_top anchor to the
@@ -65,7 +65,9 @@ export class BubbleView {
       this.hooks.onReplay();
     });
     tools.append(replay);
-    this.node.replaceChildren(el("div", { className: `bubble-name ${b.kind}`, textContent: b.npcName }), text, tools);
+    // A bark carries its whole reading (pinyin): under the line, as a slowed line's ruby would.
+    const reading = b.reading ? [el("div", { className: "bubble-reading", textContent: b.reading })] : [];
+    this.node.replaceChildren(el("div", { className: `bubble-name ${b.kind}`, textContent: b.npcName }), text, ...reading, tools);
     this.node.classList.remove("pop");
     void this.node.offsetWidth; // restart the pop animation
     this.node.classList.add("pop");

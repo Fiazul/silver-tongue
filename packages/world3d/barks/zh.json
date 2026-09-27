@@ -1,0 +1,196 @@
+{
+  "$comment": "Barks: what everyone in the town says when talked to outside the course's scenes (src/barks.ts). Roles: walkers / dressing `role` (scripts/port-town.mjs, src/layout.json), else the character asset (cat, dog, pigeon), else passerby; a story NPC's role is its npc id (said when it has no scene for you). `clip` is written by scripts/bark-audio.mjs.",
+  "language": "zh",
+  "voice": "zh-CN-XiaoxiaoNeural",
+  "roles": {
+    "passerby": {
+      "voice": "zh-CN-XiaoyiNeural",
+      "lines": [
+        { "text": "你好！", "reading": "Nǐ hǎo!", "gloss": { "en": "Hello!", "bn": "হ্যালো!" }, "clip": "5a77f205546e3af8" },
+        { "text": "不好意思，我有点忙。", "reading": "Bù hǎoyìsi, wǒ yǒudiǎn máng.", "gloss": { "en": "Sorry, I'm a bit busy.", "bn": "দুঃখিত, আমি একটু ব্যস্ত।" }, "clip": "64a9939d610872f1" }
+      ]
+    },
+    "egg_seller": {
+      "voice": "zh-CN-YunyangNeural",
+      "lines": [
+        { "text": "今天没有鸡蛋。", "reading": "Jīntiān méiyǒu jīdàn.", "gloss": { "en": "No eggs today.", "bn": "আজ ডিম নেই।" }, "clip": "e4e9b1c167bc1a50" },
+        { "text": "明天来吧，明天有。", "reading": "Míngtiān lái ba, míngtiān yǒu.", "gloss": { "en": "Come tomorrow, there'll be some tomorrow.", "bn": "কাল আসুন, কাল থাকবে।" }, "clip": "b5507e047e3afce9" },
+        { "text": "不好意思，鸡蛋都卖完了。", "reading": "Bù hǎoyìsi, jīdàn dōu mài wán le.", "gloss": { "en": "Sorry, the eggs are all sold out.", "bn": "দুঃখিত, সব ডিম বিক্রি হয়ে গেছে।" }, "clip": "2f2e72320908d2d7" }
+      ]
+    },
+    "stroller": {
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "lines": [
+        { "text": "今天天气很好！", "reading": "Jīntiān tiānqì hěn hǎo!", "gloss": { "en": "The weather is lovely today!", "bn": "আজ আবহাওয়া খুব ভালো!" }, "clip": "35119a3242c4edac" },
+        { "text": "我喜欢在河边走。", "reading": "Wǒ xǐhuan zài hébiān zǒu.", "gloss": { "en": "I like walking by the river.", "bn": "আমি নদীর ধারে হাঁটতে ভালোবাসি।" }, "clip": "a02ee0321790c845" }
+      ]
+    },
+    "shopper": {
+      "voice": "zh-CN-YunyangNeural",
+      "lines": [
+        { "text": "我去买菜。", "reading": "Wǒ qù mǎi cài.", "gloss": { "en": "I'm off to buy groceries.", "bn": "আমি বাজার করতে যাচ্ছি।" }, "clip": "178e92bcbdeae340" },
+        { "text": "水果太贵了！", "reading": "Shuǐguǒ tài guì le!", "gloss": { "en": "Fruit is too expensive!", "bn": "ফলের দাম খুব বেশি!" }, "clip": "521fcc21f1039b01" },
+        { "text": "你也去市场吗？", "reading": "Nǐ yě qù shìchǎng ma?", "gloss": { "en": "Are you going to the market too?", "bn": "আপনিও কি বাজারে যাচ্ছেন?" }, "clip": "e76917526d503e69" }
+      ]
+    },
+    "worker": {
+      "voice": "zh-CN-YunxiaNeural",
+      "lines": [
+        { "text": "我要去上班。", "reading": "Wǒ yào qù shàngbān.", "gloss": { "en": "I have to get to work.", "bn": "আমাকে কাজে যেতে হবে।" }, "clip": "a027530e03894d35" },
+        { "text": "对不起，我没有时间。", "reading": "Duìbuqǐ, wǒ méiyǒu shíjiān.", "gloss": { "en": "Sorry, I don't have time.", "bn": "দুঃখিত, আমার সময় নেই।" }, "clip": "dc35628650b6dc42" }
+      ]
+    },
+    "kid": {
+      "voice": "zh-CN-YunxiaNeural",
+      "lines": [
+        { "text": "你好！你是哪国人？", "reading": "Nǐ hǎo! Nǐ shì nǎ guó rén?", "gloss": { "en": "Hi! Which country are you from?", "bn": "হ্যালো! তুমি কোন দেশের মানুষ?" }, "clip": "fd98906e407bcaaa" },
+        { "text": "我八岁了！", "reading": "Wǒ bā suì le!", "gloss": { "en": "I'm eight!", "bn": "আমার আট বছর!" }, "clip": "c703a6dad89237c2" },
+        { "text": "我们一起玩吧！", "reading": "Wǒmen yìqǐ wán ba!", "gloss": { "en": "Let's play together!", "bn": "চলো একসাথে খেলি!" }, "clip": "3aeef7bcc8009368" }
+      ]
+    },
+    "granny": {
+      "voice": "zh-CN-XiaoyiNeural",
+      "lines": [
+        { "text": "你吃饭了吗？", "reading": "Nǐ chīfàn le ma?", "gloss": { "en": "Have you eaten?", "bn": "তুমি খেয়েছ?" }, "clip": "4dd0e03270557acc" },
+        { "text": "慢慢走，别着急。", "reading": "Mànmàn zǒu, bié zháojí.", "gloss": { "en": "Take it slowly, no hurry.", "bn": "আস্তে হাঁটো, তাড়াহুড়ো কোরো না।" }, "clip": "d3815de23843d66d" },
+        { "text": "你的中文不错！", "reading": "Nǐ de Zhōngwén búcuò!", "gloss": { "en": "Your Chinese is pretty good!", "bn": "তোমার চীনা ভাষা বেশ ভালো!" }, "clip": "4313246b93fab6de" }
+      ]
+    },
+    "tourist": {
+      "voice": "zh-CN-XiaoyiNeural",
+      "lines": [
+        { "text": "这里很漂亮！", "reading": "Zhèlǐ hěn piàoliang!", "gloss": { "en": "It's beautiful here!", "bn": "এখানে খুব সুন্দর!" }, "clip": "d5e6285c63abe27f" },
+        { "text": "请问，茶馆在哪儿？", "reading": "Qǐngwèn, cháguǎn zài nǎr?", "gloss": { "en": "Excuse me, where's the tea house?", "bn": "মাফ করবেন, চায়ের দোকানটা কোথায়?" }, "clip": "6d330ebeb7585f81" },
+        { "text": "我也是第一次来。", "reading": "Wǒ yě shì dì-yī cì lái.", "gloss": { "en": "It's my first time here too.", "bn": "আমিও এই প্রথম এলাম।" }, "clip": "b400f89e977ca9b8" }
+      ]
+    },
+    "courier": {
+      "voice": "zh-CN-XiaoyiNeural",
+      "lines": [
+        { "text": "不好意思，我有点忙。", "reading": "Bù hǎoyìsi, wǒ yǒudiǎn máng.", "gloss": { "en": "Sorry, I'm a bit busy.", "bn": "দুঃখিত, আমি একটু ব্যস্ত।" }, "clip": "64a9939d610872f1" },
+        { "text": "快递！快递！", "reading": "Kuàidì! Kuàidì!", "gloss": { "en": "Delivery! Delivery!", "bn": "ডেলিভারি! ডেলিভারি!" }, "clip": "3e143ce4c0c729c8" }
+      ]
+    },
+    "boatman": {
+      "voice": "zh-CN-YunjianNeural",
+      "lines": [
+        { "text": "坐船吗？十块钱。", "reading": "Zuò chuán ma? Shí kuài qián.", "gloss": { "en": "A boat ride? Ten yuan.", "bn": "নৌকায় চড়বেন? দশ ইউয়ান।" }, "clip": "fc5968c0fcecce5a" },
+        { "text": "今天没有风。", "reading": "Jīntiān méiyǒu fēng.", "gloss": { "en": "No wind today.", "bn": "আজ বাতাস নেই।" }, "clip": "a915cf4e902aaff2" }
+      ]
+    },
+    "diner": {
+      "voice": "zh-CN-YunxiaNeural",
+      "lines": [
+        { "text": "这个面很好吃！", "reading": "Zhège miàn hěn hǎochī!", "gloss": { "en": "These noodles are delicious!", "bn": "এই নুডলস খুব মজার!" }, "clip": "7cfda3944c802db5" },
+        { "text": "老板，再来一碗！", "reading": "Lǎobǎn, zài lái yì wǎn!", "gloss": { "en": "Boss, another bowl!", "bn": "মালিক, আরেক বাটি দিন!" }, "clip": "9d9b323fb6be71fd" },
+        { "text": "你也来吃面吗？", "reading": "Nǐ yě lái chī miàn ma?", "gloss": { "en": "Are you here for noodles too?", "bn": "আপনিও কি নুডলস খেতে এসেছেন?" }, "clip": "4a03bef8c1e1eb08" }
+      ]
+    },
+    "tea_guest": {
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "lines": [
+        { "text": "这里的茶很好喝。", "reading": "Zhèlǐ de chá hěn hǎohē.", "gloss": { "en": "The tea here is very good.", "bn": "এখানকার চা খুব ভালো।" }, "clip": "c6e4757c41b6aa0b" },
+        { "text": "请坐，喝杯茶吧。", "reading": "Qǐng zuò, hē bēi chá ba.", "gloss": { "en": "Sit down, have a cup of tea.", "bn": "বসুন, এক কাপ চা খান।" }, "clip": "bae8c975755fe187" }
+      ]
+    },
+    "cat": {
+      "voice": "zh-CN-XiaoyiNeural",
+      "lines": [
+        { "text": "喵。", "reading": "Miāo.", "gloss": { "en": "Meow.", "bn": "মিয়াঁও।" }, "clip": "3d6eec7a77492983" },
+        { "text": "喵喵！", "reading": "Miāo miāo!", "gloss": { "en": "Meow meow!", "bn": "মিয়াঁও মিয়াঁও!" }, "clip": "93eda6ff82385ecb" }
+      ]
+    },
+    "dog": {
+      "voice": "zh-CN-YunjianNeural",
+      "lines": [
+        { "text": "汪！", "reading": "Wāng!", "gloss": { "en": "Woof!", "bn": "ঘেউ!" }, "clip": "827d2ffc153aa9a7" },
+        { "text": "汪汪汪！", "reading": "Wāng wāng wāng!", "gloss": { "en": "Woof woof woof!", "bn": "ঘেউ ঘেউ ঘেউ!" }, "clip": "e1524164185cde31" }
+      ]
+    },
+    "pigeon": {
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "lines": [
+        { "text": "咕咕。", "reading": "Gūgū.", "gloss": { "en": "Coo coo.", "bn": "বাকবাকুম।" }, "clip": "c4b1a6983efa07ef" },
+        { "text": "咕咕咕！", "reading": "Gū gū gū!", "gloss": { "en": "Coo coo coo!", "bn": "বাকবাকুম বাকবাকুম!" }, "clip": "834ed7c62c491a4b" }
+      ]
+    },
+    "wang": {
+      "lines": [
+        { "text": "你好！今天学习了吗？", "reading": "Nǐ hǎo! Jīntiān xuéxí le ma?", "gloss": { "en": "Hello! Have you studied today?", "bn": "নমস্কার! আজ পড়াশোনা করেছ?" }, "clip": "f4af7936d756fea3" },
+        { "text": "明天见！", "reading": "Míngtiān jiàn!", "gloss": { "en": "See you tomorrow!", "bn": "কাল দেখা হবে!" }, "clip": "cf7ff63cb9ceb4fe" }
+      ]
+    },
+    "cook": {
+      "lines": [
+        { "text": "欢迎！今天的面很好吃。", "reading": "Huānyíng! Jīntiān de miàn hěn hǎochī.", "gloss": { "en": "Welcome! The noodles are great today.", "bn": "স্বাগতম! আজকের নুডলস খুব মজার।" }, "clip": "339800cab4e1f04f" },
+        { "text": "我现在很忙。", "reading": "Wǒ xiànzài hěn máng.", "gloss": { "en": "I'm very busy right now.", "bn": "আমি এখন খুব ব্যস্ত।" }, "clip": "085ce503eb5bc209" }
+      ]
+    },
+    "landlord": {
+      "lines": [
+        { "text": "别忘了房租。", "reading": "Bié wàng le fángzū.", "gloss": { "en": "Don't forget the rent.", "bn": "ভাড়ার কথা ভুলো না।" }, "clip": "9aed32abad72b903" },
+        { "text": "晚上早点儿睡。", "reading": "Wǎnshang zǎo diǎnr shuì.", "gloss": { "en": "Get to bed early tonight.", "bn": "রাতে তাড়াতাড়ি ঘুমিও।" }, "clip": "dde03b549dafcf86" }
+      ]
+    },
+    "foreman": {
+      "lines": [
+        { "text": "现在没有工作。", "reading": "Xiànzài méiyǒu gōngzuò.", "gloss": { "en": "There's no work right now.", "bn": "এখন কোনো কাজ নেই।" }, "clip": "377986e3399d274b" },
+        { "text": "明天早点儿来。", "reading": "Míngtiān zǎo diǎnr lái.", "gloss": { "en": "Come early tomorrow.", "bn": "কাল তাড়াতাড়ি এসো।" }, "clip": "92fba0b4922c9425" }
+      ]
+    },
+    "dispatcher": {
+      "lines": [
+        { "text": "现在没有快递。", "reading": "Xiànzài méiyǒu kuàidì.", "gloss": { "en": "No parcels right now.", "bn": "এখন কোনো পার্সেল নেই।" }, "clip": "0a8a69d28d908e1c" },
+        { "text": "你要买水果吗？", "reading": "Nǐ yào mǎi shuǐguǒ ma?", "gloss": { "en": "Would you like some fruit?", "bn": "ফল কিনবে?" }, "clip": "6f754bab8b1d66b4" }
+      ]
+    },
+    "teacher": {
+      "lines": [
+        { "text": "学习很重要。", "reading": "Xuéxí hěn zhòngyào.", "gloss": { "en": "Studying is important.", "bn": "পড়াশোনা খুব জরুরি।" }, "clip": "d35dac0e8cd0063d" },
+        { "text": "明天见！", "reading": "Míngtiān jiàn!", "gloss": { "en": "See you tomorrow!", "bn": "কাল দেখা হবে!" }, "clip": "dd3b48fdf848bb19" }
+      ]
+    },
+    "classmate": {
+      "lines": [
+        { "text": "你好！我们是同学。", "reading": "Nǐ hǎo! Wǒmen shì tóngxué.", "gloss": { "en": "Hi! We're classmates.", "bn": "হ্যালো! আমরা সহপাঠী।" }, "clip": "8c7c504e17e9c8ff" },
+        { "text": "中文很难，对吧？", "reading": "Zhōngwén hěn nán, duì ba?", "gloss": { "en": "Chinese is hard, isn't it?", "bn": "চীনা ভাষা কঠিন, তাই না?" }, "clip": "d53627e3fc29e8dd" }
+      ]
+    },
+    "doctor": {
+      "lines": [
+        { "text": "多喝水，多休息。", "reading": "Duō hē shuǐ, duō xiūxi.", "gloss": { "en": "Drink plenty of water and rest.", "bn": "বেশি করে পানি খাও, বিশ্রাম নাও।" }, "clip": "0e714de74c4ae037" },
+        { "text": "你今天好吗？", "reading": "Nǐ jīntiān hǎo ma?", "gloss": { "en": "Are you well today?", "bn": "আজ তুমি ভালো আছ?" }, "clip": "772084a1bf5052aa" }
+      ]
+    },
+    "traveller": {
+      "lines": [
+        { "text": "车怎么还没来？", "reading": "Chē zěnme hái méi lái?", "gloss": { "en": "Why hasn't the bus come yet?", "bn": "বাস এখনও আসছে না কেন?" }, "clip": "35e1a54e19112c09" },
+        { "text": "我要去北京。", "reading": "Wǒ yào qù Běijīng.", "gloss": { "en": "I'm going to Beijing.", "bn": "আমি বেইজিং যাব।" }, "clip": "4107350b38d34230" }
+      ]
+    },
+    "driver": {
+      "lines": [
+        { "text": "车十分钟以后走。", "reading": "Chē shí fēnzhōng yǐhòu zǒu.", "gloss": { "en": "The bus leaves in ten minutes.", "bn": "বাস দশ মিনিট পরে ছাড়বে।" }, "clip": "aa3273a802198b8b" },
+        { "text": "上车吗？", "reading": "Shàng chē ma?", "gloss": { "en": "Getting on?", "bn": "উঠবেন?" }, "clip": "4d6b71fcd4e9c957" }
+      ]
+    },
+    "shopkeeper": {
+      "lines": [
+        { "text": "欢迎光临！", "reading": "Huānyíng guānglín!", "gloss": { "en": "Welcome!", "bn": "স্বাগতম!" }, "clip": "c1cbe543632964e1" },
+        { "text": "今天人不多。", "reading": "Jīntiān rén bù duō.", "gloss": { "en": "Not many people today.", "bn": "আজ লোকজন বেশি নেই।" }, "clip": "272799e6b013c25d" }
+      ]
+    },
+    "teaboss": {
+      "lines": [
+        { "text": "喝茶吗？", "reading": "Hē chá ma?", "gloss": { "en": "Some tea?", "bn": "চা খাবেন?" }, "clip": "818b4b267b7581bc" },
+        { "text": "慢慢喝，别着急。", "reading": "Mànmàn hē, bié zháojí.", "gloss": { "en": "Drink slowly, no hurry.", "bn": "আস্তে আস্তে খান, তাড়া নেই।" }, "clip": "a5c7a94dbc8cabdb" }
+      ]
+    },
+    "neighbour": {
+      "lines": [
+        { "text": "你好，邻居！", "reading": "Nǐ hǎo, línjū!", "gloss": { "en": "Hello, neighbour!", "bn": "হ্যালো, প্রতিবেশী!" }, "clip": "85b3366d603fa4bf" },
+        { "text": "我的狗很喜欢你。", "reading": "Wǒ de gǒu hěn xǐhuan nǐ.", "gloss": { "en": "My dog really likes you.", "bn": "আমার কুকুরটা তোমাকে খুব পছন্দ করে।" }, "clip": "1417d70803fd6b1e" }
+      ]
+    }
+  }
+}

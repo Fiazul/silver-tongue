@@ -6,7 +6,8 @@
     "build": "node build.mjs",
     "dev": "node build.mjs --dev",
     "port-town": "node scripts/port-town.mjs",
-    "assets:sync": "node scripts/sync-assets.mjs"
+    "assets:sync": "node scripts/sync-assets.mjs",
+    "bark-audio": "node scripts/bark-audio.mjs"
   },
   "dependencies": {
     "@silver-tongue/core": "*",

@@ -11,12 +11,21 @@ const HOME_SPEED = 0.5; // m/s
 const SCATTER_MAX = 3.5; // m from home at most
 const SETTLE = 2.5; // s before drifting home
 
+/** Turns `m` to face (px, pz) (yaw as atan2(dx, dz)); a player on top of it leaves the yaw as it is. */
+function faceFrom(m: { x: number; z: number; yaw: number }, px: number, pz: number) {
+  const dx = px - m.x;
+  const dz = pz - m.z;
+  if (Math.hypot(dx, dz) > 1e-3) m.yaw = Math.atan2(dx, dz);
+}
+
 export class WalkerMotion {
   x: number;
   z: number;
   /** facing (radians, atan2(dx, dz)) */
   yaw = 0;
   waiting = false;
+  /** talked to (a bark, main.ts): stands still facing the player until let go, then walks on */
+  held = false;
   private next = 1;
   private dir = 1;
 
@@ -30,6 +39,11 @@ export class WalkerMotion {
 
   /** One frame; returns the ground speed (m/s) for the walk clip. */
   update(dt: number, px: number, pz: number): number {
+    if (this.held) {
+      this.waiting = true;
+      faceFrom(this, px, pz);
+      return 0;
+    }
     if (this.path.length < 2 || dt <= 0) return 0;
     const [tx, tz] = this.path[this.next];
     const dx = tx - this.x;
@@ -60,6 +74,8 @@ export class ScatterMotion {
   x: number;
   z: number;
   yaw: number;
+  /** talked to (a bark): stays put facing the player */
+  held = false;
   private settle = 0;
 
   constructor(
@@ -72,6 +88,10 @@ export class ScatterMotion {
 
   /** One frame; returns the ground speed (m/s). */
   update(dt: number, px: number, pz: number): number {
+    if (this.held) {
+      faceFrom(this, px, pz);
+      return 0;
+    }
     const ox = this.x - px;
     const oz = this.z - pz;
     const od = Math.hypot(ox, oz);

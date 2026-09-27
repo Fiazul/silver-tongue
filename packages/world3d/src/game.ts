@@ -31,7 +31,9 @@ import { makeText, notebookLines, type AudioOut, type Speech, type StyledLine, t
 import { WebSessions, type KeyValue, type Opened } from "@silver-tongue/tui-web/src/web-storage";
 import { route } from "./layout";
 import { objective, type Objective } from "./objective";
-import { display, makeStrings, type Strings } from "./strings";
+import { display, makeStrings, uiLanguage, type Strings } from "./strings";
+import { FALLBACK_UI } from "../locale";
+import { BARK_CLIP, barkGloss, barkTokens, isBarkClip, npcRole, wordForms, type BarkLine, type BarkPicker } from "./barks";
 
 export type Tone = "info" | "good" | "bad" | "note" | "place" | "you" | "story";
 
@@ -48,7 +50,10 @@ export interface Bubble {
   npc: string;
   npcName: string;
   line: RenderedLine;
-  kind: "line" | "reaction" | "rephrase";
+  /** `bark`: someone outside the course said a line (game.bark): no scene, nothing logged */
+  kind: "line" | "reaction" | "rephrase" | "bark";
+  /** a bark's whole reading (pinyin), shown under it */
+  reading?: string;
   /** a replayed line: show it slowly, with pronunciation */
   slow: boolean;
   /** words heard for the first time in this line (faint underline) */
@@ -61,7 +66,9 @@ export interface Bubble {
 export type ReplyPanel =
   | { mode: "pick"; options: RenderedLine[]; cost?: number }
   /** tiles (typed replies play as tiles in core): tap them in order, then say it */
-  | { mode: "tiles"; tiles: string[]; cost?: number };
+  | { mode: "tiles"; tiles: string[]; cost?: number }
+  /** a bark: the one reply that closes it ("…") */
+  | { mode: "continue"; label: string; cost?: undefined };
 
 /** A wallet change floating from the wallet chip: "+¥14 delivery", "−¥4 shopping". */
 export interface WalletFx {
@@ -118,6 +125,8 @@ export interface UiModel {
   scene: { id: string; npc: string } | null;
   bubble: Bubble | null;
   reply: ReplyPanel | null;
+  /** someone outside the course is saying a line (the bubble is theirs): `id` a figure id (src/barks.ts) or a story NPC's */
+  bark: { id: string; role: string } | null;
   /** talking to someone with several things to talk about: pick one */
   choices: { title: string; items: Choice[] } | null;
   /** narration, results and rejections, newest last (the UI shows new ones as toasts) */
@@ -167,6 +176,10 @@ export interface GameOptions {
   audio?: AudioOut;
   /** the chrome's UI language (strings.ts; default the course's reading language) */
   ui?: string;
+  /** barks (src/barks.ts): lines for everyone outside the course; a story NPC with nothing to talk about says one */
+  barks?: BarkPicker;
+  /** where barks are said (their clips, `bark:<id>`); leave out and they're silent */
+  barkAudio?: AudioOut;
 }
 
 export interface Game {
@@ -186,8 +199,16 @@ export interface Game {
   enterPlace(place: string): void;
   /** the travel list: every other place (the TUI's "Go to" items, routed) */
   travel(): void;
-  /** tapped / pressed E at an NPC: start their scene, or list them if there are several */
+  /** tapped / pressed E at an NPC: start their scene, or list them if there are several (none: they bark, when barks are on) */
   talkTo(npc: string): void;
+  /**
+   * Someone outside the course says a line (a walker, a pet, a stall keeper): the bubble with its
+   * reading, the meaning in the UI language under the hint chip, its clip, and a "…" reply that
+   * closes it. No core input: no slot, nothing logged. `hint`: a one-off note shown with it.
+   */
+  bark(who: { id: string; name: string; role: string }, line: BarkLine, hint?: string): void;
+  /** closes the bark on screen (the "…" reply, a tap, walking off) */
+  endBark(): void;
   choose(index: number): void;
   closeChoices(): void;
   reply(index: number): void;
@@ -268,11 +289,19 @@ export function createGame(opts: GameOptions): Game {
   const hear = (clips: string[] | undefined, slow = false) => {
     if (clips?.length) queue.push(slow ? { clips, slow } : { clips });
   };
-  /** Says everything queued, unless sound is off. */
+  /** Says everything queued, unless sound is off. Barks' clips go to their own player. */
   const flush = () => {
-    if (queue.length && soundOn()) opts.audio!.play(queue);
+    const barks = queue.filter((x) => x.clips.every(isBarkClip)).map((x) => ({ ...x, clips: x.clips.map((c) => c.slice(BARK_CLIP.length)) }));
+    const words = queue.filter((x) => !x.clips.every(isBarkClip));
+    if (words.length && soundOn()) opts.audio!.play(words);
+    if (barks.length && opts.barkAudio?.available && core.state.sound !== false) {
+      opts.audio?.stop();
+      opts.barkAudio.play(barks);
+    }
     queue = [];
   };
+  const native = uiLanguage(opts.ui ?? course.learner);
+  let forms: ReturnType<typeof wordForms> | null = null;
 
   const model: UiModel = {
     mode: "explore",
@@ -280,6 +309,7 @@ export function createGame(opts: GameOptions): Game {
     scene: null,
     bubble: null,
     reply: null,
+    bark: null,
     choices: null,
     feed: [],
     mentor: null,
@@ -517,6 +547,8 @@ export function createGame(opts: GameOptions): Game {
 
   /** Sends one input; returns its events (dispatched) and whether core accepted it. */
   function send(input: Input): { events: GameEvent[]; ok: boolean } {
+    // Anything sent to core ends a bark on screen (its bubble and "…" belong to no scene).
+    if (model.bark && input.type !== "setSound") closeBark();
     const events = core.send(input);
     const ok = !events.some((e) => e.type === "inputRejected");
     if (ok) persist();
@@ -545,6 +577,7 @@ export function createGame(opts: GameOptions): Game {
 
   function travel() {
     if (core.state.run || model.mode === "name") return;
+    if (model.bark) closeBark(); // the Go to list replaces a bark (walking into a zone doesn't: main.ts ends it once you walk off)
     const items: Choice[] = Object.keys(course.world.places)
       .filter((p) => p !== core.state.place && route(course.world, core.state.place, p).length)
       .map((p) => ({ label: t("menu-go", { place: t(`place-${p}`) }), input: { type: "goTo", place: p } }));
@@ -559,6 +592,7 @@ export function createGame(opts: GameOptions): Game {
   function talkTo(npc: string) {
     const st = core.state;
     if (model.mode === "name") return;
+    if (model.bark) closeBark();
     if (st.run) return dispatch([{ type: "inputRejected", reason: "in-scene" }]);
     if (course.world.npcs[npc]?.place !== st.place) return dispatch([{ type: "inputRejected", reason: "wrong-place" }]);
     const items: Choice[] = [];
@@ -574,6 +608,10 @@ export function createGame(opts: GameOptions): Game {
       if (waiting.length) {
         for (const x of waiting)
           feed("info", t("menu-needs-money", { npc: npcName(npc), scene: t(`scene-${x.id}`), currency: course.world.currency, cost: sceneCost(x) }), "info");
+      } else if (opts.barks) {
+        // Nothing to talk about: they still say something.
+        const { role } = npcRole(opts.barks.book, npc);
+        return bark({ id: npc, name: npcName(npc), role }, opts.barks.pick(role).line);
       } else feed("info", s("nothing-to-say", { npc: npcName(npc) }), "info");
       return refresh();
     }
@@ -596,6 +634,7 @@ export function createGame(opts: GameOptions): Game {
 
   function reply(index: number) {
     const r = model.reply;
+    if (r?.mode === "continue") return endBark();
     if (r?.mode !== "pick" || !r.options[index]) return;
     feed("you", s("you-say", { text: r.options[index].text }), "you");
     hear(r.options[index].audio);
@@ -621,12 +660,13 @@ export function createGame(opts: GameOptions): Game {
     send({ type: "replyTiles", tiles: [] });
   }
 
-  /** Looking a word up is logged as help on it, like the TUI's [w] word help. */
+  /** Looking a word up is logged as help on it, like the TUI's [w] word help (not in a bark: nothing is logged there). */
   function helpWord(word: WordId): Gloss | undefined {
     const w = course.words[word];
     if (!w) return undefined;
     hear(w.audio);
-    send({ type: "helpWord", word });
+    if (model.bark) flush();
+    else send({ type: "helpWord", word });
     const reading = wordReadings(w);
     return { text: w.w, ...(reading ? { reading } : {}), gloss: w.gloss, audio: w.audio ?? [] };
   }
@@ -634,9 +674,9 @@ export function createGame(opts: GameOptions): Game {
   /** The whole line's meaning, said aloud. Not logged as help: the words still have to be recognised. */
   function sentence(line: RenderedLine): Gloss | undefined {
     if (!line.meaning) return undefined;
-    const reading = lineReading(course, line);
     // The bubble's line is said as the bubble says it (a reaction in the NPC's voice, a slow repeat slowly).
     const b = model.bubble?.line === line ? model.bubble : null;
+    const reading = b?.reading ?? lineReading(course, line);
     const audio = b ? b.audio : (line.audio ?? []);
     const slow = !!b?.slow;
     say(audio, slow);
@@ -650,7 +690,10 @@ export function createGame(opts: GameOptions): Game {
 
   function setSound(on: boolean) {
     if (!opts.audio?.available) return; // nothing to turn on or off here
-    if (!on) opts.audio.stop();
+    if (!on) {
+      opts.audio.stop();
+      opts.barkAudio?.stop();
+    }
     send({ type: "setSound", on });
   }
 
@@ -659,6 +702,35 @@ export function createGame(opts: GameOptions): Game {
     const run = core.state.run;
     const ex = run && course.scenes.find((x) => x.id === run.scene)?.exchanges[run.exchange];
     return run ? ex?.variants[comboKey(run.combo)]?.reply : undefined;
+  }
+
+  function bark(who: { id: string; name: string; role: string }, line: BarkLine, hint?: string) {
+    if (core.state.run || model.mode !== "explore") return;
+    model.choices = null;
+    const meaning = barkGloss(line, native, FALLBACK_UI);
+    const audio = line.clip ? [BARK_CLIP + line.clip] : [];
+    forms ??= wordForms(course);
+    const rendered: RenderedLine = { text: line.text, tokens: barkTokens(course, line.text, forms), audio, ...(meaning ? { meaning } : {}) };
+    model.bark = { id: who.id, role: who.role };
+    model.bubble = { seq: ++seq, npc: who.id, npcName: who.name, line: rendered, kind: "bark", slow: false, fresh: [], audio, ...(line.reading ? { reading: line.reading } : {}) };
+    model.reply = { mode: "continue", label: "…" };
+    if (hint) feed("info", hint, "note");
+    say(audio);
+    refresh();
+  }
+
+  /** Clears a bark from the model (no refresh). */
+  function closeBark() {
+    model.bark = null;
+    model.bubble = null;
+    model.reply = null;
+  }
+
+  function endBark() {
+    if (!model.bark) return;
+    closeBark();
+    opts.barkAudio?.stop();
+    refresh();
   }
 
   function setName(name: string): boolean {
@@ -691,6 +763,8 @@ export function createGame(opts: GameOptions): Game {
     enterPlace,
     travel,
     talkTo,
+    bark,
+    endBark,
     choose,
     closeChoices: () => choose(-1),
     reply,
@@ -725,6 +799,8 @@ export function openSession(
     onEvent?: GameOptions["onEvent"];
     audio?: GameOptions["audio"];
     ui?: string;
+    barks?: GameOptions["barks"];
+    barkAudio?: GameOptions["barkAudio"];
   },
 ): { game: Game; opened: Opened; sessions: WebSessions } {
   const sessions = new WebSessions(kv, course, opts.now);
@@ -740,6 +816,8 @@ export function openSession(
     onChange: opts.onChange,
     onEvent: opts.onEvent,
     audio: opts.audio,
+    barks: opts.barks,
+    barkAudio: opts.barkAudio,
     ui: opts.ui,
   });
   return { game, opened, sessions };

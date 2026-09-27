@@ -41,16 +41,21 @@ export function silentWav(): string {
   return `data:audio/wav;base64,${btoa(bin)}`;
 }
 
-export function createAudioPlayer(deps: WebAudioDeps): AudioPlayer {
+/**
+ * `ext`: the clips' file extension when they aren't createWebAudio's .mp3 (the barks' .ogg / .m4a,
+ * picked by pickFormat): each clip URL's ".mp3" becomes it.
+ */
+export function createAudioPlayer(deps: WebAudioDeps, opts: { ext?: string } = {}): AudioPlayer {
   const real = deps.audio;
   let unlocked = false;
+  const url = (v: string) => (opts.ext && v.endsWith(".mp3") ? `${v.slice(0, -4)}.${opts.ext}` : v);
   // The element as createWebAudio sees it, except that a play() that goes through marks audio unlocked.
   const el: AudioLike | undefined = real && {
     get src() {
       return real.src;
     },
     set src(v) {
-      real.src = v;
+      real.src = url(v);
     },
     get playbackRate() {
       return real.playbackRate;
