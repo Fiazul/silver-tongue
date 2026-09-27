@@ -475,13 +475,27 @@ wooden one, a lake with a pier to the west, hills, and mountains 360-400 m out u
   dome, r 800), so the town stays clear and the mountains read through a veil (the old street's 26-90 m depth fog would have
   greyed them out). Its colour is the dome's horizon, tinted with the dome through the day
   (`DAY.skyTint`). The sun sits at town.json's bearing and reaches its elevation at midday.
-- **The fly-over** (`src/cutscene.ts`): a new game opens with town.json's 22 s camera path (cubic
-  Hermite on position and look-at with the stored tangents, fov linear, scaled like the game fov
-  on a portrait phone) under letterbox bars and a "Tap to skip" hint; any tap, click or key skips
-  it. A loaded save skips it. Its last key is the game camera at the spawn (elevation 42°, azimuth
-  36°, 19 m, fov 30°, aim 1 m over the plaza), so the hand-over to `CameraRig.snap` doesn't jump
-  (`test/cutscene.test.ts`, to 1e-3, landscape and portrait). The overlay (and the name dialog)
-  waits underneath.
+- **The fly-over** (`src/cutscene.ts`): a new game opens with a camera path (cubic Hermite on
+  position and look-at with the stored tangents, fov linear, scaled like the game fov on a
+  portrait phone) under letterbox bars and a "Tap to skip" hint; any tap, click or key skips it. A
+  loaded save skips it. At most 5 s (players found the canonical 22 s, 13-key tour too long): the
+  port (`scripts/port-town.mjs cutFlyover`) cuts it to 4 keys — the aerial establishing key
+  (mountains, the whole town), the key over the stone bridge that also frames the great tree (both
+  still seen on the way down), the key over the wooden bridge turning to the plaza, and the end
+  pose — and retimes them to 0 / 2.8 / 3.9 / 5 s. The dropped keys' tangents can't be reused (they
+  were fitted to neighbours this cut drops); each kept interior key's tangent is instead the
+  average of its two adjacent secant slopes (a Catmull-Rom variant that stays local to the segment
+  either side of it, so it doesn't overshoot underground on the cut's sharper turn the way the
+  plain far-neighbour chord formula does), zero at both ends as the canonical path's tangents
+  already are (its ease in / out). Its last key is the game camera at the spawn (elevation 42°,
+  azimuth 36°, 19 m, fov 30°, aim 1 m over the plaza), so the hand-over to `CameraRig.snap` doesn't
+  jump (`test/cutscene.test.ts`, to 1e-3, landscape and portrait; also checked numerically: no
+  frame-to-frame speed over 3x the path's mean, the camera stays over the ground throughout). The
+  overlay (and the name dialog) waits underneath. `cutscene_flyover`'s music (24 s, unlooped)
+  crossfades to the town's own bed the moment the fly-over ends, played out or skipped
+  (`SoundMixer.setMusic`, 1.5 s linear fade both ways): that crossfade is driven by the phase flag
+  alone, not by any stored duration, so it fades cleanly whichever way the now-shorter fly-over
+  ends.
 - **Far edge** (`src/horizon.ts`, checked by `test/horizon.test.ts`; `npx tsx
   packages/world3d/scripts/horizon-report.ts` prints the tables): the apron ends at r 760 m and
   mountains_far only covers the bearings 300°-140°, so the fly-over saw a floating disc. world3d
