@@ -683,7 +683,9 @@ en, bn }, clip }`; `src/barks.ts` maps figures to roles and picks a line (at ran
 that role said last).
 
 - **Who:** every walker and every dressing character (people standing about, pets, pigeons) in the
-  town and the interiors (`spaceFigures`, in the order `world.ts` builds them). The role is the
+  town and the interiors (`spaceFigures`, slots counted in layout order as `world.ts` counts them;
+  `SceneSpace.figures` finds each by its id, `figureId(kind, slot)`, whatever order the streamed
+  actors land in). The role is the
   entry's `role` (`scripts/port-town.mjs` WALKERS / STANDING, `src/layout.json` interior dressing),
   else its asset (cat, dog, pigeon), else `passerby` (你好 / 不好意思，我有点忙。). A story NPC with no
   scene for you (and none waiting for money) says its own lines (role = its npc id) instead of the
@@ -695,7 +697,10 @@ that role said last).
   blocked. Inside: a diner in the noodle shop, a tea drinker in the tea house, the neighbour's dog
   on the stairs. The fruit stall already has its keeper (Miss Gao).
 - **Talking:** the same prompt as the story NPCs ("E · Talk to Egg seller", within 2.3 m, the name
-  from `role-<role>` in `strings.ts` / `locale/`), over the figure's head where it is now. The figure
+  from `role-<role>` in `strings.ts` / `locale/`), over the figure's head where it is now; or tap /
+  click its body (an invisible pick cylinder on its root, smaller for a pet, never drawn): within
+  talk range the bark starts at once, else the player walks up to it first (as for a door or a
+  story NPC; the tap target is where it stood). The figure
   stops and turns to the player (a walker leaves its path, `WalkerMotion.held`, and walks on after;
   a pigeon doesn't scatter; an extra turns and turns back), plays `talk`; the player turns to it.
   The bubble shows the line with its words tappable (the course's words in it, looked up without
@@ -712,7 +717,9 @@ that role said last).
   following core's sound setting.
 - **Guide:** the first bark while the guide is on adds a one-off note, "Everyone here will talk to
   you. The hint chip shows what they said in English." (`bark-hint`; remembered in prefs).
-- Console: `world3d.figures()` (id, role, where, talking, held), `world3d.bark(id)`,
+- Wayfinding stands down during a bark (no marker, path or edge arrow; the "lost?" timer resets).
+- Console: `world3d.figures()` (id, role, where, `screen` {x, y, visible}: its body's middle in CSS
+  px, to tap; talking, held), `world3d.bark(id)`,
   `world3d.barkShown()`.
 
 ## Tests (DOM-free, `npm test`)
@@ -732,7 +739,9 @@ that role said last).
   props without the carry pose, walkers walking, pigeons scattering, the shrug, bed picking), the
   town's landscape, sky dome and haze, the draw calls (the town at most 250 unculled, characters
   one mesh each), every talk stand, spawn and trigger walkable against the real blockers and walk
-  grid, and the parcel in the player's hands (carry clips; restored from a save).
+  grid, and the parcel in the player's hands (carry clips; restored from a save); every figure that
+  barks found by its id with actors landing in reverse order (its own actor at its layout spot), a
+  tap from above picking it, its pick cylinder never drawn.
 - `test/town.test.ts`: `src/town.json` is the port of the vendored town; every walkable cell
   reachable from the spawn is a place, and the mapped one (sampled across the plaza, spokes, pads,
   banks, bridges, pier, gate); every outdoor place has a zone, every building place a door or is

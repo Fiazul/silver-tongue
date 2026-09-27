@@ -9,6 +9,7 @@ import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js
 import { CharacterActor, type ActorOptions } from "./actor";
 import { turnToward } from "./anim";
 import { HORIZON, moveClouds, skirtGeometry } from "./horizon";
+import { figureId } from "./barks";
 import { CHARACTER_KINDS, type LoadEvent } from "./loading";
 import { anchorToWorld, heldProp, yawFor, type Blocker, type Box2, type HeldPropSpec, type LayoutIndex, type Placement, type SpaceLayout, type Vec3 } from "./layout";
 import type { WalkArea } from "./player";
@@ -499,7 +500,14 @@ function lerpNums(nums: number[], k: number): number {
   return nums[i] + (nums[i + 1] - nums[i]) * t;
 }
 
-export type PickHit = { npc: string } | { target: string } | { ground: THREE.Vector3 };
+/** `figure`: a walker, extra or pet (src/barks.ts figureId): someone who barks */
+export type PickHit = { npc: string } | { figure: string } | { target: string } | { ground: THREE.Vector3 };
+
+/** A figure that barks, by its id (src/barks.ts figureId): its actor, and how it moves (walkers, pigeons). */
+export interface FigureView {
+  actor: CharacterActor;
+  motion?: WalkerMotion | ScatterMotion;
+}
 
 export class SceneSpace {
   readonly scene = new THREE.Scene();
@@ -509,6 +517,12 @@ export class SceneSpace {
   readonly extras: CharacterActor[] = [];
   readonly walkers: WalkerView[] = [];
   readonly scatterers: ScatterView[] = [];
+  /**
+   * Walkers, extras and pigeons by figure id (src/barks.ts figureId: kind + layout slot). The
+   * arrays above fill as each actor loads (any order: populate streams them); this map is keyed
+   * by the layout slot, so barks.ts's Figure.slot always finds its own actor.
+   */
+  readonly figures = new Map<string, FigureView>();
   readonly layout: SpaceLayout;
   private pickables: THREE.Object3D[] = [];
   private groundPlane: THREE.Plane;
@@ -685,7 +699,7 @@ export class SceneSpace {
           this.blockers.push({ min: [stand.pos[0] - 0.25, stand.pos[2] - 0.25], max: [stand.pos[0] + 0.25, stand.pos[2] + 0.25] });
         })(),
       );
-    for (const w of layout.walkers)
+    layout.walkers.forEach((w, i) =>
       jobs.push(
         (async () => {
           const a = await this.assets.actor(w.character);
@@ -695,18 +709,32 @@ export class SceneSpace {
           a.root.rotation.y = motion.yaw;
           scene.add(a.root);
           this.walkers.push({ actor: a, motion });
+          this.addFigure(figureId("walker", i), { actor: a, motion }, false);
         })(),
-      );
+      ),
+    );
+    // Slots counted here, in layout order (as barks.ts spaceFigures counts them), before any load finishes.
+    let extraSlot = 0;
+    let scatterSlot = 0;
     for (const d of layout.dressing) {
       const e = L.asset(d.asset);
       if (!(e.set === "characters" && CHARACTER_KINDS.has(e.kind ?? ""))) continue;
+      const scatter = d.behaviour === "scatter";
+      const id = scatter ? figureId("scatter", scatterSlot++) : figureId("extra", extraSlot++);
+      const small = e.kind === "pet";
       jobs.push(
         (async () => {
           const a = await this.assets.actor(d.asset);
           this.place(a.root, d);
           scene.add(a.root);
-          if (d.behaviour === "scatter") this.scatterers.push({ actor: a, motion: new ScatterMotion([d.pos[0], d.pos[2]], d.rotY * DEG) });
-          else this.extras.push(a);
+          if (scatter) {
+            const view = { actor: a, motion: new ScatterMotion([d.pos[0], d.pos[2]], d.rotY * DEG) };
+            this.scatterers.push(view);
+            this.addFigure(id, view, small);
+          } else {
+            this.extras.push(a);
+            this.addFigure(id, { actor: a }, small);
+          }
         })(),
       );
     }
@@ -821,11 +849,27 @@ export class SceneSpace {
     return { min: [Math.min(...xs), Math.min(...zs)], max: [Math.max(...xs), Math.max(...zs)] };
   }
 
-  /** What's under a screen point: an NPC, a thing to use, else a spot on the ground (the town's: on its walking height). */
+  /**
+   * Registers a figure that barks and gives it a tap target like a story NPC's: an invisible
+   * cylinder riding on its root (walkers walk, pigeons scatter), smaller for a pet. Never drawn
+   * (pickMaterial), so no draw call.
+   */
+  private addFigure(id: string, view: FigureView, small: boolean) {
+    this.figures.set(id, view);
+    const [r, h] = small ? [0.4, 0.8] : [0.55, 2.1];
+    const proxy = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 8), pickMaterial);
+    proxy.position.y = h / 2;
+    proxy.userData.figure = id;
+    view.actor.root.add(proxy);
+    this.pickables.push(proxy);
+  }
+
+  /** What's under a screen point: an NPC, a figure that barks, a thing to use, else a spot on the ground (the town's: on its walking height). */
   pick(ndc: THREE.Vector2, camera: THREE.Camera): PickHit | null {
     this.ray.setFromCamera(ndc, camera);
     const hit = this.ray.intersectObjects(this.pickables, false)[0];
     if (hit?.object.userData.npc) return { npc: hit.object.userData.npc as string };
+    if (hit?.object.userData.figure) return { figure: hit.object.userData.figure as string };
     if (hit?.object.userData.target) return { target: hit.object.userData.target as string };
     const p = new THREE.Vector3();
     if (!this.ray.ray.intersectPlane(this.groundPlane, p)) return null;

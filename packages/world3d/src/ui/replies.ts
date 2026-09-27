@@ -74,7 +74,8 @@ export class RepliesView {
     if (r.mode === "continue") {
       // A bark: one reply, "…", that closes it (as does a tap anywhere, E, Enter, Space or 1).
       const go = el("button", { className: "option continue", textContent: r.label, title: this.s("bark-continue") });
-      go.addEventListener("click", () => this.hooks.onPick(0));
+      // wired as a pick option's row is (ui/dom.ts tappable): a press that began on a nested control never counts
+      tappable(go, () => this.hooks.onPick(0));
       this.node.replaceChildren(go);
       return;
     }

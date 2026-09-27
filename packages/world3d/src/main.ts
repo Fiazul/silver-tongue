@@ -401,9 +401,9 @@ async function main() {
     return figuresFor.list;
   };
   /** A figure's actor in the current space (world.ts builds walkers / extras / scatterers in layout order). */
-  const figureActor = (f: Figure) =>
-    f.kind === "walker" ? space.walkers[f.slot]?.actor : f.kind === "scatter" ? space.scatterers[f.slot]?.actor : space.extras[f.slot];
-  const figureMotion = (f: Figure) => (f.kind === "walker" ? space.walkers[f.slot]?.motion : f.kind === "scatter" ? space.scatterers[f.slot]?.motion : undefined);
+  // By figure id (world.ts figures: keyed by layout slot, whatever order the actors streamed in).
+  const figureActor = (f: Figure) => space.figures.get(f.id)?.actor;
+  const figureMotion = (f: Figure) => space.figures.get(f.id)?.motion;
   /** the fly-over while it plays (a new game), with its letterbox */
   let flyover: { path: CameraPathPlayer; bars: Letterbox } | null = null;
   /** the fly-over's state for browser checks: playing, done (played out or skipped), null (never played: a loaded save) */
@@ -875,8 +875,9 @@ async function main() {
     if ("npc" in hit) return requestTalk(hit.npc);
     if (player.locked) return;
     pendingTalk = null;
-    if ("target" in hit) {
-      const t = targets().find((x) => x.id === hit.target);
+    // A walker, extra or pet: its bark, by the prompt's range rule (next to it: now; else walk up to it first).
+    if ("target" in hit || "figure" in hit) {
+      const t = "figure" in hit ? barkTargets().find((x) => x.ref === hit.figure) : targets().find((x) => x.id === hit.target);
       if (!t) return;
       const near = nearestPrompt(L, nav.space, [t], player.position.x, player.position.z);
       if (near) return use(near);
@@ -996,11 +997,11 @@ async function main() {
    * The objective's target in this space (wayfind.ts resolveTarget; the guide's steps point at the
    * same one): the marker over it, the card's step n/N and next step, the ground path (2x a second,
    * or at once on a new target), the "lost?" reminder. Nothing during the fly-over, a scene, a
-   * dialog or a space change.
+   * dialog, a bark (src/barks.ts: standing talking is not being lost) or a space change.
    */
   function updateWayfinding(dt: number) {
     const st = game?.core.state;
-    wayBusy = !game || !st || !!flyover || startOpen || transitioning || overlay.blocking || game.model.mode !== "explore" || !!st.run;
+    wayBusy = !game || !st || !!flyover || startOpen || transitioning || overlay.blocking || game.model.mode !== "explore" || !!st.run || !!game.model.bark;
     const o = game?.model.objective;
     wayTarget = !wayBusy && st ? resolveTarget(L, o?.goal, nav.space, st.place) : null;
     const at = wayTarget ? new THREE.Vector3(...wayTarget.at) : null;
@@ -1194,7 +1195,9 @@ async function main() {
       figures: () =>
         figures().map((f) => {
           const a = figureActor(f);
-          return { id: f.id, role: f.role, kind: f.kind, at: a ? [a.root.position.x, a.root.position.z] : null, talking: !!a?.talking, held: !!figureMotion(f)?.held };
+          // `screen`: its body's middle in CSS px, to click / tap (tap-to-talk checks)
+          const mid = a ? a.root.position.clone().setY((a.root.position.y + a.headTop(barkHead).y) / 2) : null;
+          return { id: f.id, role: f.role, kind: f.kind, at: a ? [a.root.position.x, a.root.position.z] : null, screen: mid ? project(mid) : null, talking: !!a?.talking, held: !!figureMotion(f)?.held };
         }),
       /** talk to a figure by id (as its prompt does) */
       bark: (id: string) => startBark(id),

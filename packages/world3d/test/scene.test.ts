@@ -9,7 +9,9 @@ import { LAYOUT, LayoutIndex, type Box2 } from "../src/layout";
 import { CAMERA } from "../src/camera";
 import { blocked, PLAYER_RADIUS } from "../src/movement";
 import { ZONE_MARGIN } from "../src/spaces";
-import { AssetCache, SceneSpace } from "../src/world";
+import { AssetCache, drawCalls, SceneSpace } from "../src/world";
+import { BARKS } from "../barks";
+import { spaceFigures } from "../src/barks";
 import { ASSETS, assetIndex, readGlb, course, makeGame } from "./helpers";
 
 /** Every space built from the real GLBs, read from disk instead of fetched (once for the file). */
@@ -193,4 +195,49 @@ describe.skipIf(!assetIndex)("scene spaces from the real GLBs", () => {
     for (let i = 0; i < 10; i++) actor.update(1 / 60, 0);
     expect(actor.state).toBe("idle");
   }, 30_000);
+  it("every figure that barks (walkers, extras, pets) is found by its id however the actors stream in, and a tap on its body picks it", async () => {
+    const { L } = await buildAll();
+    const book = BARKS.zh!;
+    // A fresh street whose characters land in reverse order (streaming: populate() loads them all at once).
+    const assets = new AssetCache(ASSETS, L, { read: readGlb });
+    await assets.preload();
+    const real = assets.actor.bind(assets);
+    let calls = 0;
+    assets.actor = async (name: string) => {
+      const wait = 200 - calls++ * 4;
+      await new Promise((r) => setTimeout(r, Math.max(0, wait)));
+      return real(name);
+    };
+    for (const id of ["street", "noodle_shop", "stairs"]) {
+      const sp = await SceneSpace.create(L, assets, id);
+      const figs = spaceFigures(L, id, book);
+      expect(figs.length, id).toBeGreaterThan(0);
+      expect(sp.figures.size, id).toBe(figs.length);
+      const calls0 = drawCalls(sp.scene);
+      const cam = new THREE.PerspectiveCamera(30, 1, 0.1, 100);
+      for (const f of figs) {
+        const v = sp.figures.get(f.id);
+        expect(v, f.id).toBeDefined();
+        // its own actor: standing (or starting its walk) where the layout puts it
+        const p = v!.actor.root.position;
+        expect(Math.hypot(p.x - f.home[0], p.z - f.home[2]), `${id} ${f.id} ${f.role}`).toBeLessThan(0.05);
+        if (f.kind === "walker") expect(sp.walkers.some((w) => w.actor === v!.actor && w.motion === v!.motion)).toBe(true);
+        if (f.kind === "scatter") expect(sp.scatterers.some((w) => w.actor === v!.actor && w.motion === v!.motion)).toBe(true);
+        if (f.kind === "extra") expect(sp.extras).toContain(v!.actor);
+        // looking straight down on it: the tap picks the figure (a story NPC standing on top of it aside)
+        cam.position.set(p.x, p.y + 12, p.z);
+        cam.lookAt(p.x, p.y, p.z);
+        cam.updateMatrixWorld();
+        sp.scene.updateMatrixWorld();
+        const hit = sp.pick(new THREE.Vector2(0, 0), cam);
+        if (hit && "npc" in hit) continue;
+        expect(hit, `${id} ${f.id}`).toEqual({ figure: f.id });
+      }
+      // the tap targets are never drawn
+      expect(drawCalls(sp.scene)).toBe(calls0);
+      let proxies = 0;
+      sp.scene.traverse((o) => o.userData.figure && proxies++);
+      expect(proxies).toBe(figs.length);
+    }
+  }, 60_000);
 });

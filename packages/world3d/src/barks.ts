@@ -9,6 +9,8 @@
 import type { Course, Token } from "@silver-tongue/core";
 import type { BarkBook, BarkLine } from "../barks";
 import type { LayoutIndex, Vec3 } from "./layout";
+// the asset kinds that are characters (they get an actor): the one list world.ts builds by
+import { CHARACTER_KINDS } from "./loading";
 
 export type { BarkBook, BarkLine } from "../barks";
 
@@ -18,10 +20,11 @@ export const FALLBACK_ROLE = "passerby";
 export const BARK_CLIP = "bark:";
 export const isBarkClip = (clip: string) => clip.startsWith(BARK_CLIP);
 
-/** Asset kinds (index.json) that are characters (world.ts CHARACTER_KINDS: they get an actor). */
-const CHARACTER_KINDS = new Set(["human", "recolour", "pet"]);
 
 export type FigureKind = "walker" | "extra" | "scatter";
+
+/** A figure's id from its kind and slot (spaceFigures; world.ts tags its pick proxy with the same). */
+export const figureId = (kind: FigureKind, slot: number) => `bark:${kind}:${slot}`;
 
 /** Someone in a space who barks. `slot`: their index in SceneSpace's walkers / extras / scatterers (world.ts builds them in layout order). */
 export interface Figure {
@@ -54,7 +57,7 @@ export function spaceFigures(L: LayoutIndex, space: string, book: BarkBook): Fig
   const s = L.space(space);
   const out: Figure[] = [];
   s.walkers.forEach((w, i) => {
-    out.push({ id: `bark:walker:${i}`, kind: "walker", slot: i, asset: w.character, ...roleOf(book, { role: w.role, asset: w.character }), home: [w.path[0][0], 0, w.path[0][1]] });
+    out.push({ id: figureId("walker", i), kind: "walker", slot: i, asset: w.character, ...roleOf(book, { role: w.role, asset: w.character }), home: [w.path[0][0], 0, w.path[0][1]] });
   });
   let extra = 0;
   let scatter = 0;
@@ -63,7 +66,7 @@ export function spaceFigures(L: LayoutIndex, space: string, book: BarkBook): Fig
     if (e.set !== "characters" || !CHARACTER_KINDS.has(e.kind ?? "")) continue;
     const kind: FigureKind = d.behaviour === "scatter" ? "scatter" : "extra";
     const slot = kind === "scatter" ? scatter++ : extra++;
-    out.push({ id: `bark:${kind}:${slot}`, kind, slot, asset: d.asset, ...roleOf(book, d), home: [...d.pos] });
+    out.push({ id: figureId(kind, slot), kind, slot, asset: d.asset, ...roleOf(book, d), home: [...d.pos] });
   }
   return out;
 }
