@@ -1,19 +1,24 @@
 // The spatial layout the 3D world owns (core's world graph has no coordinates), plus the pure
-// maths on it: anchor -> world transforms, scene spaces (the street and each interior), trigger
-// zones, walking height, blockers of interior furniture, place routing.
+// maths on it: anchor -> world transforms, scene spaces (the town outdoors and each interior),
+// trigger zones, walking height and walkable ground, blockers, place routing.
+// Two files make it: src/layout.json (the player, the interiors, the NPCs' characters) and
+// src/town.json (the canal town, ported by scripts/port-town.mjs); `mergeLayout` joins them.
 // No three.js here, so game logic and tests can use it without WebGL.
 import type { World } from "@silver-tongue/core";
 import layoutJson from "./layout.json";
+import townJson from "./town.json";
+import { PLAYER_RADIUS } from "./movement";
 
 export type Vec3 = [number, number, number];
 export type Vec2 = [number, number];
 
-/** An asset instance: glTF axes, rotY/tiltX in degrees. */
+/** An asset instance: glTF axes, rotY/tiltX in degrees, uniform `scale` (default 1). */
 export interface Placement {
   asset: string;
   pos: Vec3;
   rotY: number;
   tiltX?: number;
+  scale?: number;
   /** street life: "scatter" moves away from the player (pigeons) */
   behaviour?: "scatter";
 }
@@ -23,6 +28,17 @@ export interface BuildingPlacement extends Placement {
 export interface Box2 {
   min: Vec2;
   max: Vec2;
+}
+/** A rect turned by rotY about +y (the town's blockers): centre x/z, half sizes along its own x / z. */
+export interface OrientedRect {
+  id?: string;
+  centre: Vec2;
+  half: Vec2;
+  rotY: number;
+}
+/** What stops walking: an x/z box, or an oriented rect inside its box (`obb`). */
+export interface Blocker extends Box2 {
+  obb?: OrientedRect;
 }
 /** A fixed point with a facing (x/z or x/y/z). */
 export interface FixedStand {
@@ -51,8 +67,15 @@ export interface PlaceLayout {
   spawn: Spawn;
   /** the place has a scene space of its own (key of `interiors`: a room, or an outdoor side street) */
   interior?: string;
-  /** the door (in `space`) that leads into it */
+  /** the door (in `space`) that leads into it; a place without `interior` is simply there (the town's bus stop stand) */
   door?: DoorSpec;
+  /**
+   * No building of its own (the town has no warehouse, school or hospital): reached from the Go to
+   * list only, which puts the player at `spawn`; `stay` is the spot (x/z box) that keeps them at the
+   * place while they stay in it. Walking into it goes nowhere.
+   */
+  travelOnly?: boolean;
+  stay?: Box2;
 }
 /** A held prop: a characters/ prop (origin at its grip). `carry: true` (boxes, bags) plays the carry pose. */
 export type HeldPropSpec = string | { asset: string; carry?: boolean };
@@ -128,23 +151,95 @@ export interface Surfaces {
   default: number;
   bands: { zMin: number; zMax: number; y: number }[];
 }
-export interface Layout {
-  defaultPlace: string;
+/** The town's walk grid: `classes[j][i]` for the cell [x0+i*cell, +cell] x [z0+j*cell, +cell] (1-5 walkable), heights (cm) at the cell corners, row-major (rows+1) x (cols+1). */
+export interface WalkGrid {
+  x0: number;
+  z0: number;
+  cell: number;
+  cols: number;
+  rows: number;
+  classes: string[];
+  heights: number[];
+}
+/** A bridge or pier deck: walkable within `width` of its walk path, at the path's height. */
+export interface Deck {
+  id: string;
+  kind: "bridge" | "pier";
+  width: number;
+  path: Vec3[];
+}
+/** One key of the fly-over: cubic Hermite on pos and lookAt with the stored tangents (m/s), fov linear. */
+export interface CameraKey {
+  t: number;
+  pos: Vec3;
+  lookAt: Vec3;
+  fovDeg: number;
+  posTangent: Vec3;
+  lookTangent: Vec3;
+}
+export interface CameraPath {
+  duration: number;
+  /** the game camera the last key lands on (camera.ts CAMERA at the spawn) */
+  endPose: { elevationDeg: number; azimuthDeg: number; distance: number; aimHeight: number; fovDeg: number };
+  keys: CameraKey[];
+}
+/** src/town.json: the outdoors, ported from the make-it-in-china canal town. */
+export interface TownLayout {
   bounds: Box2;
-  surfaces: Surfaces;
+  /** world GLBs loaded at the origin (terrain, water, banks, hills, mountains, clouds) */
+  landscape: string[];
+  /** the sky dome (drawn unlit, behind everything) */
+  sky?: string;
+  buildings: BuildingPlacement[];
+  blockers: OrientedRect[];
+  grid: WalkGrid;
+  decks: Deck[];
+  /** the round plaza: its top sits `y` above the terrain inside `radius` */
+  plaza?: { centre: Vec2; radius: number; y: number };
+  /** compass bearing from north (-z) toward east (+x), and height above the horizon */
+  sun: { azimuthDeg: number; elevationDeg: number };
+  fog: { near: number; far: number };
+  camera: CameraPath;
+  places: Record<string, Partial<PlaceLayout>>;
+  npcs: Record<string, Partial<NpcLayout>>;
+  walkers: WalkerLayout[];
+  dressing: Placement[];
+}
+/** src/layout.json: the player, the interiors, the NPCs' characters (and the interior NPCs' stands). */
+export interface LayoutFile {
+  defaultPlace: string;
   /** the player's character, and what they carry while an errand is on (a parcel: `{asset, carry: true}`) */
   player: { character: string; errandProp?: HeldPropSpec };
+  places: Record<string, Partial<PlaceLayout>>;
+  npcs: Record<string, Partial<NpcLayout>>;
+  interiors: Record<string, InteriorLayout>;
+}
+/** The whole layout: layout.json and town.json merged (a place's / NPC's fields come from both). */
+export interface Layout {
+  defaultPlace: string;
+  player: LayoutFile["player"];
   places: Record<string, PlaceLayout>;
   npcs: Record<string, NpcLayout>;
-  buildings: BuildingPlacement[];
-  tiles: Placement[];
-  ground: GroundBox[];
-  dressing: Placement[];
   interiors: Record<string, InteriorLayout>;
-  walkers: WalkerLayout[];
+  town: TownLayout;
 }
 
-export const LAYOUT = layoutJson as unknown as Layout;
+/** Joins layout.json and town.json: every place and NPC gets the fields of both files (town.json's win). */
+export function mergeLayout(file: LayoutFile, town: TownLayout): Layout {
+  const join = <T>(a: Record<string, Partial<T>>, b: Record<string, Partial<T>>) =>
+    Object.fromEntries([...new Set([...Object.keys(a), ...Object.keys(b)])].map((k) => [k, { ...a[k], ...b[k] } as T]));
+  return {
+    defaultPlace: file.defaultPlace,
+    player: file.player,
+    places: join<PlaceLayout>(file.places, town.places),
+    npcs: join<NpcLayout>(file.npcs, town.npcs),
+    interiors: file.interiors,
+    town,
+  };
+}
+
+export const LAYOUT = mergeLayout(layoutJson as unknown as LayoutFile, townJson as unknown as TownLayout);
+/** The outdoor space (the town); its default place is `defaultPlace`. */
 export const STREET = "street";
 
 /** index.json entry, the parts the world uses. */
@@ -176,9 +271,13 @@ export interface SpacePiece extends BuildingPlacement {
   block: BlockMode;
 }
 
-/** A trigger box: a place's zone, a door into another space, or a space's way out. */
+/**
+ * A trigger box: a place's zone, a door (into another space, or a spot like the bus stop's stand),
+ * a space's way out, or a travel-only place's `stay` spot (never entered by walking; it only
+ * holds the place while the player stays in it). Doors and exits win over the zone round them.
+ */
 export interface Trigger {
-  kind: "zone" | "door" | "exit";
+  kind: "zone" | "door" | "exit" | "stay";
   /** the place walking in means going to */
   place: string;
   box: Box2;
@@ -192,13 +291,25 @@ export interface Interactable {
   range: number;
 }
 
-/** One scene space, normalised: the street and every interior go through this shape. */
+/** The town's outdoor look: landscape GLBs at the origin, the sky dome, the sun, the fog. */
+export interface TownLook {
+  landscape: string[];
+  sky?: string;
+  sun: TownLayout["sun"];
+  fog: TownLayout["fog"];
+}
+
+/** One scene space, normalised: the town and every interior go through this shape. */
 export interface SpaceLayout {
   id: string;
   /** the place you are at anywhere in the space outside its triggers */
   defaultPlace: string;
   bounds: Box2;
   surfaces: Surfaces;
+  /** blockers of their own (the town's oriented rects), on top of what the pieces block */
+  blockers: Blocker[];
+  /** outdoors in the town */
+  town?: TownLook;
   pieces: SpacePiece[];
   tiles: Placement[];
   ground: GroundBox[];
@@ -215,18 +326,70 @@ export interface SpaceLayout {
 const DEG = Math.PI / 180;
 const WALL = 0.15; // shell wall thickness allowance (m) for default interior bounds
 
-/** A point in an asset's frame -> world, for an instance at `p` (rotY about +Y, glTF convention). */
-export function anchorToWorld(p: Pick<Placement, "pos" | "rotY">, local: Vec3): Vec3 {
+/** A point in an asset's frame -> world, for an instance at `p` (rotY about +Y, glTF convention; scaled by `scale`). */
+export function anchorToWorld(p: Pick<Placement, "pos" | "rotY" | "scale">, local: Vec3): Vec3 {
   const a = p.rotY * DEG;
-  const c = Math.cos(a);
-  const s = Math.sin(a);
+  const k = p.scale ?? 1;
+  const c = Math.cos(a) * k;
+  const s = Math.sin(a) * k;
   // Rotation about +Y: x' = x cos + z sin, z' = -x sin + z cos.
-  return [p.pos[0] + local[0] * c + local[2] * s, p.pos[1] + local[1], p.pos[2] - local[0] * s + local[2] * c];
+  return [p.pos[0] + local[0] * c + local[2] * s, p.pos[1] + local[1] * k, p.pos[2] - local[0] * s + local[2] * c];
 }
 
 /** A direction in an asset's frame -> world (rotation only). */
 export function dirToWorld(p: Pick<Placement, "rotY">, local: Vec3): Vec3 {
   return anchorToWorld({ pos: [0, 0, 0], rotY: p.rotY }, local);
+}
+
+/** An oriented rect's x/z box, with the rect kept for the exact test (movement.ts). */
+export function orientedBlocker(r: OrientedRect): Blocker {
+  const a = r.rotY * DEG;
+  const c = Math.abs(Math.cos(a));
+  const s = Math.abs(Math.sin(a));
+  const hx = r.half[0] * c + r.half[1] * s;
+  const hz = r.half[0] * s + r.half[1] * c;
+  return { min: [r.centre[0] - hx, r.centre[1] - hz], max: [r.centre[0] + hx, r.centre[1] + hz], obb: r };
+}
+
+/** The walk grid's height at (x, z): bilinear between the corner heights, clamped to the grid. */
+export function gridHeight(g: WalkGrid, x: number, z: number): number {
+  const fi = Math.max(0, Math.min(g.cols, (x - g.x0) / g.cell));
+  const fj = Math.max(0, Math.min(g.rows, (z - g.z0) / g.cell));
+  const i = Math.min(g.cols - 1, Math.floor(fi));
+  const j = Math.min(g.rows - 1, Math.floor(fj));
+  const u = fi - i;
+  const v = fj - j;
+  const w = g.cols + 1;
+  const h = (ii: number, jj: number) => g.heights[jj * w + ii] / 100;
+  return (h(i, j) * (1 - u) + h(i + 1, j) * u) * (1 - v) + (h(i, j + 1) * (1 - u) + h(i + 1, j + 1) * u) * v;
+}
+
+/** The walk grid's class at (x, z): 0 off the grid (the town's edge is the grid's). */
+export function gridClass(g: WalkGrid, x: number, z: number): number {
+  const i = Math.floor((x - g.x0) / g.cell);
+  const j = Math.floor((z - g.z0) / g.cell);
+  if (i < 0 || j < 0 || i >= g.cols || j >= g.rows) return 0;
+  return g.classes[j].charCodeAt(i) - 48;
+}
+
+/** Where (x, z) is on a deck: its walk path's height there and how far off the path it is, or null off every deck. */
+export function deckAt(decks: Deck[], x: number, z: number): { y: number; lateral: number; deck: Deck } | null {
+  let best: { y: number; lateral: number; deck: Deck } | null = null;
+  for (const deck of decks)
+    for (let k = 0; k + 1 < deck.path.length; k++) {
+      const a = deck.path[k];
+      const b = deck.path[k + 1];
+      const ex = b[0] - a[0];
+      const ez = b[2] - a[2];
+      const len2 = ex * ex + ez * ez;
+      if (len2 < 1e-9) continue;
+      const t = ((x - a[0]) * ex + (z - a[2]) * ez) / len2;
+      if (t < 0 || t > 1) continue;
+      const lateral = Math.abs((x - a[0]) * ez - (z - a[2]) * ex) / Math.sqrt(len2);
+      if (lateral > deck.width / 2) continue;
+      if (!best || lateral < best.lateral) best = { y: a[1] + (b[1] - a[1]) * t, lateral, deck };
+    }
+  return best;
 }
 
 /** Y rotation (radians) that turns an asset (front = +z) to look along `dir` in x/z. */
@@ -277,7 +440,8 @@ export class LayoutIndex {
     index: AssetIndex,
   ) {
     for (const a of index.assets) this.assets.set(a.name, a);
-    for (const b of layout.buildings) this.addPiece(STREET, { ...b, block: "footprint" });
+    // The town's placements block nothing themselves: its blockers are listed (oriented rects).
+    for (const b of layout.town.buildings) this.addPiece(STREET, { ...b, block: "none" });
     for (const [id, interior] of Object.entries(layout.interiors ?? {})) for (const p of this.interiorPieces(interior)) this.addPiece(id, p);
   }
 
@@ -317,7 +481,7 @@ export class LayoutIndex {
     return b;
   }
 
-  /** Every scene space: the street, then each interior. */
+  /** Every scene space: the town, then each interior. */
   spaceIds(): string[] {
     return [STREET, ...Object.keys(this.layout.interiors ?? {})];
   }
@@ -355,21 +519,28 @@ export class LayoutIndex {
     throw new Error(`${b.asset} has no point anchor "${anchor}"`);
   }
 
-  private resolveStand(n: NpcLayout, spec: string | FixedStand): Stand {
-    if (typeof spec !== "string") return { pos: spec.pos, facing: vec3(spec.facing) };
-    if (!n.building) throw new Error(`npc stand "${spec}" needs a building`);
-    return this.stand(n.building, spec);
+  private resolveStand(npc: string, spec: string | FixedStand): Stand {
+    const n = this.npc(npc);
+    let s: Stand;
+    if (typeof spec !== "string") s = { pos: spec.pos, facing: vec3(spec.facing) };
+    else if (!n.building) throw new Error(`npc stand "${spec}" needs a building`);
+    else s = this.stand(n.building, spec);
+    return this.onGround(this.npcSpace(npc), s);
+  }
+
+  /** In the town a stand is on the walking surface (terrain, plaza, deck); interiors keep the floor height they give. */
+  private onGround(space: string, s: Stand): Stand {
+    if (space !== STREET) return s;
+    return { pos: [s.pos[0], this.heightAt(space, s.pos[0], s.pos[2]), s.pos[2]], facing: s.facing };
   }
 
   npcStand(npc: string): Stand {
-    const n = this.npc(npc);
-    return this.resolveStand(n, n.stand);
+    return this.resolveStand(npc, this.npc(npc).stand);
   }
 
   /** Where the player stands to talk to `npc`, facing them. */
   talkStand(npc: string): Stand {
-    const n = this.npc(npc);
-    return this.resolveStand(n, n.playerStand);
+    return this.resolveStand(npc, this.npc(npc).playerStand);
   }
 
   npc(npc: string): NpcLayout {
@@ -423,11 +594,16 @@ export class LayoutIndex {
     return this.spawnIn(this.spaceOf(place), place);
   }
 
-  private spawnIn(_space: string, place: string): Stand {
+  private spawnIn(space: string, place: string): Stand {
     const s = (this.layout.places[place] ?? this.layout.places[this.layout.defaultPlace]).spawn;
     if ("interior" in s) return this.entrySpawn(s.interior);
-    if ("building" in s) return this.stand(s.building, s.anchor);
-    return { pos: s.pos, facing: vec3(s.facing) };
+    if ("building" in s) return this.onGround(space, this.stand(s.building, s.anchor));
+    return this.onGround(space, { pos: s.pos, facing: vec3(s.facing) });
+  }
+
+  /** A place with no building here (the Go to list only; `PlaceLayout.travelOnly`). */
+  travelOnly(place: string): boolean {
+    return !!this.layout.places[place]?.travelOnly;
   }
 
   /**
@@ -466,7 +642,7 @@ export class LayoutIndex {
     return { pos: [d.pos[0] + (d.facing[2] / len) * k, d.pos[1], d.pos[2] - (d.facing[0] / len) * k], facing: d.facing };
   }
 
-  /** The zones and doors of the places in `space` (`places.<p>.space`, the street by default). */
+  /** The zones, doors and stay spots of the places in `space` (`places.<p>.space`, the town by default). */
   private placeTriggers(space: string): Trigger[] {
     const triggers: Trigger[] = [];
     for (const [place, p] of Object.entries(this.layout.places)) {
@@ -474,6 +650,10 @@ export class LayoutIndex {
       for (const box of [...(p.zone ? [p.zone] : []), ...(p.zones ?? [])]) {
         const c = [(box.min[0] + box.max[0]) / 2, (box.min[1] + box.max[1]) / 2];
         triggers.push({ kind: "zone", place, box, at: [c[0], 2.2, c[1]] });
+      }
+      if (p.stay) {
+        const c = [(p.stay.min[0] + p.stay.max[0]) / 2, (p.stay.min[1] + p.stay.max[1]) / 2];
+        triggers.push({ kind: "stay", place, box: p.stay, at: [c[0], 2.2, c[1]] });
       }
       if (p.door) {
         const d = this.doorStand(p.door);
@@ -489,20 +669,23 @@ export class LayoutIndex {
     return triggers;
   }
 
+  /** The town: its placements, blockers, landscape, sky, sun and fog; walking on its grid and decks (heightAt, walkable). */
   private streetSpace(): SpaceLayout {
     const l = this.layout;
-    const triggers = this.placeTriggers(STREET);
+    const t = l.town;
     return {
       id: STREET,
       defaultPlace: l.defaultPlace,
-      bounds: l.bounds,
-      surfaces: l.surfaces,
-      pieces: l.buildings.map((b) => this.building(b.id)),
-      tiles: l.tiles,
-      ground: l.ground,
-      dressing: l.dressing,
-      walkers: l.walkers ?? [],
-      triggers,
+      bounds: t.bounds,
+      surfaces: this.surfacesOf(STREET),
+      blockers: t.blockers.map(orientedBlocker),
+      town: { landscape: t.landscape, sky: t.sky, sun: t.sun, fog: t.fog },
+      pieces: t.buildings.map((b) => this.building(b.id)),
+      tiles: [],
+      ground: [],
+      dressing: t.dressing,
+      walkers: t.walkers,
+      triggers: this.placeTriggers(STREET),
       interactables: [],
       npcs: this.npcsIn(STREET),
       camera: {},
@@ -510,9 +693,9 @@ export class LayoutIndex {
     };
   }
 
-  /** A space's walking heights: Main Street's kerbs, a side street's own, else its flat floor. */
+  /** A space's walking heights: a side street's own, else its flat floor (the town walks on its grid instead, heightAt). */
   private surfacesOf(space: string): Surfaces {
-    if (space === STREET) return this.layout.surfaces;
+    if (space === STREET) return { default: 0, bands: [] };
     const i = this.interior(space);
     if (i.surfaces) return i.surfaces;
     return { default: i.floorY ?? (i.shell ? ((this.asset(i.shell.asset).anchors?.floor_top_z as number | undefined) ?? 0.06) : 0.06), bands: [] };
@@ -544,6 +727,7 @@ export class LayoutIndex {
       defaultPlace: i.place,
       bounds,
       surfaces,
+      blockers: [],
       pieces,
       tiles: i.tiles ?? [],
       ground: i.ground,
@@ -563,11 +747,15 @@ export class LayoutIndex {
   }
 
   /**
-   * The trigger holding (x, z) in a space, or null. `margin` > 0 asks for "well inside" (the box
-   * shrunk by it), < 0 for "anywhere near" (grown): ZoneTracker uses both for hysteresis.
+   * The trigger holding (x, z) in a space, or null: a door or way out first, else a zone (a door
+   * sits inside the zone round it); travel-only stay spots never count. `margin` > 0 asks for
+   * "well inside" (the box shrunk by it), < 0 for "anywhere near" (grown): ZoneTracker uses both
+   * for hysteresis.
    */
   triggerAt(space: string, x: number, z: number, margin = 0): Trigger | null {
-    for (const t of this.space(space).triggers) if (inBox(t.box, x, z, margin)) return t;
+    const ts = this.space(space).triggers;
+    for (const t of ts) if ((t.kind === "door" || t.kind === "exit") && inBox(t.box, x, z, margin)) return t;
+    for (const t of ts) if (t.kind === "zone" && inBox(t.box, x, z, margin)) return t;
     return null;
   }
 
@@ -576,11 +764,45 @@ export class LayoutIndex {
     return this.triggerAt(space, x, z)?.place ?? this.space(space).defaultPlace;
   }
 
-  /** Walking surface height at (x, z). */
-  heightAt(space: string, _x: number, z: number): number {
+  /**
+   * Whether standing at (x, z) is being at `place` (within `margin` of one of its triggers, its
+   * stay spot included; for the default place, not well inside any other trigger). Where core put
+   * the player at a place the player isn't standing at (the Go to list), SpaceNav moves them.
+   */
+  holds(space: string, place: string, x: number, z: number, margin = 0): boolean {
+    const own = this.space(space).triggers.filter((t) => t.place === place);
+    if (own.some((t) => inBox(t.box, x, z, -margin))) return true;
+    return place === this.space(space).defaultPlace && !this.triggerAt(space, x, z, margin);
+  }
+
+  /** Walking surface height at (x, z): in the town the deck, else the plaza's top, else the terrain grid (bilinear); indoors the floor. */
+  heightAt(space: string, x: number, z: number): number {
+    if (space === STREET) {
+      const t = this.layout.town;
+      const deck = deckAt(t.decks, x, z);
+      if (deck) return deck.y;
+      const h = gridHeight(t.grid, x, z);
+      const p = t.plaza;
+      return p && Math.hypot(x - p.centre[0], z - p.centre[1]) <= p.radius ? Math.max(h, p.y) : h;
+    }
     const surfaces = this.surfacesOf(space);
     const band = surfaces.bands.find((b) => z > b.zMin && z < b.zMax);
     return band ? band.y : surfaces.default;
+  }
+
+  /**
+   * Whether the player can stand at (x, z) (movement.ts, on top of bounds and blockers). In the
+   * town: a deck (bridge, pier) within its width less the player's radius, else a grid cell of
+   * class 1-4 (ground, path, plaza, pad; the bridge slots, 5, only on a deck; water and slopes, 0,
+   * never). Interiors: everywhere inside the bounds.
+   */
+  walkable(space: string, x: number, z: number): boolean {
+    if (space !== STREET) return true;
+    const t = this.layout.town;
+    const deck = deckAt(t.decks, x, z);
+    if (deck && deck.lateral <= deck.deck.width / 2 - PLAYER_RADIUS) return true;
+    const c = gridClass(t.grid, x, z);
+    return c >= 1 && c <= 4;
   }
 
   /**
@@ -608,8 +830,9 @@ export class LayoutIndex {
 }
 
 /**
- * The asset names a layout uses: every `asset` / `character` / `heldProp` value anywhere in it,
- * plus the furniture of every shell. build.mjs has the same scan in plain JS.
+ * The asset names a layout uses: every `asset` / `character` / `heldProp` / `sky` value and
+ * `landscape` list anywhere in it, plus the furniture of every shell. scripts/used-assets.mjs (the
+ * build and the asset sync) has the same scan in plain JS.
  */
 export function usedAssets(layout: unknown, entry: (name: string) => { anchors?: Record<string, unknown> } | undefined): string[] {
   const out = new Set<string>();
@@ -617,7 +840,8 @@ export function usedAssets(layout: unknown, entry: (name: string) => { anchors?:
     if (Array.isArray(v)) return v.forEach(walk);
     if (!v || typeof v !== "object") return;
     for (const [k, x] of Object.entries(v)) {
-      if ((k === "asset" || k === "character" || k === "heldProp") && typeof x === "string") out.add(x);
+      if ((k === "asset" || k === "character" || k === "heldProp" || k === "sky") && typeof x === "string") out.add(x);
+      else if (k === "landscape" && Array.isArray(x)) x.forEach((n) => typeof n === "string" && out.add(n));
       else walk(x);
     }
   };

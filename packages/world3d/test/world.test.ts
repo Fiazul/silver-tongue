@@ -1,5 +1,6 @@
-// The walking side of the game, DOM-free: trigger zones (the thrash fix), street <-> interior
-// transitions, the objective line across a played day, prompts, street life motion, 3D wording.
+// The walking side of the game, DOM-free: trigger zones (the thrash fix), town <-> interior
+// transitions, the Go to list across the town (zones, travel-only spots), the objective line
+// across a played day, prompts, street life motion, 3D wording, daylight.
 import { readFileSync } from "node:fs";
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
@@ -86,8 +87,52 @@ describe.skipIf(!assetIndex)("place triggers (the goTo thrash)", () => {
     for (const id of L.spaceIds())
       for (const t of L.space(id).triggers) {
         const [cx, cz] = centre(t.box);
-        expect(L.triggerAt(id, cx, cz, ZONE_MARGIN)?.place, `${id} ${t.kind} ${t.place}`).toBe(t.place);
+        // a travel-only spot is never walked into: it only holds its place
+        if (t.kind === "stay") expect(L.holds(id, t.place, cx, cz, ZONE_MARGIN), `${id} stay ${t.place}`).toBe(true);
+        else expect(L.triggerAt(id, cx, cz, ZONE_MARGIN)?.place, `${id} ${t.kind} ${t.place}`).toBe(t.place);
       }
+  });
+
+  it("a door inside a zone wins, and its margin band holds (no flip between the door and the zone round it)", () => {
+    const { game, core } = makeGame({ ...named(), place: "market" });
+    const nav = new SpaceNav(L, "market");
+    const door = L.space(STREET).triggers.find((t) => t.kind === "door" && t.place === "noodle_shop")!;
+    expect(L.placeAt(STREET, door.box.max[0] + 1, door.box.max[1] + 1)).toBe("market"); // the zone round it
+    const [cx] = centre(door.box);
+    const z = door.box.max[1];
+    // jitter across the door's outer edge: never deep inside, so never in
+    for (let i = 0; i < 100; i++) {
+      const go = nav.step(1 / 60, cx, z + (i % 2 ? 0.12 : -0.12));
+      if (go) game.enterPlace(go);
+    }
+    expect(goTos(core.sent)).toBe(0);
+    expect(core.state.place).toBe("market");
+  });
+
+  it("a travel-only spot holds its place only while it is the place: walking onto it goes nowhere, walking off it goes back", () => {
+    const pier = LAYOUT.places.warehouse.stay!;
+    const [px, pz] = centre(pier);
+    // walking onto the pier from the street: still the street
+    const { game, core } = makeGame(named());
+    const nav = new SpaceNav(L, "street");
+    for (let i = 0; i < 60; i++) {
+      const go = nav.step(1 / 60, px, pz);
+      if (go) game.enterPlace(go);
+    }
+    expect(core.state.place).toBe("street");
+    expect(goTos(core.sent)).toBe(0);
+    // the Go to list: at the warehouse, on the pier; stepping about on it holds, walking off it is the street again
+    game.travel();
+    game.choose(game.model.choices!.items.findIndex((c) => c.input?.type === "goTo" && c.input.place === "warehouse"));
+    expect(core.state.place).toBe("warehouse");
+    const a = nav.sync("warehouse", { x: 0, z: 0 });
+    expect(a).toMatchObject({ from: STREET, space: STREET, stand: L.spawn("warehouse") });
+    const talk = L.talkStand("foreman").pos;
+    expect(inBoxXZ(pier, talk[0], talk[2])).toBe(true);
+    for (let i = 0; i < 60; i++) expect(nav.step(1 / 60, talk[0] + (i % 2 ? 0.2 : -0.2), talk[2])).toBeNull();
+    let go: string | null = null;
+    for (let i = 0; i < 60 && !go; i++) go = nav.step(1 / 60, -30, 0); // back on the west spoke
+    expect(go).toBe("street");
   });
 });
 
@@ -133,18 +178,33 @@ describe.skipIf(!assetIndex)("interiors: enter and leave", () => {
     });
   }
 
-  it("a save made inside resumes inside (jump), and travel from the list lands in the right space", () => {
+  it("a save made inside resumes inside (jump), and travel from the list lands in the right space, at the place", () => {
     const nav = new SpaceNav(L, "room");
     expect(nav.space).toBe("room");
     expect(nav.jump("room").stand).toEqual(L.entrySpawn("room"));
     const { game, core } = makeGame({ ...named(), place: "room" });
-    game.travel();
-    const i = game.model.choices!.items.findIndex((c) => c.input?.type === "goTo" && c.input.place === "warehouse");
-    game.choose(i);
-    expect(core.state.place).toBe("warehouse");
-    expect(nav.sync("warehouse")).toMatchObject({ from: "room", space: "warehouse" });
-    expect(nav.sync("warehouse")).toBeNull();
-    expect(nav.exitPlace()).toBe(L.space("warehouse").triggers[0].place);
+    const go = (place: string) => {
+      game.travel();
+      const i = game.model.choices!.items.findIndex((c) => c.input?.type === "goTo" && c.input.place === place);
+      expect(i, place).toBeGreaterThanOrEqual(0);
+      game.choose(i);
+      expect(core.state.place).toBe(place);
+    };
+    // out of the room to a travel-only place: the town, on its spot
+    go("warehouse");
+    const e = L.entrySpawn("room").pos;
+    expect(nav.sync("warehouse", { x: e[0], z: e[2] })).toMatchObject({ from: "room", space: STREET, stand: L.spawn("warehouse") });
+    expect(nav.sync("warehouse", { x: L.spawn("warehouse").pos[0], z: L.spawn("warehouse").pos[2] })).toBeNull();
+    expect(nav.exitPlace()).toBeNull();
+    // across the town: a zone the player isn't standing in moves them to its spawn; one they stand in doesn't
+    const at = L.spawn("warehouse").pos;
+    go("market");
+    const a = nav.sync("market", { x: at[0], z: at[2] });
+    expect(a).toMatchObject({ from: STREET, space: STREET, stand: L.spawn("market") });
+    const m = L.spawn("market").pos;
+    expect(L.placeAt(STREET, m[0], m[2])).toBe("market");
+    go("station");
+    expect(nav.sync("station", { x: L.spawn("station").pos[0], z: L.spawn("station").pos[2] })).toBeNull();
   });
 
   it("prompts: talk near an NPC, enter at a door, sleep at the bed only where core allows it, the desk notebook", () => {
@@ -163,11 +223,14 @@ describe.skipIf(!assetIndex)("interiors: enter and leave", () => {
   });
 });
 
+const inBoxXZ = (b: { min: number[]; max: number[] }, x: number, z: number) => x >= b.min[0] && x <= b.max[0] && z >= b.min[1] && z <= b.max[1];
+
 /**
  * Walks to `place` the way a player would: through the triggers of each space in turn (a door, a
  * zone, a way out), standing well inside each one until the zone tracker fires. Spaces are found
- * by a search over the triggers (which space each one's place is shown in), so it crosses Main
- * Street, Station Road, the rooms and the stairwell alike.
+ * by a search over the triggers (which space each one's place is shown in), so it crosses the
+ * town, the rooms and the stairwell alike. A travel-only place (no building in the town) is taken
+ * from the Go to list, as a player would.
  */
 function walker(L: LayoutIndex, game: ReturnType<typeof createGame>, nav: SpaceNav) {
   const core = game.core;
@@ -199,6 +262,13 @@ function walker(L: LayoutIndex, game: ReturnType<typeof createGame>, nav: SpaceN
     }
   };
   return (place: string) => {
+    if (L.travelOnly(place) && core.state.place !== place) {
+      game.travel();
+      game.choose(game.model.choices!.items.findIndex((c) => c.input?.type === "goTo" && c.input.place === place));
+      const a = nav.sync(core.state.place);
+      const s = a?.stand.pos ?? L.spawn(place).pos;
+      stand(s[0], s[2]); // on its spot: it holds
+    }
     for (let hop = 0; hop < 8 && core.state.place !== place; hop++) {
       const target = L.spaceOf(place);
       if (nav.space === target) {
@@ -277,7 +347,7 @@ describe.skipIf(!assetIndex)("a day played through: the objective line at every 
     expect(core.state.scenesDone["noodle-shift"]).toBe(1);
   });
 
-  it("an errand end to end (pick up from Miss Gao, carry it down Station Road, hand it over) and a shop purchase", () => {
+  it("an errand end to end (pick up from Miss Gao, carry it to the drop-off, hand it over) and a shop purchase", () => {
     // Miss Gao has told you about deliveries, and the shopkeeper knows you: the paid parts are open.
     const { game, core } = makeGame(
       { ...named(), wallet: 30, scenesDone: { "delivery-intro": 1, "shop-intro": 1 }, trust: { dispatcher: 1, shopkeeper: 1 } },
@@ -294,7 +364,7 @@ describe.skipIf(!assetIndex)("a day played through: the objective line at every 
       playScene(game);
     };
 
-    // the pickup: Miss Gao's stall on Market Street's far pavement
+    // the pickup: Miss Gao's fruit stall on the south bank
     walkTo("market");
     expect(nav.space).toBe(STREET);
     expect(game.model.hud.errand).toBeNull();
@@ -314,9 +384,9 @@ describe.skipIf(!assetIndex)("a day played through: the objective line at every 
     expect(obj()).toBe(s("obj-deliver", { place: t(`place-${to}`), npc: game.npcName(drop.npc) }));
     expect(game.model.objective.scene).toBe(drop.id);
 
-    // through the gate onto Station Road, into the drop-off's zone
+    // to the drop-off: the bus stop, or the Go to list for the school / hospital by the pavilion
     walkTo(to);
-    expect(nav.space).toBe("station_road");
+    expect(nav.space).toBe(STREET);
     expect(obj()).toBe(s("obj-deliver-here", { npc: game.npcName(drop.npc) }));
     const m = game.model.events.length;
     const wallet = core.state.wallet;
@@ -331,7 +401,7 @@ describe.skipIf(!assetIndex)("a day played through: the objective line at every 
     expect(wage?.delta).toBeGreaterThan(0);
     expect(core.state.wallet).toBe(wallet + wage!.delta);
 
-    // back up Station Road, across Market Street and into the shop: a purchase
+    // across the town and into the corner shop: a purchase
     walkTo("shop");
     expect(nav.space).toBe("shop");
     game.talkTo("shopkeeper");
@@ -344,7 +414,7 @@ describe.skipIf(!assetIndex)("a day played through: the objective line at every 
     expect(core.state.wallet).toBe(before - cost);
     const spent = game.model.walletFx.find((fx) => fx.reason === "shopping");
     expect(spent).toMatchObject({ delta: -cost, label: t("reason-shopping") });
-    // and out again: the shop's open front leads back onto Market Street
+    // and out again: the shop's open front leads back into the town
     walkTo("market");
     expect(nav.space).toBe(STREET);
   });
@@ -450,6 +520,7 @@ describe.skipIf(!assetIndex)("bug 1 category: a scene started through the topic 
     expect(game.model.bubble?.npc).toBe("wang");
 
     const camera = new THREE.PerspectiveCamera(30, 1024 / 768, 0.1, 200);
+    const w = L.npcStand("wang").pos;
     let sawOnScreen = false;
     let frames = 0;
     // A camera swinging round wang's head (headVisible flips both ways) for several simulated
@@ -458,8 +529,8 @@ describe.skipIf(!assetIndex)("bug 1 category: a scene started through the topic 
     for (let guard = 0; game.core.state.run && guard < 20; guard++) {
       for (let f = 0; f < 12; f++, frames++) {
         const angle = frames * 0.4;
-        camera.position.set(18.286 + Math.sin(angle) * 6, 3 + Math.cos(angle * 0.7), -3.32 + Math.cos(angle) * 6);
-        camera.lookAt(18.286, 1.7, -3.32);
+        camera.position.set(w[0] + Math.sin(angle) * 6, w[1] + 3 + Math.cos(angle * 0.7), w[2] + Math.cos(angle) * 6);
+        camera.lookAt(w[0], w[1] + 1.7, w[2]);
         camera.updateMatrixWorld();
         const npc = game.model.bubble?.npc ?? null;
         expect(npc).toBe("wang");

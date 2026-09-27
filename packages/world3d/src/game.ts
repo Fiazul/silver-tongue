@@ -172,6 +172,8 @@ export interface Game {
   readonly core: Core;
   readonly t: Text;
   readonly s: Strings;
+  /** a new game (nothing played yet: day 1, first slot, at the start place): the town's fly-over plays */
+  readonly fresh: boolean;
   /** the one event dispatcher: every GameEvent goes through here */
   dispatch(events: GameEvent[]): void;
   /**
@@ -682,6 +684,7 @@ export function createGame(opts: GameOptions): Game {
     core,
     t,
     s,
+    fresh,
     dispatch,
     enterPlace,
     travel,

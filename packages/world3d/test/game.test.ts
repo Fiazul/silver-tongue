@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { comboKey, newGame, type Course, type GameEvent } from "@silver-tongue/core";
 import { buildCourse } from "../../../tools/src/build-course";
 import { createGame, openSession, type UiModel } from "../src/game";
-import { boxesOverlap, heldProp, LAYOUT, LayoutIndex, route, STREET, type AssetIndex, type Box2 } from "../src/layout";
+import { boxesOverlap, heldProp, inBox, LAYOUT, LayoutIndex, route, STREET, type AssetIndex, type Box2 } from "../src/layout";
 import { blocked } from "../src/movement";
 import { ZONE_MARGIN } from "../src/spaces";
 import { createCore } from "@silver-tongue/core";
@@ -215,15 +215,17 @@ describe("layout", () => {
     for (const n of Object.keys(course.world.npcs)) expect(LAYOUT.npcs[n], n).toBeDefined();
   });
 
-  it.skipIf(!index)("every asset is in index.json; every NPC stands in the space of its place and talks from inside that place", () => {
+  it.skipIf(!index)("every asset is in index.json; every NPC stands in the space of its place and talks from inside that place (a travel-only place: its stay spot)", () => {
     const L = new LayoutIndex(LAYOUT, index!);
     for (const a of L.assetNames()) expect(() => L.asset(a), a).not.toThrow();
     for (const [npc, { place }] of Object.entries(course.world.npcs)) {
       const space = L.spaceOf(place);
       expect(L.npcSpace(npc), npc).toBe(space);
       const talk = L.talkStand(npc);
-      expect(L.placeAt(space, talk.pos[0], talk.pos[2]), npc).toBe(place);
-      expect(L.placeAt(space, L.spawn(place).pos[0], L.spawn(place).pos[2]), place).toBe(place);
+      expect(L.holds(space, place, talk.pos[0], talk.pos[2]), `${npc} talks from ${place}`).toBe(true);
+      expect(L.holds(space, place, L.spawn(place).pos[0], L.spawn(place).pos[2]), place).toBe(true);
+      // walking there is being there, except at a travel-only spot (the Go to list takes you)
+      if (!L.travelOnly(place)) expect(L.placeAt(space, talk.pos[0], talk.pos[2]), npc).toBe(place);
     }
     // the cook stands behind the noodle counter inside the shop, the counter from props/
     const cook = L.npcStand("cook").pos;
@@ -237,9 +239,14 @@ describe("layout", () => {
       const space = L.spaceOf(place);
       expect(L.spaceIds(), place).toContain(space);
       const sp = L.spawn(place).pos;
-      expect(L.placeAt(space, sp[0], sp[2]), `${place} spawn`).toBe(place);
-      // nowhere near a trigger that would send the player on the moment they land (grown by the margin)
+      expect(L.holds(space, place, sp[0], sp[2]), `${place} spawn`).toBe(true);
+      if (!L.travelOnly(place)) expect(L.placeAt(space, sp[0], sp[2]), `${place} spawn`).toBe(place);
+      // nowhere near a trigger that would send the player on the moment they land (grown by the
+      // margin); a travel-only spot, or a door the spawn is well inside (the bus stop's stand),
+      // holds its place against the zone round it, not against another door
+      const inOwnDoor = L.space(space).triggers.some((t) => t.place === place && t.kind === "door" && inBox(t.box, sp[0], sp[2], ZONE_MARGIN));
       for (const t of L.space(space).triggers) {
+        if (t.kind === "stay" || (t.kind === "zone" && (L.travelOnly(place) || inOwnDoor))) continue;
         const near = t.box.min[0] - ZONE_MARGIN <= sp[0] && sp[0] <= t.box.max[0] + ZONE_MARGIN && t.box.min[1] - ZONE_MARGIN <= sp[2] && sp[2] <= t.box.max[1] + ZONE_MARGIN;
         if (near) expect(t.place, `${place} spawn near ${t.kind} ${t.place}`).toBe(place);
       }
@@ -254,17 +261,21 @@ describe("layout", () => {
     expect([...seen].sort()).toEqual([...L.spaceIds()].sort());
   });
 
-  it.skipIf(!index)("trigger zones of different places never overlap, in any space", () => {
+  it.skipIf(!index)("triggers of different places never overlap, in any space: zone with zone, door with door, stay spot with stay spot or door (a door may sit inside a zone: doors win)", () => {
     const L = new LayoutIndex(LAYOUT, index!);
+    const tier = (k: string) => (k === "zone" ? "zone" : k === "stay" ? "stay" : "door");
     for (const id of L.spaceIds()) {
       const ts = L.space(id).triggers;
       for (let i = 0; i < ts.length; i++)
         for (let j = i + 1; j < ts.length; j++) {
-          // one place's zone may be several boxes (wrapped round another place's door); they may touch
+          // one place's zone may be several boxes; they may touch
           if (ts[i].place === ts[j].place) continue;
-          // grown by the hysteresis margin too: two zones must not be within reach of one step
+          const [a, b] = [tier(ts[i].kind), tier(ts[j].kind)];
+          // a door or a travel-only spot inside a zone is fine (it takes precedence / holds its place)
+          if ((a === "zone") !== (b === "zone")) continue;
+          // grown by the hysteresis margin too: two triggers must not be within reach of one step
           const grow = (b: Box2): Box2 => ({ min: [b.min[0] - ZONE_MARGIN, b.min[1] - ZONE_MARGIN], max: [b.max[0] + ZONE_MARGIN, b.max[1] + ZONE_MARGIN] });
-          expect(boxesOverlap(grow(ts[i].box), grow(ts[j].box)), `${id}: ${ts[i].place} / ${ts[j].place}`).toBe(false);
+          expect(boxesOverlap(grow(ts[i].box), grow(ts[j].box)), `${id}: ${ts[i].kind} ${ts[i].place} / ${ts[j].kind} ${ts[j].place}`).toBe(false);
         }
     }
   });

@@ -137,6 +137,24 @@ export class Overlay {
     this.render(game.model);
   }
 
+  /**
+   * Held under the fly-over (cutscene.ts): the overlay is hidden and opens no dialog (a modal would
+   * make the skip tap inert). Released: shown again, with the place banner, the walk hint and any
+   * dialog the game is waiting on (the name).
+   */
+  hold(on: boolean) {
+    if (this.held === on) return;
+    this.held = on;
+    this.root.classList.toggle("under-cutscene", on);
+    if (on && this.nameForm.open) this.nameForm.close();
+    if (on || !this.game) return;
+    this.place = "";
+    this.hint.classList.remove("gone");
+    setTimeout(() => this.hint.classList.add("gone"), 9000);
+    this.render(this.game.model);
+  }
+  private held = false;
+
   /** Something modal is open: the world ignores taps and keys meant for walking. */
   get blocking(): boolean {
     return this.notebook.open || this.nameForm.open || this.menu.open || this.dayCardView.open || !this.choices.classList.contains("hidden");
@@ -166,7 +184,7 @@ export class Overlay {
       const card = m.dayCard;
       setTimeout(() => this.openDayCard(card), 900);
     }
-    if (m.mode === "name" && !this.nameForm.open) this.openName();
+    if (m.mode === "name" && !this.nameForm.open && !this.held) this.openName();
     if (m.mode !== "name" && this.nameForm.open) this.nameForm.close();
   }
 

@@ -5,13 +5,14 @@
 import * as THREE from "three";
 import type { CharacterActor } from "./actor";
 import { turnToward } from "./anim";
-import type { Box2 } from "./layout";
-import { step, WALK_SPEED } from "./movement";
+import type { Blocker, Box2 } from "./layout";
+import { step, WALK_SPEED, type WalkableFn } from "./movement";
 
-/** Where the player walks: the current scene space's bounds, blockers and floor height. */
+/** Where the player walks: the current scene space's bounds, blockers, walkable ground (the town's grid and decks) and walking height. */
 export interface WalkArea {
   bounds: Box2;
-  blockers: Box2[];
+  blockers: Blocker[];
+  walkable?: WalkableFn;
   heightAt(x: number, z: number): number;
 }
 
@@ -57,7 +58,7 @@ export class Player {
   /** `dir`: the held movement (keys / joystick, input.ts) in world x/z, length 0..1 (a half-pushed stick walks at half speed). */
   update(dt: number, dir: THREE.Vector2) {
     const p = this.root.position;
-    const { bounds, blockers } = this.area;
+    const { bounds, blockers, walkable } = this.area;
     let dx = 0;
     let dz = 0;
     let dist = WALK_SPEED * dt;
@@ -84,7 +85,7 @@ export class Player {
     }
     let speed = 0;
     if (dx || dz) {
-      const [nx, nz] = step(p.x, p.z, dx, dz, dist, blockers, bounds);
+      const [nx, nz] = step(p.x, p.z, dx, dz, dist, blockers, bounds, walkable);
       const moved = Math.hypot(nx - p.x, nz - p.z);
       if (moved < 1e-5 && this.target) this.target = null; // stuck against something: give up the walk
       speed = dt > 0 ? moved / dt : 0;
@@ -92,7 +93,7 @@ export class Player {
       p.z = nz;
       if (moved > 1e-5) this.yaw = turnToward(this.yaw, Math.atan2(dx, dz), TURN_RATE * dt);
     }
-    p.y += (this.area.heightAt(p.x, p.z) - p.y) * Math.min(1, dt * 15); // ease up/down kerbs
+    p.y += (this.area.heightAt(p.x, p.z) - p.y) * Math.min(1, dt * 15); // ease up/down slopes, steps and decks
     this.root.rotation.y = turnToward(this.root.rotation.y, this.yaw, TURN_RATE * dt);
     this.actor.update(dt, speed);
   }

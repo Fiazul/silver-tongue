@@ -3,7 +3,7 @@
 // jittering on a boundary can't flood core with goTo), and what happens when core moves them to a
 // place shown by another space (the street <-> an interior). Also the one prompt resolver: which
 // thing near the player gets the floating "E · Talk" / "Enter" / "Sleep" hint.
-import { STREET, type LayoutIndex, type Stand, type Vec3 } from "./layout";
+import { inBox, STREET, type LayoutIndex, type Stand, type Vec3 } from "./layout";
 
 /** Must be this far (m) inside a trigger to count as in it, this far outside all to count as out. */
 export const ZONE_MARGIN = 0.25;
@@ -13,7 +13,9 @@ export const ZONE_COOLDOWN = 0.5;
 /**
  * Edge-triggered zone state for one space. `update` returns a place only when the stable zone
  * under the player changes from the one last committed; in the margin band around a boundary the
- * previous zone holds, so jitter never flips it.
+ * previous zone holds, so jitter never flips it. Doors and ways out come first (a door inside a
+ * zone: its band holds too, so the zone round it can't flip it either); a travel-only place's stay
+ * spot holds that place while it is the committed one, and never draws the player in.
  */
 export class ZoneTracker {
   private stable: string;
@@ -43,14 +45,26 @@ export class ZoneTracker {
 
   update(dt: number, x: number, z: number): string | null {
     this.cooldown = Math.max(0, this.cooldown - dt);
-    const deep = this.L.triggerAt(this.space, x, z, ZONE_MARGIN);
-    if (deep) this.stable = deep.place;
-    else if (!this.L.triggerAt(this.space, x, z, -ZONE_MARGIN)) this.stable = this.L.space(this.space).defaultPlace;
-    // else: in the margin band, the previous zone holds
+    const place = this.placeUnder(x, z);
+    if (place !== null) this.stable = place; // null: in a margin band, the previous zone holds
     if (this.stable === this.committed || this.cooldown > 0) return null;
     this.committed = this.stable;
     this.cooldown = ZONE_COOLDOWN;
     return this.committed;
+  }
+
+  /** The stable place under (x, z), or null in a margin band (hold the previous one). */
+  private placeUnder(x: number, z: number): string | null {
+    const ts = this.L.space(this.space).triggers;
+    const near = (kinds: string[]) => ts.filter((t) => kinds.includes(t.kind) && inBox(t.box, x, z, -ZONE_MARGIN));
+    if (near(["stay"]).some((t) => t.place === this.committed)) return this.committed;
+    for (const kinds of [["door", "exit"], ["zone"]]) {
+      const ours = near(kinds);
+      const deep = ours.find((t) => inBox(t.box, x, z, ZONE_MARGIN));
+      if (deep) return deep.place;
+      if (ours.length) return null;
+    }
+    return this.L.space(this.space).defaultPlace;
   }
 }
 
@@ -63,7 +77,8 @@ export interface Arrival {
 /**
  * The player's space and zone. `step` per frame while walking is free: a place to send to
  * game.enterPlace, or null. `sync` after core's place changed: the arrival when the place is shown
- * by another space (swap scenes, put the player at `stand`), else null.
+ * by another space (swap scenes, put the player at `stand`), or by this one where the player isn't
+ * standing (the Go to list: a zone across the town, a travel-only spot), else null.
  */
 export class SpaceNav {
   space: string;
@@ -81,10 +96,14 @@ export class SpaceNav {
     return this.zones.update(dt, x, z);
   }
 
-  sync(place: string): Arrival | null {
+  /** `at`: where the player stands now (x, z); without it, only a change of space moves them. */
+  sync(place: string, at?: { x: number; z: number }): Arrival | null {
     const want = this.L.spaceOf(place);
     if (want === this.space) {
-      if (this.zones.current !== place) this.zones.reset(this.space, place);
+      if (this.zones.current === place) return null;
+      this.zones.reset(this.space, place);
+      // Core put the player somewhere they aren't standing: take them to its spawn.
+      if (at && !this.L.holds(this.space, place, at.x, at.z, ZONE_MARGIN)) return { from: this.space, space: this.space, stand: this.L.spawn(place) };
       return null;
     }
     const from = this.space;

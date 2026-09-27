@@ -33,6 +33,9 @@ const FALLBACK: Record<string, string> = {
   "name-placeholder": "Your name",
   "you-say": "You: {text}",
   "walk-hint": "Tap the street to walk (or WASD / arrows). Tap someone, or press E next to them, to talk.",
+  // the fly-over over the town at the start of a new game
+  "cutscene-skip": "Tap to skip",
+  "cutscene-skip-key": "Click or press any key to skip",
   // prompts over things near the player
   "prompt-talk": "Talk to {npc}",
   "prompt-enter": "Enter {place}",

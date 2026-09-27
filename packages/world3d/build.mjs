@@ -1,7 +1,7 @@
 // Builds dist/: index.html (CSS inlined), main.js (the app with three.js), courses/ (the catalog
 // and every course file, copied from the repo's dist/courses/ as packages/tui-web's build does; the
 // page fetches the course it plays, so it needs a web server), assets/ (only the GLBs layout.json
-// uses, plus a matching index.json), manifest.webmanifest and icons/. GLBs are copied, never
+// and town.json use, plus a matching index.json), manifest.webmanifest and icons/. GLBs are copied, never
 // inlined. Every URL is relative, so dist/ works at any path (GitHub Pages serves it under /world3d/).
 //
 //   node build.mjs          one-off build
@@ -36,9 +36,9 @@ const bundleAudio = dev || process.env.WORLD3D_AUDIO === "bundle";
 const audioRoot = bundleAudio ? "" : "../";
 if (!existsSync(join(assetsSrc, "index.json"))) throw new Error(`no asset library at ${assetsSrc} (set WORLD3D_ASSETS)`);
 
-/** Copies the GLBs layout.json uses and an index.json listing only those (scripts/used-assets.mjs). */
+/** Copies the GLBs layout.json and town.json use and an index.json listing only those (scripts/used-assets.mjs). */
 function copyAssets() {
-  return copyUsed(assetsSrc, join(dist, "assets"), join(here, "src", "layout.json"));
+  return copyUsed(assetsSrc, join(dist, "assets"), [join(here, "src", "layout.json"), join(here, "src", "town.json")]);
 }
 
 /** The home-screen bits: manifest and icons (icons/, made by scripts/make-icons.py; outside src/, which holds no particular language). */

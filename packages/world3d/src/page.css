@@ -19,6 +19,14 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #edd9b8; tou
 #ui { position: fixed; inset: 0; pointer-events: none; }
 #ui > * { pointer-events: auto; }
 #loading { position: fixed; inset: 0; display: grid; place-items: center; font-size: 1.2rem; background: #edd9b8; }
+/* the fly-over (cutscene.ts): bars slide in over the picture, a tap anywhere skips; the HUD waits underneath */
+.letterbox { position: fixed; inset: 0; z-index: 50; cursor: pointer; touch-action: none; }
+.letterbox-bar { position: absolute; left: 0; right: 0; height: 11vh; background: #15110f; transition: transform 0.45s ease; }
+.letterbox-bar.top { top: 0; transform: translateY(-100%); }
+.letterbox-bar.bottom { bottom: 0; transform: translateY(100%); display: flex; align-items: center; justify-content: center; padding-bottom: env(safe-area-inset-bottom); }
+.letterbox.on .letterbox-bar { transform: none; }
+.letterbox-hint { color: #f3e7d3; font-size: 0.95rem; letter-spacing: 0.04em; opacity: 0.85; }
+#ui.under-cutscene { visibility: hidden; }
 .hidden { display: none !important; }
 button { font: inherit; color: inherit; background: var(--paper); border: 2px solid var(--ink); border-radius: 10px; padding: 0.45em 0.8em; cursor: pointer; box-shadow: 0 2px 0 var(--ink); }
 button:active { transform: translateY(2px); box-shadow: none; }

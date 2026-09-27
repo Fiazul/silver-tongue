@@ -1,13 +1,14 @@
 // The 3D world: one asset loader (shared cache, clone per instance), the toon look, and SceneSpace:
-// the street and every interior instantiated by one class from layout.ts's SpaceLayout through the
-// one anchor helper, with blockers, picking, street life and the time-of-day light.
+// the town and every interior instantiated by one class from layout.ts's SpaceLayout through the
+// one anchor helper, with blockers, picking, street life and the time-of-day light. The town adds
+// its landscape (at the origin), the sky dome, the sun from town.json and a far haze.
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { mergeGeometries, mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { CharacterActor, type ActorOptions } from "./actor";
 import { turnToward } from "./anim";
-import { anchorToWorld, heldProp, yawFor, type Box2, type HeldPropSpec, type LayoutIndex, type Placement, type SpaceLayout, type Vec3 } from "./layout";
+import { anchorToWorld, heldProp, yawFor, type Blocker, type Box2, type HeldPropSpec, type LayoutIndex, type Placement, type SpaceLayout, type Vec3 } from "./layout";
 import type { WalkArea } from "./player";
 import { ScatterMotion, WalkerMotion } from "./streetlife";
 
@@ -98,12 +99,13 @@ class Toon {
     const m = src as THREE.MeshStandardMaterial;
     const color = m.color ?? new THREE.Color(1, 1, 1);
     const emissive = m.emissive ?? new THREE.Color(0, 0, 0);
-    const key = `${color.getHexString()}|${emissive.getHexString()}|${m.opacity}|${m.side}`;
+    const key = `${color.getHexString()}|${emissive.getHexString()}|${m.opacity}|${m.side}|${m.vertexColors ? "vc" : ""}`;
     let toon = this.materials.get(key);
     if (!toon) {
       toon = new THREE.MeshToonMaterial({
         color,
         emissive,
+        vertexColors: m.vertexColors,
         gradientMap: this.gradient,
         transparent: m.transparent || m.opacity < 1,
         opacity: m.opacity,
@@ -149,11 +151,87 @@ class Toon {
 }
 
 // ---------------------------------------------------------------------------------------------
+// One mesh per character: its palette primitives merged, colours in the vertices
+// ---------------------------------------------------------------------------------------------
+
+/** The material a merged mesh uses (its colours are per vertex), one per side mode (Toon turns it into one toon material). */
+const vertexColourSources = new Map<THREE.Side, THREE.MeshStandardMaterial>();
+function vertexColourSource(side: THREE.Side): THREE.MeshStandardMaterial {
+  let m = vertexColourSources.get(side);
+  if (!m) vertexColourSources.set(side, (m = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, name: "vertex_colours", side })));
+  return m;
+}
+
+/**
+ * A glTF mesh with one primitive per palette colour loads as a group of meshes, one draw each (a
+ * rigged human is 5-7; with its outline hulls twice that, and they can't be batched: they move).
+ * Merges each such group into one mesh, the colour of each primitive's material written into its
+ * vertices: one draw (and one hull) per character or held prop, drawn exactly as before (toon
+ * colour x vertex colour). Only opaque, untextured, non-emissive primitives sharing one skeleton /
+ * transform and one attribute layout are merged; anything else stays as it is.
+ */
+export function mergePrimitives(root: THREE.Object3D): number {
+  let merged = 0;
+  const groups: THREE.Object3D[] = [];
+  root.traverse((o) => {
+    if (o.children.filter((c) => (c as THREE.Mesh).isMesh).length > 1) groups.push(o);
+  });
+  for (const g of groups) {
+    const meshes = g.children.filter((c): c is THREE.Mesh => (c as THREE.Mesh).isMesh && !c.children.length);
+    const first = meshes[0] as THREE.SkinnedMesh | undefined;
+    if (!first || meshes.length < 2) continue;
+    const attrs = (m: THREE.Mesh) => Object.keys(m.geometry.attributes).sort().join(",");
+    const plain = (m: THREE.Mesh) => {
+      const mat = m.material as THREE.MeshStandardMaterial;
+      return !Array.isArray(m.material) && !mat.map && mat.opacity === 1 && !mat.transparent && !(mat.emissive && mat.emissive.getHex()) && !Object.keys(m.geometry.morphAttributes).length;
+    };
+    const same = (m: THREE.Mesh) => {
+      const sk = m as THREE.SkinnedMesh;
+      return (
+        !!sk.isSkinnedMesh === !!first.isSkinnedMesh &&
+        (!first.isSkinnedMesh || (sk.skeleton === first.skeleton && sk.bindMatrix.equals(first.bindMatrix))) &&
+        m.matrix.equals(first.matrix) &&
+        (m.material as THREE.Material).side === (first.material as THREE.Material).side &&
+        attrs(m) === attrs(first) &&
+        !!m.geometry.index === !!first.geometry.index
+      );
+    };
+    if (!meshes.every((m) => plain(m) && same(m))) continue;
+    const geoms = meshes.map((m) => {
+      const geo = m.geometry.clone();
+      const c = (m.material as THREE.MeshStandardMaterial).color ?? new THREE.Color(1, 1, 1);
+      const n = geo.getAttribute("position").count;
+      const col = new Float32Array(n * 3);
+      for (let i = 0; i < n; i++) col.set([c.r, c.g, c.b], i * 3);
+      geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
+      return geo;
+    });
+    const geo = mergeGeometries(geoms, false);
+    if (!geo) continue;
+    const mat = vertexColourSource((first.material as THREE.Material).side);
+    let one: THREE.Mesh;
+    if (first.isSkinnedMesh) {
+      const sk = new THREE.SkinnedMesh(geo, mat);
+      sk.bind(first.skeleton, first.bindMatrix);
+      one = sk;
+    } else one = new THREE.Mesh(geo, mat);
+    one.name = first.name;
+    one.matrix.copy(first.matrix);
+    one.matrix.decompose(one.position, one.quaternion, one.scale);
+    one.frustumCulled = first.frustumCulled;
+    for (const m of meshes) m.removeFromParent();
+    g.add(one);
+    merged += meshes.length - 1;
+  }
+  return merged;
+}
+
+// ---------------------------------------------------------------------------------------------
 // The one asset loader
 // ---------------------------------------------------------------------------------------------
 
-/** Flat ground assets get no outline: it would only draw a line round every tile. */
-const NO_OUTLINE_SETS = new Set(["tiles"]);
+/** Flat ground assets get no outline: it would only draw a line round every tile (the landscape: terrain, water, hills, sky). */
+const NO_OUTLINE_SETS = new Set(["tiles", "landscape"]);
 const isFlat = (name: string) => /^(road_|pavement_|manhole|drain_grate)/.test(name);
 
 export class AssetCache {
@@ -175,6 +253,8 @@ export class AssetCache {
         const root = gltf.scene;
         root.name = name;
         root.animations = gltf.animations; // kept through clone(): the actor's clips
+        // Characters and what they hold move, so they can't be batched: one mesh each instead.
+        if (entry.set === "characters") mergePrimitives(root);
         this.toon.apply(root, !NO_OUTLINE_SETS.has(entry.set) && !isFlat(name));
         return root;
       });
@@ -348,9 +428,19 @@ const DAY = {
   sunAngle: [35, 55, 40, 12],
   background: [new THREE.Color("#CFE3F5"), new THREE.Color(BACKGROUND), new THREE.Color("#F2C79A"), new THREE.Color("#8C6270")],
   fog: [new THREE.Color("#CFE3F5"), new THREE.Color(BACKGROUND), new THREE.Color("#F2C79A"), new THREE.Color("#6E4E5A")],
+  /** the town's sky dome (and its haze) times this: cool morning, clear midday, warm afternoon, orange evening */
+  skyTint: [new THREE.Color("#E6EEFF"), new THREE.Color("#FFFFFF"), new THREE.Color("#FFE0B8"), new THREE.Color("#FF9F72")],
 };
+/** The midday stop of DAY.sunAngle: the town's `sun.elevationDeg` lands there. */
+const MIDDAY_SUN = 55;
 /** Fixed horizontal offset (m) the sun keeps as it swings from high (morning/midday) to low (evening). */
 const SUN_HORIZ: [number, number] = [-6, 9];
+
+/** The town's sun: compass bearing (from north, -z, toward east, +x) -> the same horizontal offset length. */
+function sunHoriz(azimuthDeg: number): [number, number] {
+  const r = Math.hypot(...SUN_HORIZ);
+  return [Math.sin(azimuthDeg * DEG) * r, -Math.cos(azimuthDeg * DEG) * r];
+}
 
 /** `stops[0..n]` at k=0..1, evenly spaced: which two stops `k` falls between, and how far (0..1). */
 function stopIndex(stops: readonly unknown[], k: number): { i: number; t: number } {
@@ -374,7 +464,7 @@ export type PickHit = { npc: string } | { target: string } | { ground: THREE.Vec
 
 export class SceneSpace {
   readonly scene = new THREE.Scene();
-  readonly blockers: Box2[] = [];
+  readonly blockers: Blocker[] = [];
   readonly npcs = new Map<string, NpcView>();
   /** street extras and pets from the dressing list: idle in place */
   readonly extras: CharacterActor[] = [];
@@ -387,6 +477,11 @@ export class SceneSpace {
   private hemi = new THREE.HemisphereLight(0xfff4e0, 0x8a7a66, 1.1);
   private sun = new THREE.DirectionalLight(0xffffff, 2.2);
   private background: THREE.Color;
+  /** the sun's fixed horizontal offset: the town's bearing, else the street default */
+  private sunHoriz: [number, number];
+  /** the town's sky dome materials and their own colours (tinted through the day), and the haze colour it starts from */
+  private sky: { mat: THREE.MeshBasicMaterial; base: THREE.Color }[] = [];
+  private horizon?: THREE.Color;
   /** static batching (mergeStatic): draw calls before / after, meshes merged away */
   batching = { before: 0, after: 0, merged: 0 };
 
@@ -398,6 +493,7 @@ export class SceneSpace {
     this.layout = L.space(id);
     this.groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -this.layout.surfaces.default);
     this.background = new THREE.Color(this.layout.background ?? BACKGROUND);
+    this.sunHoriz = this.layout.town ? sunHoriz(this.layout.town.sun.azimuthDeg) : SUN_HORIZ;
   }
 
   static async create(L: LayoutIndex, assets: AssetCache, id: string): Promise<SceneSpace> {
@@ -408,27 +504,44 @@ export class SceneSpace {
 
   /** The walking area for the player (player.ts). */
   get area(): WalkArea {
-    return { bounds: this.layout.bounds, blockers: this.blockers, heightAt: (x, z) => this.L.heightAt(this.id, x, z) };
+    return {
+      bounds: this.layout.bounds,
+      blockers: this.blockers,
+      walkable: this.layout.town ? (x, z) => this.L.walkable(this.id, x, z) : undefined,
+      heightAt: (x, z) => this.L.heightAt(this.id, x, z),
+    };
   }
 
   private place(obj: THREE.Object3D, p: Pick3<Placement>) {
     obj.position.set(p.pos[0], p.pos[1], p.pos[2]);
     obj.rotation.set((p.tiltX ?? 0) * DEG, p.rotY * DEG, 0, "YXZ");
+    obj.scale.setScalar(p.scale ?? 1);
   }
 
   private async build() {
     const { L, scene, layout } = this;
     scene.background = this.background.clone();
+    const town = layout.town;
     // A soft depth fog outdoors only (interiors are enclosed, small; no far plane to fade into):
     // cheap (no shadow maps, just a colour that lerps with the sky in setDaylight) atmospheric depth.
-    if (!layout.interior) scene.fog = new THREE.Fog(this.background.clone(), 26, 90);
+    // The town's is a far haze (town.json fog): clear over the 140 m plateau, a veil on the mountains.
+    if (!layout.interior) scene.fog = town ? new THREE.Fog(this.background.clone(), town.fog.near, town.fog.far) : new THREE.Fog(this.background.clone(), 26, 90);
     scene.add(this.hemi);
-    this.sun.position.set(SUN_HORIZ[0], 14, SUN_HORIZ[1]);
+    this.sun.position.set(this.sunHoriz[0], 14, this.sunHoriz[1]);
     scene.add(this.sun);
     /** everything that never moves: batched by material at the end */
     const statics: THREE.Object3D[] = [];
 
-    if (!layout.interior) {
+    if (town) {
+      // The landscape GLBs share the world origin; the sky dome is drawn unlit and unfogged, behind everything.
+      for (const name of town.landscape) {
+        const o = await this.assets.instance(name);
+        o.name = name;
+        scene.add(o);
+        statics.push(o);
+      }
+      if (town.sky) await this.addSky(town.sky);
+    } else if (!layout.interior) {
       // Endless ground under everything, then the mock-up's forecourt / road-extension boxes.
       const floor = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), this.assets.toon.flat("#C8C1B2"));
       floor.rotation.x = -Math.PI / 2;
@@ -460,6 +573,7 @@ export class SceneSpace {
       const blocker = b.block === "footprint" ? this.buildingBlocker(b, await this.assets.template(b.asset)) : b.block === "size" ? L.sizeBlocker(b) : null;
       if (blocker) this.blockers.push(blocker);
     }
+    this.blockers.push(...layout.blockers); // the town's own (oriented rects)
     for (const d of layout.dressing) {
       const e = L.asset(d.asset);
       if (e.set === "characters" && CHARACTER_KINDS.has(e.kind ?? "")) {
@@ -516,6 +630,35 @@ export class SceneSpace {
     this.batching.after = drawCalls(scene);
   }
 
+  /**
+   * The sky dome: each of its colours as an unlit, unfogged material (drawn first, never writing
+   * depth), kept to tint through the day; its horizon colour is the haze's.
+   */
+  private async addSky(name: string) {
+    const o = await this.assets.instance(name);
+    o.name = name;
+    o.traverse((m) => {
+      const mesh = m as THREE.Mesh;
+      if (!mesh.isMesh || mesh.userData.outline) return;
+      const src = mesh.material as THREE.MeshToonMaterial;
+      const base = src.color.clone();
+      const mat = new THREE.MeshBasicMaterial({ color: base.clone(), fog: false, side: THREE.DoubleSide, depthWrite: false, name: src.name });
+      mesh.material = mat;
+      mesh.renderOrder = -1;
+      mesh.frustumCulled = false;
+      this.sky.push({ mat, base });
+    });
+    // The horizon band is the lighter, less saturated colour of the two.
+    const hsl = { h: 0, s: 0, l: 0 };
+    this.horizon = this.sky.map((x) => x.base).sort((a, b) => b.getHSL(hsl).l - a.getHSL(hsl).l)[0]?.clone();
+    if (this.horizon) {
+      this.background.copy(this.horizon);
+      (this.scene.background as THREE.Color).copy(this.horizon);
+      if (this.scene.fog instanceof THREE.Fog) this.scene.fog.color.copy(this.horizon);
+    }
+    this.scene.add(o);
+  }
+
   /** The one held-prop path (NPCs and walkers): the carry pose only for `carry: true` props. */
   private async holdProp(actor: CharacterActor, spec: HeldPropSpec | undefined) {
     const prop = heldProp(spec);
@@ -541,14 +684,23 @@ export class SceneSpace {
     return { min: [Math.min(...xs), Math.min(...zs)], max: [Math.max(...xs), Math.max(...zs)] };
   }
 
-  /** What's under a screen point: an NPC, a thing to use, else a spot on the ground. */
+  /** What's under a screen point: an NPC, a thing to use, else a spot on the ground (the town's: on its walking height). */
   pick(ndc: THREE.Vector2, camera: THREE.Camera): PickHit | null {
     this.ray.setFromCamera(ndc, camera);
     const hit = this.ray.intersectObjects(this.pickables, false)[0];
     if (hit?.object.userData.npc) return { npc: hit.object.userData.npc as string };
     if (hit?.object.userData.target) return { target: hit.object.userData.target as string };
     const p = new THREE.Vector3();
-    return this.ray.ray.intersectPlane(this.groundPlane, p) ? { ground: p } : null;
+    if (!this.ray.ray.intersectPlane(this.groundPlane, p)) return null;
+    // Uneven ground: slide the hit to the walking height under it (a few steps settle on gentle slopes and decks).
+    if (this.layout.town) {
+      const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+      for (let i = 0; i < 4; i++) {
+        plane.constant = -this.L.heightAt(this.id, p.x, p.z);
+        if (!this.ray.ray.intersectPlane(plane, p)) break;
+      }
+    }
+    return { ground: p };
   }
 
   /** An NPC's head top in world space (HeadTop bone), for anchoring the speech bubble. */
@@ -580,11 +732,19 @@ export class SceneSpace {
     lerpStops(DAY.sun, k, this.sun.color);
     this.sun.intensity = lerpNums(DAY.sunIntensity, k);
     // The sun swings low toward evening (grazing light, a longer-shadow feel) without moving its
-    // azimuth, so the toon shading's light direction only dips, never spins.
-    const angle = lerpNums(DAY.sunAngle, k) * DEG;
-    const horiz = Math.hypot(...SUN_HORIZ);
-    this.sun.position.set(SUN_HORIZ[0], Math.tan(angle) * horiz, SUN_HORIZ[1]);
-    if (!this.layout.interior) {
+    // azimuth, so the toon shading's light direction only dips, never spins. The town's sun
+    // (town.json) sits at its own bearing and reaches its own elevation at midday.
+    const town = this.layout.town;
+    const angle = lerpNums(DAY.sunAngle, k) * (town ? town.sun.elevationDeg / MIDDAY_SUN : 1) * DEG;
+    const horiz = Math.hypot(...this.sunHoriz);
+    this.sun.position.set(this.sunHoriz[0], Math.tan(angle) * horiz, this.sunHoriz[1]);
+    if (this.horizon) {
+      // The town: the dome and the haze (and the background behind them) take the day's tint.
+      const tint = lerpStops(DAY.skyTint, k, new THREE.Color());
+      for (const s of this.sky) s.mat.color.copy(s.base).multiply(tint);
+      (this.scene.background as THREE.Color).copy(this.horizon).multiply(tint);
+      if (this.scene.fog instanceof THREE.Fog) this.scene.fog.color.copy(this.horizon).multiply(tint);
+    } else if (!this.layout.interior) {
       lerpStops(DAY.background, k, this.scene.background as THREE.Color);
       if (this.scene.fog instanceof THREE.Fog) lerpStops(DAY.fog, k, this.scene.fog.color);
     }
@@ -624,4 +784,4 @@ export class SceneSpace {
   }
 }
 
-type Pick3<T extends Placement> = Pick<T, "pos" | "rotY" | "tiltX">;
+type Pick3<T extends Placement> = Pick<T, "pos" | "rotY" | "tiltX" | "scale">;

@@ -21,6 +21,9 @@ export const CAMERA = {
   follow: 3.5,
   /** aim this far above the feet */
   aimHeight: 1.0,
+  /** near / far planes: the town's sky dome is 800 m out, the fly-over starts 400 m away */
+  near: 0.5,
+  far: 2500,
 };
 
 export class CameraRig {
@@ -37,9 +40,11 @@ export class CameraRig {
   private lift = 0;
   private offsetDir: THREE.Vector3;
   private controls?: OrbitControls;
+  /** the play fov for this viewport (portrait widens it); the fly-over scales its own by fov / CAMERA.fovDeg */
+  fov = CAMERA.fovDeg;
 
   constructor(dom: HTMLElement) {
-    this.camera = new THREE.PerspectiveCamera(CAMERA.fovDeg, 1, 0.5, 400);
+    this.camera = new THREE.PerspectiveCamera(CAMERA.fovDeg, 1, CAMERA.near, CAMERA.far);
     const el = (CAMERA.elevationDeg * Math.PI) / 180;
     const az = (CAMERA.azimuthDeg * Math.PI) / 180;
     // The camera sits in front (+z) and to the right (+x) of what it looks at, looking down.
@@ -65,7 +70,8 @@ export class CameraRig {
     this.camera.aspect = w / Math.max(1, h);
     // Portrait phones: widen the view so the street still fits across.
     this.portrait = this.camera.aspect < 1;
-    this.camera.fov = this.portrait ? CAMERA.fovDeg / Math.max(0.55, this.camera.aspect) : CAMERA.fovDeg;
+    this.fov = this.portrait ? CAMERA.fovDeg / Math.max(0.55, this.camera.aspect) : CAMERA.fovDeg;
+    this.camera.fov = this.fov;
     this.camera.updateProjectionMatrix();
   }
 
@@ -76,6 +82,10 @@ export class CameraRig {
 
   snap(focus: THREE.Vector3) {
     this.dist = this.base;
+    if (this.camera.fov !== this.fov) {
+      this.camera.fov = this.fov; // back from the fly-over's
+      this.camera.updateProjectionMatrix();
+    }
     this.aim.copy(focus).setY(focus.y + CAMERA.aimHeight);
     this.camera.position.copy(this.aim).addScaledVector(this.offsetDir, this.dist);
     this.camera.lookAt(this.aim);

@@ -1,19 +1,20 @@
 // Bootstraps the 3D front end: the course (courses.ts, picked and loaded as the browser TUI does),
-// storage (same keys as the browser TUI), every scene space (the
-// street and the interiors), the player, the camera, the overlay, and the frame loop that ties
-// walking to core (zones / doors -> goTo through SpaceNav, NPC taps / E -> the scene start sequence
-// in game.ts, prompts -> talk / enter / leave / sleep / notebook). Input: keys and the touch
-// joystick feed one MoveInput vector (input.ts); clicks and taps go through touch.ts.
+// storage (same keys as the browser TUI), every scene space (the canal town and the interiors),
+// the player, the camera, the overlay, the fly-over of a new game (cutscene.ts), and the frame loop
+// that ties walking to core (zones / doors -> goTo through SpaceNav, NPC taps / E -> the scene
+// start sequence in game.ts, prompts -> talk / enter / leave / sleep / notebook). Input: keys and
+// the touch joystick feed one MoveInput vector (input.ts); clicks and taps go through touch.ts.
 import * as THREE from "three";
 import { decodeSave, encodeSave, sessionLines } from "@silver-tongue/tui";
 import { fromLocalStorage, type KeyValue } from "@silver-tongue/tui-web/src/web-storage";
 import { createAudioPlayer, unlockAudioOnGesture } from "./audio";
-import { CameraRig, outlineScale } from "./camera";
+import { CAMERA, CameraRig, outlineScale } from "./camera";
 import { PlayerCarry } from "./carry";
 import { pickCourse } from "./courses";
+import { CameraPathPlayer, Letterbox } from "./cutscene";
 import { openSession, type Game, type UiModel } from "./game";
 import { MoveInput, toGround } from "./input";
-import { LAYOUT, LayoutIndex, type AssetIndex, type Stand } from "./layout";
+import { LAYOUT, LayoutIndex, STREET, type AssetIndex, type Stand } from "./layout";
 import { Player } from "./player";
 import { nearestPrompt, promptTargets, SpaceNav, TALK_RANGE, type Arrival, type PromptTarget } from "./spaces";
 import { PointerControls } from "./touch";
@@ -138,6 +139,8 @@ async function main() {
   let transitioning = false;
   let mixupSeq = 0;
   let prompt: PromptTarget | null = null;
+  /** the fly-over while it plays (a new game), with its letterbox */
+  let flyover: { path: CameraPathPlayer; bars: Letterbox } | null = null;
 
   /** Puts the player (and the marker) into a space at a stand. */
   function enterSpace(id: string, stand: Stand) {
@@ -190,8 +193,9 @@ async function main() {
   /** World side of the model: the space for core's place, the scene lock and walk to the talk stand, talk / shrug clips, daylight. */
   function syncWorld(m: UiModel) {
     if (!game) return;
-    // Core moved the player to a place another space shows: swap scenes behind a fade (next frame, not inside core's dispatch).
-    const arrival = nav.sync(game.core.state.place);
+    // Core moved the player to a place another space shows, or to one this space shows elsewhere
+    // (the Go to list): swap scenes / move them behind a fade (next frame, not inside core's dispatch).
+    const arrival = nav.sync(game.core.state.place, { x: player.position.x, z: player.position.z });
     if (arrival) arriving = arrival;
     applyDaylight();
     carry.sync(m.hud.errand);
@@ -242,24 +246,62 @@ async function main() {
     const start = nav.jump(game.core.state.place);
     enterSpace(start.space, start.stand);
     ready = true;
+    // A new game opens with the fly-over over the town; a loaded save starts straight in. The
+    // overlay is held first, so the name dialog waits for the end of it.
+    const fly = game.fresh && start.space === STREET;
+    if (fly) overlay.hold(true);
     overlay.setGame(game);
     syncWorld(game.model);
+    if (fly) playFlyover();
+    else endFlyover();
+  }
+
+  /** The fly-over (town.json camera_path): the overlay waits under the letterbox; any tap, click or key skips it. */
+  function playFlyover() {
+    if (flyover) return;
+    if (!LAYOUT.town.camera.keys.length) return overlay.hold(false);
+    const touch = overlay.touch || !!window.matchMedia?.("(pointer: coarse)").matches;
+    const bars = new Letterbox(document.body, game!.s(touch ? "cutscene-skip" : "cutscene-skip-key"), () => flyover?.path.skip());
+    flyover = { path: new CameraPathPlayer(LAYOUT.town.camera), bars };
+    overlay.hold(true);
+    move.clear();
+    pointers.reset();
+  }
+
+  /** Hands over to the game camera at the player (the path's last key is that very pose, so no jump). */
+  function endFlyover() {
+    if (!flyover) return;
+    flyover.bars.close();
+    flyover = null;
+    overlay.hold(false);
+    rig.snap(player.position);
   }
 
   const flat = (a: THREE.Vector3, p: number[]) => Math.hypot(a.x - p[0], a.z - p[2]);
 
-  /** Tap on an NPC / E: talk if close, else walk to where you talk to them and talk on arrival. */
+  /**
+   * Tap on an NPC / E: talk if close, else walk to where you talk to them and talk on arrival.
+   * Someone at a travel-only place's spot (Big Liu on the pier) takes you to that place first.
+   */
   function requestTalk(npc: string) {
     if (!game || game.model.scene || game.model.mode !== "explore" || !space.npcs.has(npc)) return;
     const npcPos = L.npcStand(npc).pos;
     const stand = L.talkStand(npc);
     if (flat(player.position, npcPos) <= TALK_RANGE || flat(player.position, stand.pos) <= 1.2) {
-      game.talkTo(npc);
+      talkHere(npc);
       return;
     }
     const face = new THREE.Vector3(npcPos[0] - stand.pos[0], 0, npcPos[2] - stand.pos[2]);
     player.walkTo(stand.pos[0], stand.pos[2], { face, arrive: () => (pendingTalk = npc) });
     showMarker(stand.pos[0], stand.pos[2]);
+  }
+
+  /** Talks to an NPC the player is next to; one at a travel-only place's spot (Big Liu on the pier) takes the player to that place first. */
+  function talkHere(npc: string) {
+    if (!game) return;
+    const home = course.world.npcs[npc]?.place;
+    if (home && home !== game.core.state.place && L.travelOnly(home)) game.enterPlace(home);
+    game.talkTo(npc);
   }
 
   /** Uses a prompt target: talk, go through a door, leave, sleep, read the notebook. */
@@ -322,7 +364,7 @@ async function main() {
   const canvas = renderer.domElement;
   const pointers = new PointerControls(canvas, uiRoot, move, {
     onTap: tap,
-    enabled: () => !!game && !overlay.blocking && !transitioning,
+    enabled: () => !!game && !overlay.blocking && !transitioning && !flyover,
     stickZone: () => overlay.screen.stickZone,
     onTouch: () => overlay.setTouch(),
   });
@@ -330,7 +372,7 @@ async function main() {
 
   // Keys: overlay first (replies, lists, notebook), then walking and E.
   window.addEventListener("keydown", (e) => {
-    if (!game || e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+    if (!game || flyover || e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
     if (overlay.key(e)) return e.preventDefault();
     if (overlay.blocking) return;
     if (move.press(e.key)) e.preventDefault();
@@ -367,9 +409,18 @@ async function main() {
     const v = p.clone().project(rig.camera);
     return { x: ((v.x + 1) / 2) * window.innerWidth, y: ((1 - v.y) / 2) * window.innerHeight, visible: v.z < 1 && Math.abs(v.x) <= 1 && Math.abs(v.y) <= 1 };
   };
+  const still = new THREE.Vector2();
   renderer.setAnimationLoop(() => {
     const dt = Math.min(0.05, clock.getDelta());
     if (!game) return;
+    // The fly-over: the camera on its path, the town living (walkers, pets, NPCs), the player idle at the spawn.
+    if (flyover) {
+      const done = flyover.path.update(dt, rig.camera, rig.fov / CAMERA.fovDeg);
+      player.update(dt, still);
+      space.update(dt, player.position, null);
+      if (done) endFlyover();
+      else return renderer.render(space.scene, rig.camera);
+    }
     // A place change into another space: fade, swap, fade back.
     if (arriving && !transitioning) {
       const a = arriving;
@@ -406,7 +457,7 @@ async function main() {
     if (pendingTalk) {
       const npc = pendingTalk;
       pendingTalk = null;
-      game.talkTo(npc);
+      talkHere(npc);
     }
 
     // The one prompt: the nearest thing to use in range.
@@ -457,13 +508,30 @@ async function main() {
       }),
       talk: (npc: string) => requestTalk(npc),
       walkTo: (x: number, z: number) => player.walkTo(x, z),
-      // Places the player, then runs the same edge-triggered zone check `nav.step` does every frame
-      // of real walking, so core's place (and the space the player lands in) follows the jump
-      // instead of only the raw position (a stale place broke space.npcs.has(npc) lookups for talk()).
-      teleport: (x: number, z: number) => {
-        player.place(x, z);
-        const go = nav.step(0, x, z);
+      // teleport(x, z): places the player, then runs the same edge-triggered zone check `nav.step`
+      // does every frame of real walking, so core's place (and the space the player lands in)
+      // follows the jump instead of only the raw position (a stale place broke space.npcs.has(npc)
+      // lookups for talk()). teleport(place): goes there (routed, as the Go to list: a town zone,
+      // a door, a travel-only spot, an interior) and stands at its spawn.
+      teleport: (a: number | string, z?: number) => {
+        if (typeof a === "string") {
+          if (!game) return;
+          if (game.core.state.place !== a) return game.enterPlace(a);
+          const s = nav.jump(a);
+          arriving = s;
+          return;
+        }
+        player.place(a, z ?? 0);
+        const go = nav.step(0, a, z ?? 0);
         if (go) game?.enterPlace(go);
+      },
+      /** the fly-over: "play" it again (in the town), "skip" it */
+      cutscene: (cmd: "play" | "skip" = "play") => {
+        if (cmd === "skip") return flyover?.path.skip();
+        if (nav.space !== STREET) return;
+        const s = L.spawn(LAYOUT.defaultPlace);
+        player.place(s.pos[0], s.pos[2], new THREE.Vector3(...s.facing));
+        playFlyover();
       },
       /** go to a place (routed hop by hop, like walking there): the street, or into an interior */
       enter: (place: string) => game?.enterPlace(place),
@@ -486,7 +554,7 @@ async function main() {
       /** accepted goTo inputs in core's log (a place-trigger thrash shows as a burst here) */
       goToCount: () => game?.core.state.log.filter((l) => l.input.type === "goTo").length ?? 0,
       /** last frame's draw calls (frustum-culled) and the space's static batching: draw calls before / after merging, unculled */
-      info: () => ({ calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, batching: { ...space.batching, now: drawCalls(space.scene) }, pixelRatio: renderer.getPixelRatio() }),
+      info: () => ({ calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, batching: { ...space.batching, now: drawCalls(space.scene) }, pixelRatio: renderer.getPixelRatio(), cutscene: flyover ? { t: flyover.path.t, duration: flyover.path.duration } : null }),
       /** touch input: the last joystick vector, pointers down, whether the stick is out; the layout in use */
       touch: () => ({ ...pointers.debug(), touchUi: overlay.touch, layout: overlay.screen }),
     },
