@@ -116,6 +116,14 @@
     "guide-reply": "回答：选一句",
     "guide-word": "点一个词看意思",
     "guide-go": "去{place}",
-    "guide-do": "{task}：点{npc}"
+    "guide-do": "{task}：点{npc}",
+    "way-step": "第{n}/{total}步",
+    "way-next": "下一步：{text}",
+    "way-take": "带我去",
+    "way-distance": "{name} · {m} 米",
+    "way-lost": "你的下一步：{text}",
+    "way-bed": "你的床",
+    "path-menu-on": "显示路线：开",
+    "path-menu-off": "显示路线：关"
   }
 }

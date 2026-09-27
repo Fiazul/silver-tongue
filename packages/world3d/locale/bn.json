@@ -116,6 +116,14 @@
     "guide-reply": "উত্তর দিন: একটা লাইন বাছুন",
     "guide-word": "অর্থ দেখতে একটা শব্দে ট্যাপ করুন",
     "guide-go": "{place}-এ যান",
-    "guide-do": "{task}: {npc}-কে ট্যাপ করুন"
+    "guide-do": "{task}: {npc}-কে ট্যাপ করুন",
+    "way-step": "ধাপ {n}/{total}",
+    "way-next": "এরপর: {text}",
+    "way-take": "আমাকে নিয়ে চলুন",
+    "way-distance": "{name} · {m} মি",
+    "way-lost": "আপনার পরের ধাপ: {text}",
+    "way-bed": "আপনার বিছানা",
+    "path-menu-on": "পথ দেখান: চালু",
+    "path-menu-off": "পথ দেখান: বন্ধ"
   }
 }

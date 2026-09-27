@@ -79,6 +79,16 @@ h2, h3 { font-family: var(--font-display); font-weight: 400; letter-spacing: 0.0
 .objective.new { animation: pop 0.4s ease-out; }
 .obj-text { font-weight: 600; }
 .obj-sub { font-size: 0.8rem; opacity: 0.8; }
+/* wayfinding's objective card (wayfind.ts): step n/N today, the next step greyed, "Take me there" */
+.obj-step { display: inline-block; margin-right: 0.45em; padding: 0 0.45em; border-radius: 999px; background: rgba(251, 243, 226, 0.18); color: var(--paper); font-size: 0.72rem; font-weight: 800; letter-spacing: 0.03em; vertical-align: 0.1em; white-space: nowrap; }
+.obj-next { font-size: 0.78rem; opacity: 0.55; }
+.hud .obj-go { pointer-events: auto !important; display: inline-block; margin-top: 0.3em; padding: 0.15em 0.65em; font-size: 0.8rem; background: var(--gold); color: var(--ink); box-shadow: var(--chip-lift); }
+.hud .obj-go:hover { background-color: #f0c465; }
+/* the screen-edge arrow at an off-screen target: a gold badge turned towards it, the name and distance under it */
+.way-edge { position: fixed; left: 0; top: 0; width: 0; height: 0; z-index: 4; pointer-events: none !important; will-change: transform; }
+.way-edge-arrow { position: absolute; left: -17px; top: -17px; width: 34px; height: 34px; border-radius: 50%; background: var(--gold); border: 2px solid var(--ink); box-shadow: var(--chip-lift); }
+.way-edge-arrow::after { content: ""; position: absolute; left: 12px; top: 7px; border-left: 13px solid var(--ink); border-top: 8px solid transparent; border-bottom: 8px solid transparent; }
+.way-edge-label { position: absolute; top: 21px; left: 0; transform: translateX(-50%); white-space: nowrap; background: rgba(29, 23, 20, 0.88); color: var(--paper); border-radius: 999px; padding: 0.05em 0.55em; font-size: 0.78rem; font-weight: 700; }
 .chip { background: var(--paper); border: var(--border); border-radius: 999px; padding: 0.15em 0.7em; font-size: 0.9rem; font-weight: 600; box-shadow: var(--chip-lift); }
 .chip.place { font-family: var(--font-display); font-weight: 400; letter-spacing: 0.02em; background: var(--lacquer); color: var(--paper); }
 .chip.wallet { font-weight: 700; }
@@ -155,6 +165,7 @@ rt { font-size: 0.45em; color: var(--accent); }
 .toast.place { font-weight: 700; font-size: 1.1rem; text-align: center; border-left: 0; }
 .toast.story { font-style: italic; }
 .toast.you { border-color: #2a6fb8; }
+.toast.guide { border-color: var(--gold); }
 
 /* scene list */
 .choices { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(92vw, 420px); background: var(--paper); border: var(--border); border-radius: var(--radius); padding: 0.9em; display: flex; flex-direction: column; gap: 10px; box-shadow: var(--lift); }
@@ -283,6 +294,11 @@ html:not(.touch) .action-btn { display: none !important; }
 .compact .objective { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.85rem; padding: 0.25em 0.6em; }
 .compact .obj-text, .compact .obj-sub { display: inline; font-size: inherit; }
 .compact .obj-sub::before { content: " · "; }
+.compact .objective { display: flex; align-items: center; gap: 0.4em; }
+.compact .obj-text { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.compact .obj-sub { flex: 0 1000 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.compact .obj-next { display: none; }
+.compact .hud .obj-go { flex: none; margin: 0; padding: 0 0.5em; font-size: 0.75rem; }
 .compact .toasts { left: var(--toasts-x); top: var(--toasts-y); width: var(--toasts-w); max-height: var(--toasts-h); overflow: hidden; transform: none; }
 .compact .bubble { max-width: var(--bubble-w); }
 .compact .bubble-line { font-size: 1.4rem; max-height: calc(var(--bubble-h) - 5.5em); overflow-y: auto; padding: 10px; margin: -10px; } /* the padding: room for the inline chips' 44 px hit areas inside the scroller */
