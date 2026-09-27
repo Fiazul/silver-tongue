@@ -113,6 +113,15 @@ const FALLBACK: Record<string, string> = {
   "guide-word": "Tap a word to see its meaning",
   "guide-go": "Go to {place}",
   "guide-do": "{task}: tap {npc}",
+  // wayfinding (wayfind.ts): the objective card, the screen-edge arrow, the reminder, Menu → Show path
+  "way-step": "Step {n}/{total}",
+  "way-next": "Next: {text}",
+  "way-take": "Take me there",
+  "way-distance": "{name} · {m} m",
+  "way-lost": "Your next step: {text}",
+  "way-bed": "Your bed",
+  "path-menu-on": "Show path: on",
+  "path-menu-off": "Show path: off",
 };
 
 /** The UI language the chrome can show: `ui` when locale/ has it, else English. */

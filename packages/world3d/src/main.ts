@@ -8,7 +8,10 @@
 // the touch joystick feed one MoveInput vector (input.ts); clicks and taps go through touch.ts.
 // Sound: word clips on the AudioPlayer, music / ambience / effects on the SoundMixer (audio.ts),
 // chosen every frame from the phase, the daylight, the space and the player's position. The
-// first-steps guide (guide.ts) drives the objective line and a 3D marker over its target.
+// first-steps guide (guide.ts) drives the objective line for the first minutes; wayfinding
+// (wayfind.ts, wayview.ts) keeps the objective's target in sight all game long: the 3D marker over
+// it (or the door on the way), the screen-edge arrow when it is off screen, the ground path, the
+// objective card's step n/N, next step and "Take me there", and a reminder when the player strays.
 import * as THREE from "three";
 import { cleanName, type CatalogEntry, type Course } from "@silver-tongue/core";
 import { decodeSave, encodeSave, sessionLines } from "@silver-tongue/tui";
@@ -50,6 +53,8 @@ import { Overlay } from "./ui/overlay";
 import type { Insets } from "./ui/viewport";
 import { AssetCache, drawCalls, SceneSpace, setOutlineScale } from "./world";
 import { GuideMarker } from "./marker";
+import { daySteps, edgeArrow, findPath, LostTimer, nextSteps, resolveTarget, type PathGrid, type WayTarget } from "./wayfind";
+import { EdgeArrowView, PathTrail, spaceGrid } from "./wayview";
 import type { WebSessions } from "@silver-tongue/tui-web/src/web-storage";
 
 /**
@@ -294,6 +299,24 @@ async function main() {
   let guide = new Guide(course);
   guide.hidden = prefs.guideHidden;
   let guideStep: GuideStep | null = null;
+  // Wayfinding: the objective's target here, the ground path to it, the screen-edge arrow, the reminder.
+  const trail = new PathTrail();
+  const edge = new EdgeArrowView();
+  uiRoot.append(edge.node);
+  const lost = new LostTimer();
+  const grids = new Map<string, PathGrid>();
+  let wayTarget: WayTarget | null = null;
+  let wayBusy = true;
+  let pathKey = "";
+  let pathClock = 0;
+  let pathDots = 0;
+  let stepsKey = "";
+  let steps: ReturnType<typeof nextSteps> = [];
+  /** "Take me there" on a target in this town: the camera glances at it for a moment */
+  let glance = 0;
+  /** the HUD's box (for the edge arrow to keep out of), measured with the path, not per frame */
+  let hudBox: DOMRect | null = null;
+  let hudClock = 0;
   const waterAt = waterDistance(LAYOUT.town.grid);
   const stride = new StrideClock(player.actor.strideM);
   const lastFoot = new THREE.Vector2(player.position.x, player.position.z);
@@ -328,9 +351,11 @@ async function main() {
     const next = spaces.get(id)!;
     // Through a door: it opens going in, and closes behind you coming out.
     if (door && next !== space && next.layout.interior !== space.layout.interior) sfx(next.layout.interior ? "door_open" : "door_close");
-    space.scene.remove(player.root, marker, guideMarker.root);
+    space.scene.remove(player.root, marker, guideMarker.root, trail.mesh);
     space = next;
-    space.scene.add(player.root, marker, guideMarker.root);
+    space.scene.add(player.root, marker, guideMarker.root, trail.mesh);
+    pathKey = "";
+    glance = 0;
     player.area = space.area;
     player.place(stand.pos[0], stand.pos[2], new THREE.Vector3(...stand.facing));
     lastFoot.set(stand.pos[0], stand.pos[2]);
@@ -411,11 +436,28 @@ async function main() {
     onSound: setSound,
     guide: {
       hidden: () => guide.hidden,
-      active: () => !!game && guide.active(game.core.state),
+      // Offered all game: past the first steps it still quiets wayfinding's "lost?" reminder.
+      active: () => !!game,
       setHidden: (on) => {
         guide.hidden = on;
         prefs.guideHidden = on;
         savePrefs(kv, prefs);
+      },
+    },
+    way: {
+      takeMeThere: () => {
+        const g = game?.model.objective.goal;
+        if (!game || !g || game.model.mode !== "explore" || transitioning) return;
+        // A travel-only place (warehouse, school, hospital): the Go to… list's fast travel there.
+        if (g.kind === "npc" && L.travelOnly(g.place) && game.core.state.place !== g.place) return game.enterPlace(g.place);
+        guideMarker.pulse();
+        glance = 1.6;
+      },
+      pathShown: () => !prefs.pathHidden,
+      setPathShown: (on) => {
+        prefs.pathHidden = !on;
+        savePrefs(kv, prefs);
+        pathKey = "";
       },
     },
     settings: {
@@ -733,7 +775,7 @@ async function main() {
     mixer.sfx(f.id, { rate: f.rate, gain: 0.55 });
   }
 
-  /** The guide's step (objective line) and its marker over the target NPC or door. */
+  /** The guide's step (objective line) for the first minutes; wayfinding's target, marker, card, path and reminder all game. */
   function updateGuide(dt: number) {
     guideStep = null;
     if (game && !flyover && !startOpen) {
@@ -742,16 +784,79 @@ async function main() {
       guideStep = guide.step(game.core.state, { scene: scene?.id, near }, game.t, game.s);
     }
     overlay.setGuide(guideStep);
-    const t = guideStep?.target;
-    let at: THREE.Vector3 | null = null;
-    if (t?.kind === "npc" && space.npcs.has(t.npc) && !game?.model.scene) {
-      const n = L.npcStand(t.npc).pos;
-      at = new THREE.Vector3(n[0], n[1], n[2]);
-    } else if (t?.kind === "place") {
-      const tr = L.space(nav.space).triggers.find((x) => x.place === t.place && (x.kind === "door" || x.kind === "stay" || x.kind === "zone"));
-      if (tr) at = new THREE.Vector3(tr.at[0], space.area.heightAt(tr.at[0], tr.at[2]), tr.at[2]);
-    }
+    updateWayfinding(dt);
+  }
+
+  /**
+   * The objective's target in this space (wayfind.ts resolveTarget; the guide's steps point at the
+   * same one): the marker over it, the card's step n/N and next step, the ground path (2x a second,
+   * or at once on a new target), the "lost?" reminder. Nothing during the fly-over, a scene, a
+   * dialog or a space change.
+   */
+  function updateWayfinding(dt: number) {
+    const st = game?.core.state;
+    wayBusy = !game || !st || !!flyover || startOpen || transitioning || overlay.blocking || game.model.mode !== "explore" || !!st.run;
+    const o = game?.model.objective;
+    wayTarget = !wayBusy && st ? resolveTarget(L, o?.goal, nav.space, st.place) : null;
+    const at = wayTarget ? new THREE.Vector3(...wayTarget.at) : null;
     guideMarker.update(dt, at);
+    // The card: step n/N today, the next step (recomputed when core state moves), Take me there.
+    if (game && st) {
+      const key = `${st.log.length}|${st.place}|${st.slot}|${st.day}|${st.run?.scene ?? ""}|${st.player ?? ""}|${game.model.objective.text}`;
+      if (key !== stepsKey) {
+        stepsKey = key;
+        steps = nextSteps(course, st, game.t, game.s, course.needsName);
+      }
+      overlay.setWay({ step: daySteps(course, st), next: steps[1]?.text, take: !!o?.goal && game.model.mode === "explore" && !st.run });
+    } else overlay.setWay(null);
+    const dist = wayTarget ? flat(player.position, wayTarget.at) : null;
+    if (game && o && lost.update(dt, dist, wayBusy) && !guide.hidden) overlay.notify(game.s("way-lost", { text: o.text }));
+    if (!wayTarget) {
+      trail.hide();
+      edge.update(null, "");
+      pathKey = "";
+      return;
+    }
+    hudClock -= dt;
+    if (hudClock <= 0) {
+      hudClock = 0.5;
+      hudBox = overlay.hudRect();
+    }
+    // The ground path: not within 3 m of where it ends (a door across the room needs none).
+    const walkDist = Math.hypot(player.position.x - wayTarget.walk[0], player.position.z - wayTarget.walk[1]);
+    if (prefs.pathHidden || walkDist < 3) {
+      trail.hide();
+      pathDots = 0;
+      return;
+    }
+    pathClock -= dt;
+    const key = `${nav.space}|${wayTarget.kind}|${wayTarget.ref}`;
+    if (key === pathKey && pathClock > 0) return;
+    pathKey = key;
+    pathClock = 0.5;
+    let grid = grids.get(space.id);
+    if (!grid) grids.set(space.id, (grid = spaceGrid(space)));
+    const path = findPath(grid, [player.position.x, player.position.z], wayTarget.walk);
+    trail.set(path, (x, z) => space.area.heightAt(x, z));
+    pathDots = trail.mesh.visible ? trail.mesh.geometry.drawRange.count / 6 : 0;
+  }
+
+  const clip = new THREE.Vector4();
+  /** The screen-edge arrow at the target when it is off screen (one projection a frame; transforms only). */
+  function updateEdge() {
+    if (!wayTarget || wayBusy || !game) return edge.update(null, "");
+    const [x, y, z] = wayTarget.at;
+    clip.set(x, y + 1.2, z, 1).applyMatrix4(rig.camera.matrixWorldInverse).applyMatrix4(rig.camera.projectionMatrix);
+    const view = { w: window.innerWidth, h: window.innerHeight };
+    const safe = overlay.screen.safe;
+    const pad = 46;
+    const inset = { top: safe.y + pad, left: safe.x + pad, right: view.w - safe.x - safe.w + pad, bottom: view.h - safe.y - safe.h + pad + 18 };
+    let a = edgeArrow(clip, view, inset);
+    // Under the HUD card: along the same line, below it.
+    if (!a.onScreen && hudBox && a.x < hudBox.right + 24 && a.y < hudBox.bottom + 24) a = edgeArrow(clip, view, { ...inset, top: Math.max(inset.top, hudBox.bottom + 30) });
+    const t = wayTarget;
+    const name = t.kind === "npc" ? game.npcName(t.ref) : t.kind === "bed" ? game.s("way-bed") : game.t(`place-${t.ref}`);
+    edge.update(a, game.s("way-distance", { name, m: Math.round(flat(player.position, t.at)) }));
   }
 
   renderer.setAnimationLoop(() => {
@@ -822,7 +927,13 @@ async function main() {
       const n = L.npcStand(sceneNpc).pos;
       focus.set((focus.x + n[0]) / 2, (focus.y + n[1]) / 2, (focus.z + n[2]) / 2);
     }
+    // "Take me there": a short glance at the target (walking takes the camera back at once).
+    if (glance > 0) {
+      glance = move.active || !wayTarget || sceneNpc ? 0 : glance - dt;
+      if (glance > 0 && wayTarget) focus.set(...wayTarget.at);
+    }
     rig.update(dt, focus, !!sceneNpc);
+    updateEdge();
 
     // Speech bubble on the speaker's head: a scene started from the topic picker (or any NPC the
     // current space doesn't have, e.g. mid space-swap) can leave the actor lookup empty for a frame
@@ -910,6 +1021,16 @@ async function main() {
       sfx: (id: string) => mixer.sfx(id),
       /** the first-steps guide's step (null: none / over / hidden) */
       guide: () => (guideStep ? { id: guideStep.id, text: guideStep.text, target: guideStep.target } : null),
+      /** wayfinding: the target here (null: none / busy), the objective's kind and the next steps, today's step, the path's dots, the edge arrow shown, its draw calls */
+      wayfinding: () => ({
+        target: wayTarget,
+        kind: game?.model.objective.kind ?? null,
+        steps: steps.map((x) => x.text),
+        day: game ? daySteps(course, game.core.state) : null,
+        pathDots: trail.mesh.visible ? pathDots : 0,
+        edge: !edge.node.classList.contains("hidden") ? edge.node.textContent : null,
+        calls: drawCalls(guideMarker.root) + drawCalls(trail.mesh),
+      }),
       /** the start flow is on screen */
       starting: () => startOpen,
     },

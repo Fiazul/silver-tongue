@@ -4,14 +4,15 @@
 // prompt, for thumbs) and the menu (games, export, import, new game). Phone geometry comes from
 // ui/viewport.ts (layout()). No text is drawn in WebGL. It renders the UiModel from game.ts and turns taps
 // into Game calls; it keeps no game state of its own. Also: the first-steps guide's line in the HUD
-// and its one-off highlights (guide.ts), Menu → Settings, and a tap sound for every button (the sfx
-// hook: `data-sfx` on a button names another effect, "none" none).
+// and its one-off highlights (guide.ts), wayfinding's objective card, reminder toast and Menu →
+// Show path (wayfind.ts), Menu → Settings, and a tap sound for every button (the sfx hook:
+// `data-sfx` on a button names another effect, "none" none).
 import type { Course, RenderedLine, WordId } from "@silver-tongue/core";
 import type { DayCard, FeedItem, Game, Gloss, UiModel } from "../game";
 import type { GuideStep } from "../guide";
 import { BubbleView } from "./bubble";
 import { el } from "./dom";
-import { HudView } from "./hud";
+import { HudView, type WayCard } from "./hud";
 import { notebookNodes } from "./notebook";
 import { RepliesView } from "./replies";
 import { clampBox, layoutVars, NO_INSETS, screenLayout, type Insets, type Rect, type ScreenLayout } from "./viewport";
@@ -39,6 +40,8 @@ export interface OverlayHooks {
   settings?: SettingsHooks;
   /** Menu → Hide / Show guide */
   guide?: { hidden(): boolean; active(): boolean; setHidden(on: boolean): void };
+  /** wayfinding (wayfind.ts): the objective card's "Take me there", Menu → Show path */
+  way?: { takeMeThere(): void; pathShown(): boolean; setPathShown(on: boolean): void };
 }
 
 export interface SettingsView {
@@ -125,13 +128,34 @@ export class Overlay {
   lang = "";
   private guideStep: GuideStep | null = null;
   private highlighted = new Set<string>();
+  private way: WayCard | null = null;
+  private wayKey = "null";
+
+  /** Wayfinding's part of the objective card (main.ts, every frame; re-rendered on a change only). */
+  setWay(card: WayCard | null) {
+    const key = JSON.stringify(card);
+    if (key === this.wayKey) return;
+    this.wayKey = key;
+    this.way = card;
+    if (this.game) this.hud.render(this.game.model.hud, this.game.model.objective, this.guideStep, card);
+  }
+
+  /** The HUD's box on screen (the edge arrow keeps out of it; main.ts measures it twice a second, not per frame). */
+  hudRect(): DOMRect | null {
+    return this.hud?.node.getBoundingClientRect() ?? null;
+  }
+
+  /** A toast of our own (wayfinding's "lost?" reminder), as the feed's. */
+  notify(text: string, tone = "guide") {
+    this.toast(text, tone);
+  }
 
   /** The guide's current step (main.ts, every frame): the HUD line, and its highlight the first time it can show. */
   setGuide(step: GuideStep | null) {
     const changed = (step?.text ?? null) !== (this.guideStep?.text ?? null);
     this.guideStep = step;
     if (!this.game) return;
-    if (changed) this.hud.render(this.game.model.hud, this.game.model.objective, step);
+    if (changed) this.hud.render(this.game.model.hud, this.game.model.objective, step, this.way);
     this.guideHighlight();
   }
 
@@ -182,7 +206,7 @@ export class Overlay {
     this.hud?.node.remove();
     this.bubble?.node.remove();
     this.replies?.node.remove();
-    this.hud = new HudView(s, t, (on) => this.toggleSound(on));
+    this.hud = new HudView(s, t, (on) => this.toggleSound(on), () => this.hooks.way?.takeMeThere());
     const sfx = (id: string) => this.hooks.sfx?.(id);
     this.bubble = new BubbleView(this.course, s, {
       onWord: (w, at) => this.lookUp(w, at),
@@ -244,7 +268,7 @@ export class Overlay {
   }
 
   render(m: UiModel) {
-    this.hud.render(m.hud, m.objective, this.guideStep);
+    this.hud.render(m.hud, m.objective, this.guideStep, this.way);
     this.bubble.render(m.bubble);
     this.replies.render(m.reply);
     this.renderChoices(m);
@@ -337,17 +361,21 @@ export class Overlay {
       if (f.seq <= this.seenFeed) continue;
       this.seenFeed = f.seq;
       if (f.tone === "place") continue; // the banner shows where you are
-      const node = el("div", { className: `toast ${f.tone}` });
-      // "Title\nbody" (mentor notes): bold title, then the body.
-      const [head, ...body] = f.text.split("\n");
-      if (body.length) node.append(el("b", { textContent: head }), ...body.map((p) => el("div", { textContent: p })));
-      else node.textContent = head;
-      this.toasts.append(node);
-      const ms = 2600 + f.text.length * (f.tone === "story" || f.tone === "note" ? 55 : 30);
-      setTimeout(() => node.classList.add("out"), ms);
-      setTimeout(() => node.remove(), ms + 600);
-      while (this.toasts.children.length > 5) this.toasts.firstElementChild?.remove();
+      this.toast(f.text, f.tone);
     }
+  }
+
+  private toast(text: string, tone: string) {
+    const node = el("div", { className: `toast ${tone}` });
+    // "Title\nbody" (mentor notes): bold title, then the body.
+    const [head, ...body] = text.split("\n");
+    if (body.length) node.append(el("b", { textContent: head }), ...body.map((p) => el("div", { textContent: p })));
+    else node.textContent = head;
+    this.toasts.append(node);
+    const ms = 2600 + text.length * (tone === "story" || tone === "note" ? 55 : 30);
+    setTimeout(() => node.classList.add("out"), ms);
+    setTimeout(() => node.remove(), ms + 600);
+    while (this.toasts.children.length > 5) this.toasts.firstElementChild?.remove();
   }
 
   /** "+¥5" / "−¥2" floating up from the wallet chip; shopping and a delivery's wages say so under it. */
@@ -504,8 +532,21 @@ export class Overlay {
               }),
             ]
           : []),
+        ...(this.hooks.way ? [pathToggle()] : []),
         button(s("help"), () => body.replaceChildren(el("p", { textContent: s("walk-hint") }), button(s("cancel"), home, "secondary"))),
       );
+    /** Show path: on / off (wayfinding's ground path hint); relabels itself. */
+    const pathToggle = () => {
+      const way = this.hooks.way!;
+      const label = () => s(way.pathShown() ? "path-menu-on" : "path-menu-off");
+      const b = button(label(), () => {
+        way.setPathShown(!way.pathShown());
+        b.textContent = label();
+        b.setAttribute("aria-pressed", String(way.pathShown()));
+      }, "path");
+      b.setAttribute("aria-pressed", String(way.pathShown()));
+      return b;
+    };
     /** Sound on / off (setSound, and the music and effects), as the HUD chip; relabels itself. */
     const sound = () => {
       // With the mixer (main.ts) the setting is the prefs' sound; without it, core's (the HUD chip's).

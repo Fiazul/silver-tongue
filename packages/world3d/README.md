@@ -354,6 +354,7 @@ case).
 | tui-web Games (resume) | Menu → Games | none |
 | tui-web Export / Import | Menu → Export (copy the `st1:` line) / Import (paste one; added as a new game) | none |
 | status line (day, slot, wallet, rank, rent due) | HUD chips + the objective line's rent timer | none |
+| the menu lists what can be done where (the player picks a place, then a scene) | wayfinding: the objective card (step n/N today, the objective, the next step, "Take me there"), the gold marker over the target or the door on the way, the screen-edge arrow with name and distance, the ground path; Menu → Show path, Menu → Hide guide quiets the reminder | none |
 | status line "· parcel", menu "You have a parcel to deliver." | parcel chip naming where it goes, the objective line, the bag in the player's hands (carry clips) | none |
 | menu "<npc>: <scene> · needs ¥N" (a scene waiting for money) | the same line as a toast on talking to that NPC; a reply's price in the reply panel | none |
 | start list "Choose a course" (several courses, none remembered) | the start flow's "I speak…" / "I want to learn…" cards (`src/start/flow.ts`), while the town loads underneath; a returning player with a save skips it | none |
@@ -566,7 +567,56 @@ floats over its target:
 
 Then the normal objective line takes over (a story scene away from the start place done, or day 2).
 The brief's "Eat" step is the noodle shop's first scene: the course has no eating scene (food is
-taken at night). Menu → Hide guide / Show guide (remembered). Strings in en / bn / zh.
+taken at night). Menu → Hide guide / Show guide (remembered). Strings in en / bn / zh. After it,
+wayfinding keeps the marker going (next section).
+
+## Wayfinding
+
+The player always has one current objective (`src/objective.ts`, now tagged with its `kind` and a
+`goal`: an NPC at their place, or the bed at home) and the world points at it, on and off screen,
+outdoors and indoors, from the first minute to the end of the course. The first-steps guide's
+steps point at the same target and hand over to it. No core inputs or state. `src/wayfind.ts` (pure,
+`test/wayfind.test.ts`) and `src/wayview.ts` (three.js / DOM), wired in `main.ts`.
+
+| objective kind (objective.ts) | line | target rule (resolveTarget) | marker / edge arrow / path |
+| --- | --- | --- | --- |
+| name | Tell them your name | none (the name dialog) | hidden |
+| scene | Talking with <npc> | none (dialogue) | hidden |
+| story | <task>: talk to <npc> / Go to <place> and find <npc> | the NPC in this space (a travel-only place's NPC stands in the town: them); else their place: the door in this space on the way there (spaces nest: town > interior > inner room), else this interior's way out | shown |
+| deliver | Deliver the parcel (to <npc>) | the drop-off's NPC, as story | shown |
+| mentor | Ask <npc> about the language (Go to …) | the mentor NPC, as story | shown |
+| work | Earn money: <task> with <npc> (the paid shifts; buying at the shop is a scene) | the scene's NPC, as story | shown |
+| practice | <task>: talk to <npc> | the scene's NPC, as story | shown |
+| sleep | Out of time today: sleep in your bed | the bed (at home) | shown |
+| go-home | Out of time today: go home to <place> and sleep | home's door on the way (the way out first from another interior) | shown |
+| rest | Nothing more today: sleep / go home | the bed at home, else home's door on the way | shown |
+| (rent due / tonight / late) | the card's sub-line | a reminder, no target of its own: rent is taken at night, so the bed covers it | the objective's |
+| (day end) | the day card | none: a dialog is open | hidden |
+
+- **Marker**: the toon arrow + ring (`src/marker.ts`), over the target, or over the door / way out
+  when it is elsewhere; in every space. Arrow and ring are one geometry (two draw calls: body and
+  ink hull; it was six).
+- **Screen-edge arrow** (`EdgeArrowView`): when the target is off screen, a gold badge on the
+  screen edge along the line from the centre, turned towards it, with "<name> · <n> m". One
+  projection a frame from clip space (a point behind the camera keeps its side); only transforms
+  change per frame; the HUD's box (measured twice a second) is kept clear.
+- **Ground path** (`PathTrail`): A* (8-neighbour, no corner cutting) on the space's walk grid: the
+  town's 1 m grid, classes 1..5 (grass 1.6, pad 1.2, path / plaza / bridge 1; decks count as
+  bridge), blockers out; an interior's floor at 0.4 m. Breadcrumb dots every 0.8 m, fading from
+  14 m to 40 m along the way, one merged mesh (one draw call). Rebuilt twice a second or on a new
+  target; not drawn within 3 m of where it ends (the door across the room). Menu → Show path (on
+  by default, remembered in `prefs.ts`).
+- **Objective card** (`ui/hud.ts`): step n/N today (one per slot, then the evening), the objective,
+  "Next: …" greyed (`nextSteps`: the objective resolver run again on the state projected as if this
+  step were done), and "Take me there": a travel-only place (warehouse, school, hospital) goes there
+  as the Go to… list does; else the marker pulses and the camera glances at it.
+- **Never lost**: over 40 m from the target for 20 s with nothing else on, a toast repeats the
+  objective, at most once a minute. Menu → Hide guide quiets it (the menu offers it all game).
+- Nothing shows during the fly-over, a scene, a dialog (lists, menu, notebook, day card) or a
+  space change. `window.world3d.wayfinding()` reads the target, the steps, the path's dots, the
+  edge arrow's label and the draw calls.
+- Draw calls: marker 2 + path 1 = 3 while shown (`window.world3d.info().calls`); the guide's
+  marker alone drew 6 before.
 
 ## Tests (DOM-free, `npm test`)
 
@@ -610,6 +660,11 @@ taken at night). Menu → Hide guide / Show guide (remembered). Strings in en / 
   tables naming only English keys with the same slots.
 - `test/guide.test.ts`: the guide's steps from a scripted new game (walk → talk → reply → word →
   Wang's next scenes → go to the noodle shop → its scene → handed over), hidden, day 2.
+- `test/wayfind.test.ts`: every objective kind resolved to a target in the player's space (real
+  course and layout; a fixture layout for the space chain), every NPC reachable from every space,
+  the next steps and step n/N, A* on small grids (finds, prefers paths, avoids blockers, no corner
+  cutting, no way → null, snapping), the edge arrow's maths (behind the camera too), the reminder's
+  timing, the objective card's DOM, the strings in bn / zh, the draw calls (3).
 - `test/sound.test.ts`: the buses' pure choices: format by `canPlayType`, music by phase /
   daylight / interior, ambience by the real town's water distance / daylight / zone, footstep
   surfaces on the real grid and decks, the stride clock, event effects; the vendored manifest; prefs.

@@ -169,8 +169,8 @@ describe("prefs", () => {
     const data = new Map<string, string>();
     const kv = { getItem: (k: string) => data.get(k) ?? null, setItem: (k: string, v: string) => void data.set(k, v), removeItem: (k: string) => void data.delete(k), keys: () => [...data.keys()] };
     expect(loadPrefs(kv)).toEqual(DEFAULT_PREFS);
-    savePrefs(kv, { sound: false, music: 0.3, guideHidden: true });
-    expect(loadPrefs(kv)).toEqual({ sound: false, music: 0.3, guideHidden: true });
+    savePrefs(kv, { sound: false, music: 0.3, guideHidden: true, pathHidden: true });
+    expect(loadPrefs(kv)).toEqual({ sound: false, music: 0.3, guideHidden: true, pathHidden: true });
     expect([...data.keys()]).toEqual([PREFS_KEY]);
     data.set(PREFS_KEY, '{"music": 7, "sound": "x"}');
     expect(loadPrefs(kv)).toEqual(DEFAULT_PREFS);
