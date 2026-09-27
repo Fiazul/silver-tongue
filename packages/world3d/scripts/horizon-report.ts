@@ -11,7 +11,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
 import { CAMERA } from "../src/camera";
-import { bearingOf, cloudExposure, edgeExposure, flyoverViews, HORIZON, moveClouds, playFov, rigView, rimCells, SCREENS, type Backdrop, type View } from "../src/horizon";
+import { bearingOf, buildCountryside, cloudExposure, discStep, edgeExposure, flyoverViews, groundColour, hazeColour, HORIZON, meanColour, moveClouds, playFov, rigView, rimCells, ringOpen, ringOpenInView, SCREENS, skirtGeometry, Surface, type Backdrop, type Haze, type Part, type View } from "../src/horizon";
 import { LAYOUT, type Vec3 } from "../src/layout";
 
 const ASSETS = process.env.WORLD3D_ASSETS ?? join(import.meta.dirname, "..", "assets");
@@ -181,3 +181,82 @@ slots.forEach((s, k) => {
   const list = (n: Set<string>) => (n.size ? `${n.size}: ${[...n].slice(0, 4).join("; ")}${n.size > 4 ? " ..." : ""}` : "none");
   console.log(`| ${k} | (${s.join(", ")}) | (${t.join(", ")}) | ${f1(Math.hypot(t[0], t[2]))} / ${t[1]} | ${list(b.names)} | ${list(a.names)} | ${f1(b.nearest)} -> ${f1(a.nearest)} |`);
 });
+
+// ---------------------------------------------------------------------------------------------
+// C. The countryside (horizon.ts buildCountryside): the ramp's colours, the hills, the disc check
+// ---------------------------------------------------------------------------------------------
+async function parts(name: string, rotY = 0, scale = 1): Promise<Part[]> {
+  const root = await load(name);
+  root.rotation.y = rotY;
+  root.scale.setScalar(scale);
+  root.updateMatrixWorld(true);
+  const out: Part[] = [];
+  root.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    const mat = m.material as THREE.MeshStandardMaterial;
+    out.push({ geometry: m.geometry, matrix: m.matrixWorld.clone(), colour: mat.color.clone(), material: mat.name });
+  });
+  return out;
+}
+const hex = (c: THREE.Color) => `#${c.getHexString().toUpperCase()}`;
+const apronParts = await parts("ground_apron");
+const terrainParts = await parts("terrain_town");
+const hillParts = await parts("hills_ring");
+const echo = HORIZON.mountainEcho;
+const cs = buildCountryside({
+  apron: apronParts,
+  mountains: [...(await parts(echo.asset)), ...(await parts(echo.asset, (echo.rotYDeg * Math.PI) / 180, echo.scale))],
+  hillsRing: hillParts,
+  hillTops: (index.assets.find((a) => a.name === "hills_ring")?.anchors?.hill_tops ?? []) as Vec3[],
+  tree: await parts(HORIZON.countryside.trees.asset),
+  views: flyoverViews(town.camera.keys, 16 / 9, 1, 24),
+});
+const skyParts = await parts(town.sky ?? "sky_dome");
+const haze: Haze = { colour: hazeColour(skyParts.map((p) => p.colour))!, near: town.fog.near, far: town.fog.far };
+const plateauHills = meanColour([...terrainParts, ...hillParts], (p) => {
+  const r = Math.hypot(p.x, p.z);
+  return r > 63 && r < 140; // what is seen round the ring from above
+});
+console.log("\n## C. Countryside\n");
+console.log(`- ramp: near ${hex(cs.palette.near)} (the apron's faces inside r ${HORIZON.countryside.inner}: the plateau's grass_hill), far ${hex(cs.palette.far)} (its faces past r ${HORIZON.countryside.full}: grass_far); haze ${hex(haze.colour)}`);
+console.log(`- measured for comparison: plateau + hills seen from above in r 63-140 (area-weighted, all materials) ${hex(plateauHills)}`);
+console.log(`- ground colour by radius: ${[99, 140, 165, 200, 250, 300, 350, 400, 760].map((r) => `${r} m ${hex(groundColour(r, cs.palette))}`).join(", ")}`);
+const sc = cs.hills.map((h) => h.scale);
+const hr = cs.hills.map((h) => Math.hypot(h.x, h.z));
+console.log(`- hills: ${cs.hills.length} (mounds ${cs.mounds.map((m) => `r ${m.radius.toFixed(0)} h ${m.height.toFixed(0)}`).join("; ")}), scale ${Math.min(...sc).toFixed(2)}-${Math.max(...sc).toFixed(2)}, centres r ${Math.min(...hr).toFixed(0)}-${Math.max(...hr).toFixed(0)} m, footprints from r ${Math.min(...cs.hills.map((h) => Math.hypot(h.x, h.z) - h.radius)).toFixed(0)} m`);
+console.log(`- trees: ${cs.trees.length} ${HORIZON.countryside.trees.asset} in ${HORIZON.countryside.trees.clumps} clumps; scatter ${(cs.scatter.index?.count ?? 0) / 3} triangles; apron ${apronParts.map((p) => (p.geometry.index?.count ?? 0) / 3).join("+")} -> ${cs.apron.map((g) => (g.index?.count ?? 0) / 3).join("+")} triangles`);
+console.log(`- shape: the ring (r ${HORIZON.shape.r}) with no extra hill within ${HORIZON.shape.within} m: before ${(ringOpen([]) * 100).toFixed(0)} %, after ${(ringOpen(cs.hills) * 100).toFixed(1)} % (limit ${HORIZON.shape.maxOpen * 100} %)`);
+const white = new THREE.Color(1, 1, 1);
+const groundBefore = new Surface([...terrainParts, ...apronParts, { geometry: skirtGeometry(), matrix: new THREE.Matrix4(), colour: cs.palette.far }]);
+const groundAfter = new Surface([...terrainParts, ...cs.ground.map((p) => ({ ...p, colour: white }))]);
+const pct = (x: number | null) => (x === null ? "-" : `${(x * 100).toFixed(0)} %`);
+console.log(`\n### Disc: the largest colour step (sRGB 0-255, any channel / luma, after the haze) between neighbouring 2 m ground samples in r ${HORIZON.disc.band.join("-")} m (discStep); limit ${(HORIZON.disc.maxStep * 255).toFixed(1)}; n/v: the band is not in any of the group's frames\n`);
+console.log("| view group | views | before: worst step / luma | after: worst step / luma | after: views over | ring in frame with no hill near (worst view) |");
+console.log("| --- | ---: | ---: | ---: | ---: | ---: |");
+for (const g of groups) {
+  const vs = views.filter((x) => x.group === g).map((x) => x.v);
+  const b = vs.map((v) => discStep(v, groundBefore, haze));
+  const a = vs.map((v) => discStep(v, groundAfter, haze));
+  const w = (rs: typeof b, k: "step" | "luma") => (rs.some((r) => r.pairs) ? (Math.max(...rs.map((r) => r[k])) * 255).toFixed(1) : "n/v");
+  const over = a.filter((r) => r.step > HORIZON.disc.maxStep).length;
+  const shapes = vs.map((v) => ringOpenInView(v, cs.hills)).filter((x): x is number => x !== null);
+  console.log(`| ${g} | ${vs.length} | ${w(b, "step")} / ${w(b, "luma")} | ${w(a, "step")} / ${w(a, "luma")} | ${over} | ${shapes.length ? pct(Math.max(...shapes)) : "-"} |`);
+}
+console.log("\n### Per view (desktop; phone portrait in brackets)\n");
+console.log("| view | before step | after step | ring in frame open, before -> after |");
+console.log("| --- | ---: | ---: | --- |");
+const portrait = SCREENS.find((s) => s.name === "phone-portrait")!;
+const pick: { name: string; at: (aspect: number, fovScale: number) => View }[] = [
+  ...[0, 1, 2, 2.8, 3.9, 5].map((t) => ({ name: `fly-over t=${t}`, at: (aspect: number, k: number) => flyoverViews(town.camera.keys, aspect, k, 24).reduce((best, v) => (Math.abs(Number(v.name.slice(2)) - t) < Math.abs(Number(best.name.slice(2)) - t) ? v : best)) })),
+  ...rim.filter((_, i) => i % 6 === 0).map((c) => ({ name: `rim ${c.bearing.toFixed(0)}° (${c.x}, ${c.z})`, at: (aspect: number, k: number) => rigView("rim", [c.x, c.y, c.z], rig, CAMERA.fovDeg * k, aspect) })),
+];
+for (const p of pick) {
+  const d = p.at(16 / 9, 1);
+  const ph = p.at(portrait.aspect, playFov(CAMERA.fovDeg, portrait.aspect) / CAMERA.fovDeg);
+  const st = (v: View, gnd: Surface) => {
+    const r = discStep(v, gnd, haze);
+    return r.pairs ? (r.step * 255).toFixed(1) : "band not in view";
+  };
+  console.log(`| ${p.name} | ${st(d, groundBefore)} (${st(ph, groundBefore)}) | ${st(d, groundAfter)} (${st(ph, groundAfter)}) | ${pct(ringOpenInView(d, []))} -> ${pct(ringOpenInView(d, cs.hills))} (${pct(ringOpenInView(ph, []))} -> ${pct(ringOpenInView(ph, cs.hills))}) |`);
+}

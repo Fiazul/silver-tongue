@@ -303,6 +303,8 @@ export interface TownLook {
   sky?: string;
   sun: TownLayout["sun"];
   fog: TownLayout["fog"];
+  /** the fly-over's keys (town.json camera): the countryside keeps out of its sight lines */
+  flyover: CameraKey[];
 }
 
 /** One scene space, normalised: the town and every interior go through this shape. */
@@ -685,7 +687,7 @@ export class LayoutIndex {
       bounds: t.bounds,
       surfaces: this.surfacesOf(STREET),
       blockers: t.blockers.map(orientedBlocker),
-      town: { landscape: t.landscape, sky: t.sky, sun: t.sun, fog: t.fog },
+      town: { landscape: t.landscape, sky: t.sky, sun: t.sun, fog: t.fog, flyover: t.camera.keys },
       pieces: t.buildings.map((b) => this.building(b.id)),
       tiles: [],
       ground: [],

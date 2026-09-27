@@ -802,7 +802,13 @@ describe("see-through: whatever hides the player (or the NPC in a scene) is cut 
     expect(count.get(SEE_NEVER)).toBeGreaterThan(0);
     // what each root is tagged: the landscape, the plaza disc, the far edge never; buildings, lamps, the arch by the hole
     const tagOf = (name: string) => (street.scene.getObjectByName(name)!.userData.see as { tag: number }).tag;
-    for (const g of ["terrain_town", "lake", "canal_water", "canal_banks", "plaza_round", "horizon_skirt"]) expect(tagOf(g), g).toBe(SEE_NEVER);
+    for (const g of ["terrain_town", "lake", "canal_water", "canal_banks", "plaza_round", "horizon_skirt", "ground_apron", "hills_ring", "mountains_far", "mountains_far_echo", "countryside"]) expect(tagOf(g), g).toBe(SEE_NEVER);
+    // the countryside (horizon.ts): the apron, the skirt, both mountain rings, the hills and trees in one vertex-coloured batch, never cut
+    const vc = street.scene.children.filter((c) => c.name === "batch:vertex_colours") as THREE.Mesh[];
+    expect(vc.length).toBe(1);
+    expect(new Set(vc[0].geometry.getAttribute(SEE_ATTR).array as Float32Array)).toEqual(new Set([SEE_NEVER]));
+    expect(street.countryside).toMatchObject({ near: "#78a152", far: "#93af86" });
+    expect(street.countryside!.hills).toBeGreaterThanOrEqual(24);
     for (const h of ["tea_house", "pavilion", "street_lamp", "bridge_stone_arch", "noodle_shop", "willow"]) expect(tagOf(h), h).toBe(SEE_HOLE);
     // every static mesh drawn with a patched material carries the tag; what isn't patched
     const actorRoots = new Set<THREE.Object3D>([...street.npcs.values()].map((v) => v.actor.root).concat(street.walkers.map((w) => w.actor.root), street.extras.map((a) => a.root), street.scatterers.map((s) => s.actor.root)));
@@ -838,7 +844,7 @@ describe("see-through: whatever hides the player (or the NPC in a scene) is cut 
     const hullBatch = street.scene.children.find((c) => c.userData.outline && (c as THREE.Mesh).isMesh) as THREE.Mesh;
     expect(isSeeThrough(hullBatch.material as THREE.Material)).toBe(true);
     expect((hullBatch.material as THREE.ShaderMaterial).fragmentShader).toContain("stSeeThrough();");
-    // draw calls: the same as before the see-through (0.13 at 17485a1: street 123, tea house 19)
+    // draw calls: no more than before the see-through (0.13 at 17485a1: street 123, tea house 19; the countryside: 119)
     console.log(`see-through draw calls: street ${street.batching.before} -> ${street.batching.after}, tea_house ${tea.batching.before} -> ${tea.batching.after}`);
     expect(street.batching.after).toBeLessThanOrEqual(123);
     expect(tea.batching.after).toBeLessThanOrEqual(19);

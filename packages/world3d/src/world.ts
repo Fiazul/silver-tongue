@@ -8,7 +8,7 @@ import { mergeGeometries, mergeVertices } from "three/examples/jsm/utils/BufferG
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { CharacterActor, type ActorOptions } from "./actor";
 import { turnToward } from "./anim";
-import { HORIZON, moveClouds, skirtGeometry } from "./horizon";
+import { buildCountryside, flyoverViews, hazeColour, HORIZON, moveClouds, type Part } from "./horizon";
 import { CANOPIES, markSeeThrough, patchSeeThrough, seeAttribute, SEE_ATTR, SEE_FRAG, SEE_FRAG_PARS, SEE_HOLE, SEE_NEVER, SEE_VERT, SEE_VERT_PARS, SEE_THROUGH, seeSpecFor, seeUniforms, type Canopy, type SeeSpec } from "./seethrough";
 import { figureId } from "./barks";
 import { CHARACTER_KINDS, type LoadEvent } from "./loading";
@@ -824,16 +824,11 @@ export class SceneSpace {
   /**
    * The town's far edge (horizon.ts): a skirt of the apron's far grass out past the haze, a cap on
    * every open end where two landscape pieces meet at different heights, and mountains_far again,
-   * turned, where the first ring leaves the horizon open. All static: batched with the rest.
+   * turned, where the first ring leaves the horizon open; then the countryside over all of it. All
+   * static: batched with the rest.
    */
   private async addHorizon(statics: THREE.Object3D[]) {
     const town = this.layout.town!;
-    // the skirt in the apron's own far-grass colour (the same palette key: one toon material, one batch)
-    const skirt = new THREE.Mesh(skirtGeometry(), this.assets.toon.material(new THREE.MeshStandardMaterial({ color: HORIZON.skirt.colour })));
-    skirt.name = "horizon_skirt";
-    skirt.userData.see = { tag: SEE_NEVER } satisfies SeeSpec;
-    this.scene.add(skirt);
-    statics.push(skirt);
     for (const c of HORIZON.caps) {
       const w = Math.hypot(c.to[0] - c.from[0], c.to[2] - c.from[2]);
       const h = c.to[1] - c.from[1];
@@ -855,7 +850,72 @@ export class SceneSpace {
       this.scene.add(o);
       statics.push(o);
     }
+    await this.addCountryside(statics);
   }
+
+  /**
+   * The countryside (horizon.ts buildCountryside): the apron, the skirt and both mountain rings
+   * recoloured by one radial ramp from the plateau's grass to the apron's far grass (vertex
+   * colours), and hills_ring's mounds and willow clumps scattered over the plain. All of it in one
+   * vertex-coloured toon material: one batch, never cut by the see-through.
+   */
+  private async addCountryside(statics: THREE.Object3D[]) {
+    const town = this.layout.town!;
+    const { scene } = this;
+    scene.updateMatrixWorld(true);
+    const meshes = (root: THREE.Object3D | undefined) => {
+      const out: THREE.Mesh[] = [];
+      root?.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (m.isMesh && !m.userData.outline && !Array.isArray(m.material)) out.push(m);
+      });
+      return out;
+    };
+    const part = (m: THREE.Mesh): Part => ({ geometry: m.geometry, matrix: m.matrixWorld.clone(), colour: (m.material as THREE.MeshToonMaterial).color.clone(), material: (m.material as THREE.Material).name });
+    const apron = meshes(scene.getObjectByName("ground_apron"));
+    if (!apron.length) return;
+    const echo = HORIZON.mountainEcho.asset;
+    const mountains = [...meshes(scene.getObjectByName(echo)), ...meshes(scene.getObjectByName(`${echo}_echo`))];
+    const tops = (this.L.asset("hills_ring").anchors?.hill_tops ?? []) as Vec3[];
+    const treeName = HORIZON.countryside.trees.asset;
+    // only an asset the town already loads (no extra download for the scatter)
+    const treeRoot = this.L.assetNames().includes(treeName) ? await this.assets.template(treeName) : undefined;
+    treeRoot?.updateMatrixWorld(true);
+    const tree = meshes(treeRoot);
+    const cs = buildCountryside({
+      apron: apron.map(part),
+      mountains: mountains.map(part),
+      hillsRing: town.landscape.includes("hills_ring") ? meshes(scene.getObjectByName("hills_ring")).map(part) : [],
+      hillTops: tops,
+      tree: tree.map(part),
+      views: flyoverViews(town.flyover, 16 / 9, 1, 24),
+    });
+    const vc = this.assets.toon.material(vertexColourSource(THREE.FrontSide));
+    apron.forEach((m, i) => {
+      m.geometry = cs.apron[i];
+      m.material = vc;
+    });
+    mountains.forEach((m, i) => {
+      m.geometry = cs.mountains[i];
+      m.material = vc;
+    });
+    for (const [name, geometry] of [
+      ["horizon_skirt", cs.skirt],
+      ["countryside", cs.scatter],
+    ] as const) {
+      // a named root round the mesh: the mesh merges into the batch, the root stays (scene lookups by name)
+      const root = new THREE.Group();
+      root.name = name;
+      root.userData.see = { tag: SEE_NEVER } satisfies SeeSpec;
+      root.add(new THREE.Mesh(geometry, vc));
+      scene.add(root);
+      statics.push(root);
+    }
+    this.countryside = { hills: cs.hills.length, trees: cs.trees.length, near: `#${cs.palette.near.getHexString()}`, far: `#${cs.palette.far.getHexString()}` };
+  }
+
+  /** what addCountryside built (hills, trees, the ramp's colours as sRGB hex): for the tests */
+  countryside?: { hills: number; trees: number; near: string; far: string };
 
   /**
    * The clouds (one merged object, five clusters at index.json's cloud_slots) moved to HORIZON's
@@ -893,8 +953,7 @@ export class SceneSpace {
       this.sky.push({ mat, base });
     });
     // The horizon band is the lighter, less saturated colour of the two.
-    const hsl = { h: 0, s: 0, l: 0 };
-    this.horizon = this.sky.map((x) => x.base).sort((a, b) => b.getHSL(hsl).l - a.getHSL(hsl).l)[0]?.clone();
+    this.horizon = hazeColour(this.sky.map((x) => x.base));
     if (this.horizon) {
       this.background.copy(this.horizon);
       (this.scene.background as THREE.Color).copy(this.horizon);

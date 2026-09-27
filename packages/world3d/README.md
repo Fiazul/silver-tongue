@@ -509,6 +509,27 @@ wooden one, a lake with a pier to the west, hills, and mountains 360-400 m out u
   and phone landscape: no ray below the horizon crosses the ground's edge under 99 % haze, no cloud
   within 150 m or at the frame's centre. A Blender follow-up could bake the same into
   `tools/blender/sets/landscape.py` (then drop the world3d side).
+- **Countryside** (`src/horizon.ts` `buildCountryside`, built at load by `world.ts`
+  `addCountryside`; checked by `test/horizon.test.ts`, section C of the report): from the air the
+  plateau and hill ring read as a green disc on a blue-grey plain. The apron was two colours
+  meeting at r 165 m (grass_hill #78A152 inside, grass_far #93AF86 out to 760 m), with nothing
+  but flat ground between the ring (r 63-140 m) and the mountains. Now one radial ramp, measured
+  from the apron (its faces inside r 140 m: #78A152, the plateau's own rim grass; past r 400 m:
+  #93AF86), runs smoothly from 140 to 400 m, baked into vertex colours of the apron (cut along
+  circles every 13 m: 530 -> 7546 faces), the skirt and both mountain rings (the ground's colour at
+  their feet up to 10 m, their own from 150 m; the snow keeps its white). 34 copies of hills_ring's six mounds
+  (split by `hill_tops`), turned and scaled 0.6-1.6, stand between r 150 and 600 m: 16 one per
+  sector just outside the ring, the rest denser near it, clear of the mountains' bodies, of the
+  plateau (footprints from r 125 m) and of the fly-over's sight lines, sunk into the apron; 48
+  willow_small (already loaded by the town) in clumps of 3-5 among them; seeded, the same every load.
+  All of it one vertex-coloured toon material: one batch (the town's static draw calls went down,
+  123 -> 119), never cut by the see-through. The checks: along every screen column of every view
+  (rim cells, spawn, fly-over at 24 fps, three screens) the ground's colour between 130 and 175 m
+  steps at most 0.3/255 per 2 m after the haze (limit 2.5; was 39/255 at the aerial key, 52 on
+  the fly-over), and no part of the ring (r 140) is more than 60 m from an extra hill (was all of it;
+  the limit is a quarter). The first fly-over frames looked down on mountains_far's own foothills
+  (not the skirt or the echo): their haze-blue faces now run from the ground's green at their feet
+  to their own colour near the tops.
 - **Street life:** seven walkers on the paths (the promenade, loop_south, the east spoke to the
   east loop, the north spoke, loop_north, the west loop over the stone bridge, the gate), a cat by
   the noodle shop, a dog on the lake shore, three pigeons on the plaza (they scatter), the egg
@@ -545,7 +566,7 @@ wooden one, a lake with a pier to the west, hills, and mountains 360-400 m out u
   focus depth, a 0.9 m soft band) and more than 0.3 m above their feet is dropped by a 4x4
   ordered dither (a cutout: no blending, depth still written, no extra draw call). A per-vertex
   tag baked into the static batches (`seeThru`) says what may be cut: the landscape, plaza disc
-  and far edge never; everything else by the hole; the canopies (`CANOPIES` by asset name: the
+  far edge and countryside never; everything else by the hole; the canopies (`CANOPIES` by asset name: the
   great tree's leaves and its branches above the lanterns, the willows' leaves and drapes, the
   bamboo's leaves) are also a cluster each, and while the player or the NPC talked to stands in
   one's footprint the whole canopy eases down to 25 %. Characters, their hulls, what they hold,
@@ -806,7 +827,10 @@ that role said last).
   daylight / interior, ambience by the real town's water distance / daylight / zone, footstep
   surfaces on the real grid and decks, the stride clock, event effects; the vendored manifest; prefs.
 - `test/horizon.test.ts`: the far edge and the clouds against every view (above; it also checks
-  that the old edge and the old cloud fail it), the seams between the landscape GLBs.
+  that the old edge and the old cloud fail it), the seams between the landscape GLBs, the
+  countryside (the ramp on the apron, skirt and mountains' feet, no colour step at the ring in any
+  view and the old disc caught, the hills round the ring, clear of the mountains, sunk, off the
+  fly-over's sight lines and the rim cameras, the same every load).
 - `test/nested.test.ts`: controls nested in a tappable row (`ui/dom.ts nested` / `tappable`: a
   reply option's hint chip, ▶ and words; the bubble's chip, "…", ▶ and words) never pick the row
   by click, a pointer / touch press that lifts on the row, or Enter / Space; the row itself does.
