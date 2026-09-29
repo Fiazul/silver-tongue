@@ -700,6 +700,29 @@ never touched.
 - Checked (`test/town.test.ts`): `cameraFull` is the full canonical path (13 keys, 22 s); `camera`
   is still the 5 s cut.
 
+## Real look prototype (`?look=real`)
+
+A switchable render mode to judge how far lighting and post move the scene off the toon look.
+Default (no param) is the toon look, unchanged: every change is gated on `LOOK.real`
+(`src/look.ts`), and the composer lives in its own chunk (`src/reallook.ts`) that is never fetched
+without the flag.
+
+- `?look=real`: sun shadows (PCF, 2048 map, a 44 m ortho box that follows the player snapped to
+  shadow texels; three 0.186 dropped PCFSoftShadowMap, `shadow.radius` softens instead), a PMREM
+  environment from a gradient of the space's sky (dome zenith, horizon, the hemisphere's ground;
+  rebuilt on `setDaylight`), the hemisphere at 0.35x, the sun at 1.3x, an EffectComposer (4x MSAA
+  half-float target, GTAOPass, OutputPass with ACES filmic, exposure 0.9), MeshStandardMaterial
+  (roughness 0.8, metalness 0) in place of MeshToonMaterial, camera 10 degrees lower and fov 27.
+  Fog keeps the horizon colour it already had. Outline hulls stay on.
+- `?look=real&ramp=1`: all of the above with the toon materials kept.
+- See-through: works (GTAO's normal pass carries the same dither cutout). With the heavier frames
+  the async id read-back can miss its 120 ms fence during loading and after daylight changes; three
+  misses in a row switch it to the sync read (its designed fallback) for the rest of the session.
+- Shots: `scripts/look-capture.mjs` (headless Chromium on the GPU through ANGLE Vulkan, Playwright
+  from an absolute path as in `scripts/cache-repro`) against a served `dist/`: the toon / real /
+  real + ramp views of Market Street by the noodle shop, an evening pair, a see-through check each,
+  and rAF frame times, into `shots/look/`. `world3d.look()` reports the mode and the composer's CPU ms.
+
 ## Courses and reading languages
 
 As the browser TUI (0.13): `src/courses.ts` `pickCourse` fetches the catalog `courses/index.json`,

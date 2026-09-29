@@ -16,6 +16,7 @@ import { CHARACTER_KINDS, type LoadEvent } from "./loading";
 import { anchorToWorld, heldProp, yawFor, type Blocker, type Box2, type HeldPropSpec, type LayoutIndex, type Placement, type SpaceLayout, type Vec3 } from "./layout";
 import type { WalkArea } from "./player";
 import { ScatterMotion, WalkerMotion } from "./streetlife";
+import { LOOK, REAL_HEMI, REAL_SHADOW, REAL_SUN, type LookSky } from "./look";
 
 const DEG = Math.PI / 180;
 export const BACKGROUND = "#EDD9B8";
@@ -127,6 +128,22 @@ class Toon {
     const emissive = m.emissive ?? new THREE.Color(0, 0, 0);
     const key = `${color.getHexString()}|${emissive.getHexString()}|${m.opacity}|${m.side}|${m.vertexColors ? "vc" : ""}${character ? "|character" : ""}`;
     let toon = this.materials.get(key);
+    if (!toon && LOOK.real && !LOOK.ramp) {
+      // real look (look.ts): a plain PBR surface in place of the toon ramp (typed as toon: the callers only read color / name)
+      toon = new THREE.MeshStandardMaterial({
+        color,
+        emissive,
+        vertexColors: m.vertexColors,
+        roughness: 0.8,
+        metalness: 0,
+        transparent: m.transparent || m.opacity < 1,
+        opacity: m.opacity,
+        side: m.side,
+        name: m.name,
+      }) as unknown as THREE.MeshToonMaterial;
+      if (!character) patchSeeThrough(toon);
+      this.materials.set(key, toon);
+    }
     if (!toon) {
       toon = new THREE.MeshToonMaterial({
         color,
@@ -146,6 +163,10 @@ class Toon {
 
   flat(hex: string): THREE.MeshToonMaterial {
     let toon = this.materials.get(hex);
+    if (!toon && LOOK.real && !LOOK.ramp) {
+      toon = patchSeeThrough(new THREE.MeshStandardMaterial({ color: new THREE.Color(hex), roughness: 0.8, metalness: 0 })) as unknown as THREE.MeshToonMaterial;
+      this.materials.set(hex, toon);
+    }
     if (!toon) {
       toon = patchSeeThrough(new THREE.MeshToonMaterial({ color: new THREE.Color(hex), gradientMap: this.gradient }));
       this.materials.set(hex, toon);
@@ -161,6 +182,7 @@ class Toon {
     });
     for (const mesh of meshes) {
       mesh.material = Array.isArray(mesh.material) ? mesh.material.map((m) => this.material(m, character)) : this.material(mesh.material, character);
+      if (LOOK.real) mesh.castShadow = mesh.receiveShadow = true; // real look: sun shadows (hulls below never cast)
       const hullMaterial = character ? characterOutline : outlineMaterial;
       if (!outline) continue;
       const skinned = mesh as THREE.SkinnedMesh;
@@ -459,6 +481,8 @@ export function mergeStatic(scene: THREE.Object3D, roots: THREE.Object3D[]): num
     batch.name = `batch:${(src.material as THREE.Material).name || src.name}`;
     batch.matrixAutoUpdate = false;
     batch.userData.batch = meshes.length;
+    if (LOOK.real) batch.castShadow = meshes.some((m) => m.castShadow); // real look (look.ts): the batch keeps its parts' shadow flags
+    if (LOOK.real) batch.receiveShadow = meshes.some((m) => m.receiveShadow);
     if (src.userData.outline) {
       batch.userData.outline = true;
       batch.raycast = () => {};
@@ -684,6 +708,7 @@ export class SceneSpace {
       floor.rotation.x = -Math.PI / 2;
       floor.position.y = -0.01;
       floor.userData.see = { tag: SEE_NEVER } satisfies SeeSpec;
+      if (LOOK.real) floor.receiveShadow = true;
       scene.add(floor);
       statics.push(floor);
     }
@@ -694,6 +719,7 @@ export class SceneSpace {
       box.name = g.name;
       // Explicit ground/deck boxes never fade. Interior walls and roofs live in their shell asset.
       box.userData.see = { tag: SEE_NEVER } satisfies SeeSpec;
+      if (LOOK.real) box.castShadow = box.receiveShadow = true;
       scene.add(box);
       statics.push(box);
     }
@@ -738,6 +764,64 @@ export class SceneSpace {
     this.batching.merged = mergeStatic(scene, statics);
     this.batching.after = drawCalls(scene);
     this.staticCalls = { before: this.batching.before, after: this.batching.after };
+    if (LOOK.real) this.setupRealLook();
+  }
+
+  /** real look (look.ts) only: the sun's direction; its shadow box follows the player along it (followSun) */
+  private sunDir!: THREE.Vector3;
+  private lookSky?: LookSky;
+
+  /** Real look only: the sun casts (a tight ortho box, followSun), the hemisphere steps back for the environment map. */
+  private setupRealLook() {
+    const s = this.sun;
+    s.castShadow = true;
+    s.shadow.mapSize.set(REAL_SHADOW.mapSize, REAL_SHADOW.mapSize);
+    const c = s.shadow.camera;
+    c.left = c.bottom = -REAL_SHADOW.half;
+    c.right = c.top = REAL_SHADOW.half;
+    c.near = 1;
+    c.far = REAL_SHADOW.distance * 2;
+    c.updateProjectionMatrix();
+    s.shadow.bias = REAL_SHADOW.bias;
+    s.shadow.normalBias = REAL_SHADOW.normalBias;
+    s.shadow.radius = 3;
+    this.scene.add(s.target);
+    this.hemi.intensity *= REAL_HEMI;
+    s.intensity *= REAL_SUN;
+    this.sunDir = s.position.clone().normalize();
+    const c0 = () => new THREE.Color();
+    this.lookSky = { zenith: c0(), horizon: c0(), ground: c0(), sun: new THREE.Vector3(), sunColor: c0(), version: 0 };
+    this.scene.userData.lookSky = this.lookSky;
+    this.writeLookSky();
+  }
+
+  /** Real look only: the sky colours now (dome zenith, horizon / background, the hemisphere's ground) for reallook.ts's environment map. */
+  private writeLookSky() {
+    const k = this.lookSky;
+    if (!k) return;
+    const bg = this.scene.background as THREE.Color;
+    k.horizon.copy(bg);
+    // the dome's darker colour is its zenith (hazeColour picked the lighter for the horizon)
+    const lum = (c: THREE.Color) => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+    const top = this.sky.reduce<THREE.Color | null>((a, x) => (!a || lum(x.mat.color) < lum(a) ? x.mat.color : a), null);
+    k.zenith.copy(top ?? bg);
+    k.ground.copy(this.hemi.groundColor);
+    k.sun.copy(this.sunDir);
+    k.sunColor.copy(this.sun.color).multiplyScalar(this.sun.intensity);
+    k.version++;
+  }
+
+  /** Real look only: the sun and its shadow box on the player, snapped to whole shadow texels in the light's frame (no shimmer as they walk). */
+  private followSun(p: THREE.Vector3) {
+    const z = this.sunDir;
+    const x = new THREE.Vector3(0, 1, 0).cross(z).normalize();
+    const y = new THREE.Vector3().crossVectors(z, x);
+    const texel = (2 * REAL_SHADOW.half) / REAL_SHADOW.mapSize;
+    const snap = (v: number) => Math.round(v / texel) * texel;
+    const t = this.sun.target.position;
+    t.copy(x).multiplyScalar(snap(p.dot(x))).addScaledVector(y, snap(p.dot(y))).addScaledVector(z, p.dot(z));
+    this.sun.position.copy(t).addScaledVector(z, REAL_SHADOW.distance);
+    this.sun.target.updateMatrixWorld();
   }
 
   /** Assigns one bounded id to a fadeable static root. */
@@ -963,6 +1047,7 @@ export class SceneSpace {
       const m = (mesh.material as THREE.MeshToonMaterial).clone();
       m.fog = false;
       mesh.material = m;
+      if (LOOK.real) mesh.castShadow = mesh.receiveShadow = false;
     });
   }
 
@@ -982,6 +1067,7 @@ export class SceneSpace {
       mesh.material = mat;
       mesh.renderOrder = -1;
       mesh.frustumCulled = false;
+      if (LOOK.real) mesh.castShadow = mesh.receiveShadow = false;
       this.sky.push({ mat, base });
     });
     // The horizon band is the lighter, less saturated colour of the two.
@@ -1082,6 +1168,7 @@ export class SceneSpace {
     lerpStops(DAY.ground, k, this.hemi.groundColor);
     lerpStops(DAY.sun, k, this.sun.color);
     this.sun.intensity = lerpNums(DAY.sunIntensity, k);
+    if (LOOK.real) this.sun.intensity *= REAL_SUN;
     // The sun swings low toward evening (grazing light, a longer-shadow feel) without moving its
     // azimuth, so the toon shading's light direction only dips, never spins. The town's sun
     // (town.json) sits at its own bearing and reaches its own elevation at midday.
@@ -1089,6 +1176,7 @@ export class SceneSpace {
     const angle = lerpNums(DAY.sunAngle, k) * (town ? town.sun.elevationDeg / MIDDAY_SUN : 1) * DEG;
     const horiz = Math.hypot(...this.sunHoriz);
     this.sun.position.set(this.sunHoriz[0], Math.tan(angle) * horiz, this.sunHoriz[1]);
+    if (LOOK.real) this.sunDir.copy(this.sun.position).normalize();
     if (this.horizon) {
       // The town: the dome and the haze (and the background behind them) take the day's tint.
       const tint = lerpStops(DAY.skyTint, k, new THREE.Color());
@@ -1099,6 +1187,7 @@ export class SceneSpace {
       lerpStops(DAY.background, k, this.scene.background as THREE.Color);
       if (this.scene.fog instanceof THREE.Fog) lerpStops(DAY.fog, k, this.scene.fog.color);
     }
+    if (LOOK.real) this.writeLookSky();
   }
 
   /**
@@ -1106,6 +1195,7 @@ export class SceneSpace {
    * turn back to their stand's facing; walkers pace, pigeons scatter; every character animates.
    */
   update(dt: number, player: THREE.Vector3, sceneNpc: string | null) {
+    if (LOOK.real) this.followSun(player);
     for (const v of this.npcs.values()) {
       const p = v.actor.root.position;
       const dx = player.x - p.x;

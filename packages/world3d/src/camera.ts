@@ -4,6 +4,7 @@
 // "orbit" (the one-line switch) to let the player drag the view round.
 import * as THREE from "three";
 import type { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { LOOK } from "./look";
 
 export const CAMERA = {
   mode: "fixed" as "fixed" | "orbit",
@@ -25,6 +26,12 @@ export const CAMERA = {
   near: 0.5,
   far: 2500,
 };
+// Real look (look.ts) only: a lower, slightly tighter view (10 degrees less pitch, a narrower fov),
+// set before any CameraRig reads it; the fly-over and promo orbit follow through CAMERA.
+if (LOOK.real) {
+  CAMERA.elevationDeg -= 10;
+  CAMERA.fovDeg = 27;
+}
 
 export class CameraRig {
   readonly camera: THREE.PerspectiveCamera;

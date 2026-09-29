@@ -616,10 +616,25 @@ describe.skipIf(!assetIndex)("bug 2: daylight is clearly perceptible at each qua
     // world3d.setDaylight(t) (main.ts) is wired straight to this same method, for the browser worker.
     const mainSrc = readFileSync(new URL("../src/main.ts", import.meta.url), "utf8");
     expect(mainSrc).toMatch(/setDaylight:\s*\(t: number\) => space\.setDaylight\(t\)/);
-    // cheap: no shadow maps anywhere in the 3D world module.
+    // cheap: no shadow maps in the default look. Nothing in the built street casts or receives,
+    // the sun included; the real-look prototype (look.ts, `?look=real`) turns them on only behind
+    // LOOK.real: in world.ts every shadow flag outside setupRealLook (itself called only under
+    // LOOK.real) sits on a LOOK.real-gated line, and the renderer's shadow map lives in reallook.ts.
+    expect(sun.castShadow).toBe(false);
+    let flagged = 0;
+    street.scene.traverse((o) => void ((o.castShadow || o.receiveShadow) && flagged++));
+    expect(flagged).toBe(0);
     const worldSrc = readFileSync(new URL("../src/world.ts", import.meta.url), "utf8");
-    expect(worldSrc).not.toMatch(/castShadow\s*=\s*true/);
     expect(worldSrc).not.toMatch(/shadowMap/);
+    const setup = worldSrc.indexOf("private setupRealLook()");
+    expect(setup).toBeGreaterThan(0);
+    expect(worldSrc.match(/this\.setupRealLook\(\)/g)?.length).toBe(1);
+    expect(worldSrc).toMatch(/if \(LOOK\.real\) this\.setupRealLook\(\);/);
+    const setupEnd = worldSrc.indexOf("\n  }\n", setup);
+    const outside = worldSrc.slice(0, setup) + worldSrc.slice(setupEnd);
+    const shadowLines = outside.split("\n").filter((l) => /(castShadow|receiveShadow)\s*=/.test(l));
+    expect(shadowLines.length).toBeGreaterThan(0);
+    for (const l of shadowLines) expect(l, l.trim()).toMatch(/if \(LOOK\.real\)/);
   });
 
   it("an interior shifts less than the street, and keeps its own wall colour (background/fog untouched)", async () => {
