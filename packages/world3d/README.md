@@ -764,6 +764,42 @@ without the flag.
   is its mesh again, un-pushed, at the same depth: the two z-fought into a diagonal hatch on any
   mesh that isn't batched (first seen on the textured noodle shop's single mesh).
 
+### Environment layers (`?look=real&env=...`)
+
+`src/envlook.ts` (in the real-look chunk, never loaded otherwise), wired by `reallook.ts`. Default
+with `?look=real`: all; `&env=` (empty): none, the step-2 real look; `&env=grass,sky`: a subset.
+Layers (`look.ts ENV_LAYERS`):
+
+- `ground`: the terrain's `grass_*` / `land_*` materials get world-projected generated textures
+  (grass, packed dirt, a detail normal; tileable value noise at load, no binary assets), dirt worn in
+  along path edges (a distance field from a 512^2 top-down raster of the terrain's own triangles,
+  footprints and anything standing within 0.9 m of the ground) and in noise patches.
+- `grass`: two toroidal tiles of 2-triangle blades round the player (near 26 m / 40k, far 72 m /
+  40k, fade 12.5 / 35 m), positioned, coloured (ground colour x grass texture) and swayed in the
+  vertex shader from the same field; none on path, pavement, footprints, benches, roots.
+- `leaves`: alpha-cut leaf-cluster cards (up to 14k, instanced, alpha-to-coverage) over every
+  canopy material (great_tree, willows, bamboo; there is no `tree_street` in the town). The solid
+  crown stays as a darker core and stops casting; the cards cast (the speckle). Each card carries
+  its crown's see-through id, so it fades with its tree.
+- `sky`: a gradient sky with sun disc, glow and cloud wisps replaces `sky_dome` (from the day's
+  sky colours, so fog still matches); the environment map takes the sun's glow.
+- `bloom`: UnrealBloomPass (threshold 2.4 linear, at half its own resolution), stronger at
+  evening; lanterns (`lantern_PBR`, `lantern_red`), `glass` and the filler shops' `sky_blue` panes
+  take an evening emissive.
+- `grade`: lift / gamma / gain, saturation, vignette, grain folded into OutputPass's shader;
+  midday warm-clean, evening amber over cooler shadows; still grain under prefers-reduced-motion.
+- `particles`: dust motes round the player, steam off the noodle shop counter, leaves falling
+  from the great tree (~750 points).
+
+The AO pass never sees the grass, leaves, sky or particles (hidden by material, as the hulls).
+First render of the town builds the layers: ~0.4-0.7 s (field raster, textures, leaf sampling), a
+one-off hitch. Shots: `SET=env` in `scripts/look-capture.mjs` (10-14, `see-env-env.png`; per-layer
+spot checks and frame times via `LAYERS_OUT` / `REPORT`). Frame time (2026-09-30, Vega 11,
+1280x720, rAF mean over 3 s at the noodle shop, midday): none 17.5 ms, all 21.8 ms (20.5 morning,
+19.8 evening); alone: ground 17.9, grass 18.1, leaves 17.1, sky 17.4, bloom 18.3, grade 17.1,
+particles 17.1 (run-to-run noise ~1-2 ms; the median frame is 6-7 ms in every case, the mean
+carries the see-through's sync reads).
+
 ## Courses and reading languages
 
 As the browser TUI (0.13): `src/courses.ts` `pickCourse` fetches the catalog `courses/index.json`,

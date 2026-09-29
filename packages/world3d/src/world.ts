@@ -16,7 +16,7 @@ import { CHARACTER_KINDS, type LoadEvent } from "./loading";
 import { anchorToWorld, heldProp, yawFor, type Blocker, type Box2, type HeldPropSpec, type LayoutIndex, type Placement, type SpaceLayout, type Vec3 } from "./layout";
 import type { WalkArea } from "./player";
 import { ScatterMotion, WalkerMotion } from "./streetlife";
-import { LOOK, REAL_HEMI, REAL_SHADOW, REAL_SUN, type LookSky } from "./look";
+import { LOOK, REAL_HEMI, REAL_SHADOW, REAL_SUN, type LookGround, type LookSky } from "./look";
 
 const DEG = Math.PI / 180;
 export const BACKGROUND = "#EDD9B8";
@@ -825,15 +825,18 @@ export class SceneSpace {
     s.intensity *= REAL_SUN;
     this.sunDir = s.position.clone().normalize();
     const c0 = () => new THREE.Color();
-    this.lookSky = { zenith: c0(), horizon: c0(), ground: c0(), sun: new THREE.Vector3(), sunColor: c0(), version: 0 };
+    this.lookSky = { zenith: c0(), horizon: c0(), ground: c0(), sun: new THREE.Vector3(), sunColor: c0(), daylight: 0, version: 0 };
     this.scene.userData.lookSky = this.lookSky;
+    // for the environment layers (envlook.ts): the town's ground, its footprints (the array itself: NPC stands join it as they load), its sky dome
+    this.scene.userData.lookGround = { town: !!this.layout.town, blockers: this.blockers, sky: this.layout.town?.sky } satisfies LookGround;
     this.writeLookSky();
   }
 
   /** Real look only: the sky colours now (dome zenith, horizon / background, the hemisphere's ground) for reallook.ts's environment map. */
-  private writeLookSky() {
+  private writeLookSky(daylight?: number) {
     const k = this.lookSky;
     if (!k) return;
+    if (daylight !== undefined) k.daylight = daylight;
     const bg = this.scene.background as THREE.Color;
     k.horizon.copy(bg);
     // the dome's darker colour is its zenith (hazeColour picked the lighter for the horizon)
@@ -1222,7 +1225,7 @@ export class SceneSpace {
       lerpStops(DAY.background, k, this.scene.background as THREE.Color);
       if (this.scene.fog instanceof THREE.Fog) lerpStops(DAY.fog, k, this.scene.fog.color);
     }
-    if (LOOK.real) this.writeLookSky();
+    if (LOOK.real) this.writeLookSky(k);
   }
 
   /**

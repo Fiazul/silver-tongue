@@ -62,7 +62,7 @@ import { Overlay } from "./ui/overlay";
 import type { Insets } from "./ui/viewport";
 import { BUILD } from "./version";
 import { AssetCache, drawCalls, OUTLINE_MATERIALS, SceneSpace, setOutlineScale } from "./world";
-import { patchSeeThrough, SEE_THROUGH, SeeThroughControl, SeeThroughDetector } from "./seethrough";
+import { patchSeeThrough, SEE_ATTR, SEE_THROUGH, SeeThroughControl, SeeThroughDetector } from "./seethrough";
 import { LOOK } from "./look";
 import { GuideMarker } from "./marker";
 import { daySteps, edgeArrow, findPath, LostTimer, nextSteps, resolveTarget, type PathGrid, type WayTarget } from "./wayfind";
@@ -417,8 +417,8 @@ async function main() {
   const { L, renderer, assets, plan, spaces, player, carry } = world;
   const street = spaces.get("street")!;
   const rig = new CameraRig(renderer.domElement);
-  // `?look=real` (look.ts): the composer and its passes, its own chunk; null (never loaded) otherwise
-  const real = LOOK.real ? (await import("./reallook")).createRealLook(renderer, patchSeeThrough, OUTLINE_MATERIALS) : null;
+  // `?look=real` (look.ts): the composer and its passes and the environment layers (`&env=`), its own chunk; null (never loaded) otherwise
+  const real = LOOK.real ? (await import("./reallook")).createRealLook(renderer, patchSeeThrough, OUTLINE_MATERIALS, { env: LOOK.env, seeAttr: SEE_ATTR }) : null;
 
   // Where a tap sent the player: a small ring on the ground.
   const marker = new THREE.Mesh(new THREE.RingGeometry(0.18, 0.26, 24), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8 }));
@@ -1241,7 +1241,7 @@ async function main() {
       if (done) endFlyover();
       else {
         see.update(dt, [], space.occluders, [], false); // everything opaque on the fly-over
-        if (real) return real.render(space.scene, rig.camera);
+        if (real) return real.render(space.scene, rig.camera, player.position);
         return renderer.render(space.scene, rig.camera);
       }
     }
@@ -1351,7 +1351,7 @@ async function main() {
       const p = found ? project(head) : { x: 0, y: 0, visible: false };
       overlay.bubble.position(p.x, p.y, p.visible, overlay.bubbleArea());
     }
-    if (real) real.render(space.scene, rig.camera);
+    if (real) real.render(space.scene, rig.camera, player.position);
     else renderer.render(space.scene, rig.camera);
   });
 
@@ -1430,7 +1430,7 @@ async function main() {
       /** debug: preview any time of day (0 morning .. 1 evening) regardless of the real slot; the next real game event calls applyDaylight() again and overrides it. */
       setDaylight: (t: number) => space.setDaylight(t),
       /** the render look (look.ts): `?look=real` [&ramp=1], and the composer's CPU ms per frame when on */
-      look: () => ({ ...LOOK, composerMs: real ? +real.stats.frameMs.toFixed(2) : null, envBuilds: real?.stats.envBuilds ?? 0, shadowMap: renderer.shadowMap.enabled }),
+      look: () => ({ ...LOOK, composerMs: real ? +real.stats.frameMs.toFixed(2) : null, envBuilds: real?.stats.envBuilds ?? 0, shadowMap: renderer.shadowMap.enabled, envLayers: real?.stats.envLayers ?? [], envBuildMs: real?.stats.envBuildMs ?? 0 }),
       dayCard: () => game?.model.dayCard,
       /** the parcel: where core says it goes, and whether the player has it in hand */
       errand: () => ({ to: game?.core.state.errand?.to ?? null, carrying: carry.holding, clip: player.actor.state }),

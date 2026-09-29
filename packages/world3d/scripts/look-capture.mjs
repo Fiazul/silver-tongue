@@ -24,13 +24,27 @@ const SEE_SPOT = (process.env.SEE_SPOT ?? "-17,22.5").split(",").map(Number);
 const W = Number(process.env.W ?? 1280);
 const H = Number(process.env.H ?? 720);
 
+/** the real look's environment layers (look.ts ENV_LAYERS), for SET=env */
+const ENV_LAYERS = ["ground", "grass", "leaves", "sky", "bloom", "grade", "particles"];
 const variants = [
   { name: "toon", q: "" },
   { name: "real", q: "&look=real" },
   { name: "real-ramp", q: "&look=real&ramp=1" },
   // its own page: the held dolly never hands the camera back, so no see-through check after it
   { name: "real-close", q: "&look=real", noSee: true },
+  // SET=env: every layer (the default), the fly-over, a close camera, then none (`env=`, the step-2 look) and each layer alone
+  { name: "env", q: "&look=real" },
+  { name: "env-flyover", q: "&look=real", noSee: true },
+  { name: "env-close", q: "&look=real", noSee: true },
+  { name: "env-none", q: "&look=real&env=", noSee: true },
+  ...ENV_LAYERS.map((l) => ({ name: `env-${l}`, q: `&look=real&env=${l}`, noSee: true })),
 ];
+/**
+ * SET=env: the environment layers (look.ts ENV_LAYERS, `&env=`): 10 midday and 11 evening at SPOT with
+ * every layer, 12 from the fly-over (FLY_T seconds in), 13 low over the lawn by the great tree, 14 a
+ * 2-up of 07 beside 10; then `env=` (none: step 2's real look) and each layer alone, their spot
+ * checks into LAYERS_OUT (not committed) and their frame times into the report (REPORT=file).
+ */
 /**
  * SET=textured: the textured assets' set (the noodle shop, street dressing: docs/asset-conventions.md
  * "Textures" in the library) at the same spot, 06-08 beside 01 / 02 / 05, plus 09, a close camera
@@ -39,8 +53,34 @@ const variants = [
 const SET = process.env.SET ?? "";
 /** close on the noodle shop's facade (its front at z ~31.5 facing +z), from the south-east, a little above head height */
 const CLOSE = { from: [-12.2, 3.1, 37.2], to: [-12.2, 3.1, 37.2], lookAt: [-16.6, 2.0, 31.2], seconds: 600 };
+/** SET=env: low over the lawn west of the great tree (the tree at (-17.2, 6.3)), toward its base; the player just behind the camera (the grass centres on them) */
+const CLOSE_GRASS = { from: [-31.0, 2.6, 4.6], to: [-31.0, 2.6, 4.6], lookAt: [-19.5, 0.6, 7.2], seconds: 600 };
+/** SET=env: up from the street toward the evening sun */
+const SUN_VIEW = { from: [5, 12, 40], to: [5, 12, 40], lookAt: [255, 100, 473], seconds: 600 };
+const CLOSE_GRASS_AT = [-25.6, 5.2];
+/** SET=env: the per-layer spot checks go here (not committed), frame times into the report */
+const LAYERS_OUT = process.env.LAYERS_OUT ?? join(out, "layers");
 const shots =
-  SET === "textured"
+  SET === "env"
+    ? [
+        { file: "10-env-midday.png", v: "env", day: 1 / 3 },
+        { file: "11-env-evening.png", v: "env", day: 1 },
+        { file: "env-morning.png", v: "env", day: 0, dir: LAYERS_OUT },
+        { file: "12-env-wide.png", v: "env-flyover", day: 1 / 3, flyover: Number(process.env.FLY_T ?? 14) },
+        { file: "13-env-close-grass.png", v: "env-close", day: 1 / 3, close: CLOSE_GRASS, at: CLOSE_GRASS_AT },
+        // frame times: every variant at midday (1/3); `none` at morning too (07's daylight), bloom at evening too (its glow)
+        { file: "none-morning.png", v: "env-none", day: 0, dir: LAYERS_OUT },
+        { file: "none.png", v: "env-none", day: 1 / 3, dir: LAYERS_OUT },
+        ...ENV_LAYERS.map((l) => ({ file: `${l}.png`, v: `env-${l}`, day: 1 / 3, dir: LAYERS_OUT })),
+        { file: "bloom-evening.png", v: "env-bloom", day: 1, dir: LAYERS_OUT },
+        // toward the evening sun (town.json sun azimuth 150, ~11 degrees up at evening): the sky layer's disc and glow, beside none
+        { file: "sky-evening-sun.png", v: "env-sky", day: 1, close: SUN_VIEW, dir: LAYERS_OUT },
+        { file: "none-evening-sun.png", v: "env-none", day: 1, close: SUN_VIEW, dir: LAYERS_OUT },
+        // the sky from the fly-over's opening (it looks over the town to the hills), evening; last on its page (the fly-over keeps the camera)
+        { file: "sky-evening-flyover.png", v: "env-sky", day: 1, flyover: 2.5, dir: LAYERS_OUT },
+        { file: "none-evening-flyover.png", v: "env-none", day: 1, flyover: 2.5, dir: LAYERS_OUT },
+      ]
+    : SET === "textured"
     ? [
         { file: "06-toon-textured.png", v: "toon", day: 0 },
         { file: "07-real-textured.png", v: "real", day: 0 },
@@ -83,11 +123,20 @@ for (const v of variants.filter((v) => (!only || only.includes(v.name)) && shots
   const r = { gl, ...r0, logs, frames: {} };
   for (const s of shots.filter((s) => s.v === v.name)) {
     await page.evaluate((d) => window.world3d.setDaylight(d), s.day);
-    await page.evaluate(([x, z]) => window.world3d.teleport(x, z), SPOT);
-    if (s.close) void page.evaluate((c) => void window.world3d.promo("dolly", c), CLOSE); // held for its 600 s: never awaited
+    await page.evaluate(([x, z]) => window.world3d.teleport(x, z), s.at ?? SPOT);
+    if (s.close) void page.evaluate((c) => void window.world3d.promo("dolly", c), s.close === true ? CLOSE : s.close); // held for its 600 s: never awaited
+    if (s.flyover) {
+      // the fly-over from the spawn, shot when it reaches `flyover` seconds (the town's cameraFull keys); no frame sample
+      await page.evaluate(() => window.world3d.promo("flyover"));
+      await page.waitForFunction((t) => (window.world3d.info().cutscene?.t ?? 0) >= t, s.flyover, { timeout: 120000, polling: 16 });
+      r.flyover = await page.evaluate(() => window.world3d.info().cutscene);
+      await page.screenshot({ path: join(s.dir ?? out, s.file) });
+      console.log(`${s.file}: ${v.name} fly-over t=${r.flyover?.t}`);
+      continue;
+    }
     await page.waitForTimeout(2500);
     // frame time: rAF intervals over 3 s (vsync / frame cap off in CHROME_ARGS, so it tracks the work)
-    r.frames[s.day] = await page.evaluate(
+    r.frames[+s.day.toFixed(2)] = await page.evaluate(
       () =>
         new Promise((res) => {
           const d = [];
@@ -99,7 +148,7 @@ for (const v of variants.filter((v) => (!only || only.includes(v.name)) && shots
             if (t - t0 < 3000) requestAnimationFrame(f);
             else {
               d.sort((a, b) => a - b);
-              res({ n: d.length, meanMs: +(d.reduce((a, b) => a + b, 0) / d.length).toFixed(2), p95Ms: +d[Math.floor(d.length * 0.95)].toFixed(2) });
+              res({ n: d.length, meanMs: +(d.reduce((a, b) => a + b, 0) / d.length).toFixed(2), medMs: +d[Math.floor(d.length / 2)].toFixed(2), p95Ms: +d[Math.floor(d.length * 0.95)].toFixed(2) });
             }
           };
           requestAnimationFrame(f);
@@ -107,7 +156,8 @@ for (const v of variants.filter((v) => (!only || only.includes(v.name)) && shots
     );
     r.look = await page.evaluate(() => window.world3d.look?.());
     r.info = await page.evaluate(() => { const i = window.world3d.info(); return { calls: i.calls, triangles: i.triangles }; });
-    await page.screenshot({ path: join(out, s.file) });
+    mkdirSync(s.dir ?? out, { recursive: true });
+    await page.screenshot({ path: join(s.dir ?? out, s.file) });
     console.log(`${s.file}: ${v.name} day=${s.day}`);
   }
   // see-through check (seethrough.ts): the player behind the noodle shop, seen from the street
@@ -125,5 +175,22 @@ for (const v of variants.filter((v) => (!only || only.includes(v.name)) && shots
   report[v.name] = r;
   await page.close();
 }
+// SET=env: 14, a 2-up of 07 (step 2's real look, env layers not built yet) beside 10 (every layer), drawn by the browser (no image tooling)
+if (SET === "env") {
+  const { existsSync, readFileSync } = await import("node:fs");
+  const before = process.env.BEFORE ?? join(out, "07-real-textured.png");
+  const after = join(out, "10-env-midday.png");
+  if (existsSync(before) && existsSync(after)) {
+    const url = (f) => `data:image/png;base64,${readFileSync(f).toString("base64")}`;
+    const page = await browser.newPage({ viewport: { width: W * 2, height: H + 40 } });
+    const cap = "font:600 20px sans-serif;color:#fff;position:absolute;top:8px;left:12px;text-shadow:0 1px 3px #000";
+    await page.setContent(`<body style="margin:0;background:#111;display:flex"><div style="position:relative"><img src="${url(before)}" width=${W} height=${H}><div style="${cap}">07 real look (step 2)</div></div><div style="position:relative"><img src="${url(after)}" width=${W} height=${H}><div style="${cap}">10 environment layers, midday</div></div></body>`);
+    await page.screenshot({ path: join(out, "14-env-off-vs-on.png"), clip: { x: 0, y: 0, width: W * 2, height: H } });
+    await page.close();
+    console.log("14-env-off-vs-on.png: 07 | 10");
+  }
+}
 await browser.close();
 console.log(JSON.stringify(report, null, 1));
+// REPORT=file: the same JSON, for a table
+if (process.env.REPORT) (await import("node:fs")).writeFileSync(process.env.REPORT, JSON.stringify(report, null, 1));
