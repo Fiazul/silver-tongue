@@ -23,43 +23,14 @@ import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { MeshoptEncoder } from "meshoptimizer";
+import { parseGlb, writeGlb } from "./glb.mjs";
+
+export { parseGlb, writeGlb };
 
 const EXT = "EXT_meshopt_compression";
 const SIZE = { 5120: 1, 5121: 1, 5122: 2, 5123: 2, 5125: 4, 5126: 4 };
 const COMPS = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4, MAT2: 4, MAT3: 9, MAT4: 16 };
 const align4 = (n) => (n + 3) & ~3;
-
-function parseGlb(buf) {
-  if (buf.readUInt32LE(0) !== 0x46546c67) throw new Error("not a GLB");
-  const jsonLen = buf.readUInt32LE(12);
-  const json = JSON.parse(buf.subarray(20, 20 + jsonLen).toString("utf8"));
-  let bin = null;
-  const off = 20 + jsonLen;
-  if (off < buf.length) {
-    const binLen = buf.readUInt32LE(off);
-    bin = buf.subarray(off + 8, off + 8 + binLen);
-  }
-  return { json, bin };
-}
-
-function writeGlb(json, bin) {
-  const jsonBuf = Buffer.from(JSON.stringify(json), "utf8");
-  const jsonPad = Buffer.alloc(align4(jsonBuf.length) - jsonBuf.length, 0x20);
-  const binPad = Buffer.alloc(align4(bin.length) - bin.length, 0);
-  const jl = jsonBuf.length + jsonPad.length;
-  const bl = bin.length + binPad.length;
-  const head = Buffer.alloc(12);
-  head.writeUInt32LE(0x46546c67, 0);
-  head.writeUInt32LE(2, 4);
-  head.writeUInt32LE(12 + 8 + jl + 8 + bl, 8);
-  const jh = Buffer.alloc(8);
-  jh.writeUInt32LE(jl, 0);
-  jh.writeUInt32LE(0x4e4f534a, 4);
-  const bh = Buffer.alloc(8);
-  bh.writeUInt32LE(bl, 0);
-  bh.writeUInt32LE(0x004e4942, 4);
-  return Buffer.concat([head, jh, jsonBuf, jsonPad, bh, bin, binPad]);
-}
 
 /** How each buffer view is used: accessors on it, index / vertex attribute / animation input / output / skin. */
 function viewUses(json) {
@@ -89,6 +60,79 @@ function viewUses(json) {
     if (a.bufferView !== undefined && ![...(uses.get(a.bufferView)?.accessors ?? [])].includes(i)) use(i, "other");
   });
   return uses;
+}
+
+/** Width and height of a PNG (IHDR), or null when it isn't one. */
+export function pngSize(data) {
+  if (data.length < 24 || data.readUInt32BE(0) !== 0x89504e47 || data.subarray(12, 16).toString("latin1") !== "IHDR") return null;
+  return [data.readUInt32BE(16), data.readUInt32BE(20)];
+}
+
+/**
+ * Width and height of a baseline / progressive JPEG, or null when its segment structure doesn't
+ * hold: SOI, a chain of well-formed marker segments with a SOF before the first SOS, then entropy
+ * data ending in EOI. (A structural decode: node has no image decoder; the sync's Pillow pass,
+ * scripts/textures.mjs, fully decodes every JPEG it writes.)
+ */
+export function jpegSize(data) {
+  if (data.length < 4 || data[0] !== 0xff || data[1] !== 0xd8 || data[data.length - 2] !== 0xff || data[data.length - 1] !== 0xd9) return null;
+  let i = 2;
+  let size = null;
+  while (i + 4 <= data.length) {
+    if (data[i] !== 0xff) return null;
+    const marker = data[i + 1];
+    if (marker === 0xff) {
+      i++;
+      continue;
+    }
+    const len = data.readUInt16BE(i + 2);
+    if (len < 2 || i + 2 + len > data.length) return null;
+    if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) size = [data.readUInt16BE(i + 7), data.readUInt16BE(i + 5)];
+    if (marker === 0xda) return size && size[0] > 0 && size[1] > 0 ? size : null;
+    i += 2 + len;
+  }
+  return null;
+}
+
+/**
+ * What a GLB's surfaces need besides geometry: its images (each one's type, size and bytes),
+ * textures, and which primitives carry TEXCOORD_0. compressGlb copies image views as they are and
+ * compresses UVs like any float attribute; scripts/textures.mjs re-encodes base colour / ORM PNGs
+ * as JPEG. checkSurfaces holds both to that for every textured asset.
+ */
+export function surfaces(buf) {
+  const { json, bin } = parseGlb(buf);
+  const images = (json.images ?? []).map((im) => {
+    if (im.bufferView === undefined) return { mime: im.mimeType ?? "", uri: im.uri ?? "", size: null, data: null };
+    const bv = json.bufferViews[im.bufferView];
+    const data = bin.subarray(bv.byteOffset ?? 0, (bv.byteOffset ?? 0) + bv.byteLength);
+    return { mime: im.mimeType, size: im.mimeType === "image/png" ? pngSize(data) : im.mimeType === "image/jpeg" ? jpegSize(data) : null, data };
+  });
+  const uvs = (json.meshes ?? []).flatMap((m) => (m.primitives ?? []).map((p) => p.attributes?.TEXCOORD_0 !== undefined));
+  return { images, textures: (json.textures ?? []).length, uvs };
+}
+
+/**
+ * Throws unless `out` keeps every texture and TEXCOORD_0 of `src` (`name`: for the message), and
+ * every image: a PNG still a PNG byte for byte, or re-encoded as a JPEG of the same size that parses
+ * (scripts/textures.mjs: base colour and ORM only).
+ */
+export function checkSurfaces(src, out, name) {
+  const a = surfaces(src);
+  const b = surfaces(out);
+  const fail = (why) => {
+    throw new Error(`meshopt: ${name} lost its textures or UVs: ${why} (${a.images.length} images / ${a.textures} textures -> ${b.images.length} / ${b.textures})`);
+  };
+  if (a.textures !== b.textures || a.images.length !== b.images.length) fail("counts differ");
+  if (a.uvs.join() !== b.uvs.join()) fail("TEXCOORD_0 differs");
+  a.images.forEach((x, i) => {
+    const y = b.images[i];
+    if (!x.data) return void (y.uri !== x.uri && fail(`image ${i} uri`));
+    if (!y.data || !y.size) return fail(`image ${i} missing or unreadable`);
+    if (x.mime === y.mime) return void (Buffer.compare(x.data, y.data) !== 0 && fail(`image ${i} bytes changed`));
+    if (x.mime !== "image/png" || y.mime !== "image/jpeg") fail(`image ${i} ${x.mime} -> ${y.mime}`);
+    if (!x.size || x.size.join() !== y.size.join()) fail(`image ${i} size ${x.size} -> ${y.size}`);
+  });
 }
 
 /** Resolves once the encoder (WebAssembly) is up: before compressGlb. */
@@ -173,6 +217,7 @@ export async function compressPath(path) {
     const buf = readFileSync(f);
     before += buf.length;
     const out = compressGlb(buf);
+    if (out) checkSurfaces(buf, out, f);
     if (out && out.length < buf.length) {
       writeFileSync(f, out);
       after += out.length;

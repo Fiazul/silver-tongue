@@ -16,10 +16,45 @@ export const course = buildCourse(CONTENT, "zh-china").course as Course;
 const indexPath = `${ASSETS}/index.json`;
 export const assetIndex: AssetIndex | undefined = existsSync(indexPath) ? JSON.parse(readFileSync(indexPath, "utf8")) : undefined;
 
-/** A GLB's bytes from disk (AssetCache's `read`: the tests load the real GLBs without a server). */
+/**
+ * A GLB's bytes from disk (AssetCache's `read`: the tests load the real GLBs without a server).
+ * Node can't decode the embedded PNGs of the textured assets (GLTFLoader's image path wants a
+ * browser: self, Image / ImageBitmap), so their images, textures and samplers are dropped here and
+ * the materials load as plain factors; geometry, UVs and everything else are the file's own.
+ * test/textures.test.ts checks the images themselves and the texture conversion.
+ */
 export function readGlb(path: string): ArrayBuffer {
-  const buf = readFileSync(path);
+  const buf = withoutTextures(readFileSync(path));
   return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
+}
+
+/** The GLB with no images / textures / samplers and no material references to them (unchanged when it has none). */
+export function withoutTextures(buf: Buffer): Buffer {
+  const jsonLen = buf.readUInt32LE(12);
+  const json = JSON.parse(buf.subarray(20, 20 + jsonLen).toString("utf8"));
+  if (!json.images?.length && !json.textures?.length) return buf;
+  for (const m of json.materials ?? []) {
+    delete m.normalTexture;
+    delete m.occlusionTexture;
+    delete m.emissiveTexture;
+    if (m.pbrMetallicRoughness) {
+      delete m.pbrMetallicRoughness.baseColorTexture;
+      delete m.pbrMetallicRoughness.metallicRoughnessTexture;
+    }
+  }
+  delete json.images;
+  delete json.textures;
+  delete json.samplers;
+  const text = Buffer.from(JSON.stringify(json), "utf8");
+  const chunk = Buffer.concat([text, Buffer.alloc((4 - (text.length % 4)) % 4, 0x20)]);
+  const rest = buf.subarray(20 + jsonLen);
+  const head = Buffer.alloc(20);
+  head.writeUInt32LE(0x46546c67, 0);
+  head.writeUInt32LE(2, 4);
+  head.writeUInt32LE(20 + chunk.length + rest.length, 8);
+  head.writeUInt32LE(chunk.length, 12);
+  head.writeUInt32LE(0x4e4f534a, 16);
+  return Buffer.concat([head, chunk, rest]);
 }
 
 /** A core that counts the inputs sent to it, by type. */

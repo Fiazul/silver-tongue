@@ -61,7 +61,7 @@ import { LoadingScreen } from "./ui/loading";
 import { Overlay } from "./ui/overlay";
 import type { Insets } from "./ui/viewport";
 import { BUILD } from "./version";
-import { AssetCache, drawCalls, SceneSpace, setOutlineScale } from "./world";
+import { AssetCache, drawCalls, OUTLINE_MATERIALS, SceneSpace, setOutlineScale } from "./world";
 import { patchSeeThrough, SEE_THROUGH, SeeThroughControl, SeeThroughDetector } from "./seethrough";
 import { LOOK } from "./look";
 import { GuideMarker } from "./marker";
@@ -418,7 +418,7 @@ async function main() {
   const street = spaces.get("street")!;
   const rig = new CameraRig(renderer.domElement);
   // `?look=real` (look.ts): the composer and its passes, its own chunk; null (never loaded) otherwise
-  const real = LOOK.real ? (await import("./reallook")).createRealLook(renderer, patchSeeThrough) : null;
+  const real = LOOK.real ? (await import("./reallook")).createRealLook(renderer, patchSeeThrough, OUTLINE_MATERIALS) : null;
 
   // Where a tap sent the player: a small ring on the ground.
   const marker = new THREE.Mesh(new THREE.RingGeometry(0.18, 0.26, 24), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8 }));

@@ -81,6 +81,8 @@ function outline(see: boolean): THREE.ShaderMaterial {
 const outlineMaterial = outline(true);
 /** characters' hulls are never patched: they are what the object fade reveals */
 const characterOutline = outline(false);
+/** Every hull's material (the real look hides them from its AO pass: reallook.ts createRealLook). */
+export const OUTLINE_MATERIALS: readonly THREE.Material[] = [outlineMaterial, characterOutline];
 
 /** Outline width multiplier (phones draw a thicker line, camera.ts outlineScale). */
 export function setOutlineScale(k: number) {
@@ -114,6 +116,33 @@ function hullGeometry(src: THREE.BufferGeometry): THREE.BufferGeometry {
   return g;
 }
 
+/**
+ * A textured source material's maps (the textured assets: base colour, tangent-space normal, ORM =
+ * occlusion R / roughness G / metalness B, all on TEXCOORD_0; docs/asset-conventions.md
+ * "Textures"), as the toon and the real-look materials take them; null for the flat palette
+ * materials, which then convert exactly as before. The textures are shared, not cloned, so each
+ * keeps GLTFLoader's colour space, sampler, flipY and `channel` (the UV set: three 0.186 reads the
+ * aoMap from its texture's channel, no uv2 needed). Toon has no roughness / metalness.
+ */
+function surfaceMaps(m: THREE.MeshStandardMaterial) {
+  if (!m.map && !m.normalMap && !m.aoMap && !m.roughnessMap && !m.metalnessMap && !m.emissiveMap) return null;
+  const shared = {
+    map: m.map,
+    normalMap: m.normalMap,
+    normalMapType: m.normalMapType,
+    normalScale: m.normalScale.clone(),
+    aoMap: m.aoMap,
+    aoMapIntensity: m.aoMapIntensity,
+    emissiveMap: m.emissiveMap,
+  };
+  const ids = [m.map, m.normalMap, m.aoMap, m.roughnessMap, m.metalnessMap, m.emissiveMap].map((t) => t?.uuid ?? "-").join(",");
+  return {
+    key: `${ids}|${m.normalScale.x},${m.normalScale.y}|${m.aoMapIntensity}|${m.roughness},${m.metalness}`,
+    toon: shared,
+    standard: { ...shared, roughnessMap: m.roughnessMap, metalnessMap: m.metalnessMap },
+  };
+}
+
 class Toon {
   private gradient = gradientMap();
   private materials = new Map<string, THREE.MeshToonMaterial>();
@@ -126,20 +155,23 @@ class Toon {
     const m = src as THREE.MeshStandardMaterial;
     const color = m.color ?? new THREE.Color(1, 1, 1);
     const emissive = m.emissive ?? new THREE.Color(0, 0, 0);
-    const key = `${color.getHexString()}|${emissive.getHexString()}|${m.opacity}|${m.side}|${m.vertexColors ? "vc" : ""}${character ? "|character" : ""}`;
+    const maps = surfaceMaps(m);
+    const key = `${color.getHexString()}|${emissive.getHexString()}|${m.opacity}|${m.side}|${m.vertexColors ? "vc" : ""}${character ? "|character" : ""}${maps ? `|${maps.key}` : ""}`;
     let toon = this.materials.get(key);
     if (!toon && LOOK.real && !LOOK.ramp) {
-      // real look (look.ts): a plain PBR surface in place of the toon ramp (typed as toon: the callers only read color / name)
+      // real look (look.ts): a plain PBR surface in place of the toon ramp (typed as toon: the callers only read color / name);
+      // a textured source keeps its maps and its own roughness / metalness factors (they scale the ORM map)
       toon = new THREE.MeshStandardMaterial({
         color,
         emissive,
         vertexColors: m.vertexColors,
-        roughness: 0.8,
-        metalness: 0,
+        roughness: maps ? m.roughness : 0.8,
+        metalness: maps ? m.metalness : 0,
         transparent: m.transparent || m.opacity < 1,
         opacity: m.opacity,
         side: m.side,
         name: m.name,
+        ...maps?.standard,
       }) as unknown as THREE.MeshToonMaterial;
       if (!character) patchSeeThrough(toon);
       this.materials.set(key, toon);
@@ -154,6 +186,7 @@ class Toon {
         opacity: m.opacity,
         side: m.side,
         name: m.name,
+        ...maps?.toon,
       });
       if (!character) patchSeeThrough(toon);
       this.materials.set(key, toon);
@@ -748,7 +781,9 @@ export class SceneSpace {
       if (e.set === "characters" && CHARACTER_KINDS.has(e.kind ?? "")) continue;
       const o = await this.assets.instance(d.asset);
       this.place(o, d);
-      o.userData.see = this.seeSpec(o, d.asset, d.asset);
+      // hung on a building (port-town.mjs HUNG): fades with it, one object, never on its own
+      const host = d.mounted ? (scene.getObjectByName(d.mounted)?.userData.see as SeeSpec | undefined) : undefined;
+      o.userData.see = host ? { ...host } : this.seeSpec(o, d.asset, d.asset);
       scene.add(o);
       statics.push(o);
     }

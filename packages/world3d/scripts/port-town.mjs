@@ -202,6 +202,33 @@ const STANDING = [
 ];
 
 /**
+ * Street dressing hung on a building's own anchors, as the library's street mock-up does
+ * (make-it-in-china tools/blender/mockup.py dress_noodle): a lantern on each of the noodle shop's
+ * lantern_hooks (the lantern's origin is the top of its hook ring; it hangs straight down). Each
+ * entry is `mounted` on its building: off the walk checks (it hangs over the shop's own blocker).
+ */
+const HUNG = [{ building: "noodle_shop", anchor: "lantern_hooks", asset: "lantern" }];
+
+/** layout.ts anchorToWorld: an anchor in a placement's frame -> world. */
+function anchorWorld(p, local) {
+  const a = p.rotY * DEG;
+  const k = p.scale ?? 1;
+  const c = Math.cos(a) * k;
+  const s = Math.sin(a) * k;
+  return [p.pos[0] + local[0] * c + local[2] * s, p.pos[1] + local[1] * k, p.pos[2] - local[0] * s + local[2] * c];
+}
+
+function hungDressing(buildings, index) {
+  return HUNG.flatMap((h) => {
+    const b = buildings.find((x) => x.id === h.building);
+    const hooks = index.assets.find((a) => a.name === b?.asset)?.anchors?.[h.anchor];
+    if (!b || !Array.isArray(hooks) || !hooks.length) throw new Error(`port-town: no ${h.building} with ${h.anchor} anchors to hang ${h.asset} on`);
+    if (!index.assets.some((a) => a.name === h.asset)) throw new Error(`port-town: ${h.asset} is not in index.json`);
+    return hooks.map((hook) => ({ asset: h.asset, pos: anchorWorld(b, hook).map(r3), rotY: b.rotY, mounted: h.building }));
+  });
+}
+
+/**
  * Outdoor fog for a 140 m plateau under mountains 360-600 m out: clear over the town, a haze on the
  * far ring, full before the sky dome (r 800 m), so the ground's far ring fades into the dome's
  * horizon band (world3d src/horizon.ts: the skirt runs on under it).
@@ -265,7 +292,7 @@ function walkChecks(out) {
         if (!walkable(x, z) || nearBlocker(x, z, 0.3)) problems.push(`walker ${w.character} at ${x.toFixed(2)},${z.toFixed(2)}`);
       }
     }
-  for (const p of out.dressing) if (!walkable(p.pos[0], p.pos[2]) || nearBlocker(p.pos[0], p.pos[2], 0.2)) problems.push(`dressing ${p.asset} at ${p.pos}`);
+  for (const p of out.dressing) if (!p.mounted && !walkable(p.pos[0], p.pos[2]) || nearBlocker(p.pos[0], p.pos[2], 0.2)) problems.push(`dressing ${p.asset} at ${p.pos}`);
   if (problems.length) throw new Error(`port-town: off the walkable ground or in a blocker:\n  ${problems.slice(0, 20).join("\n  ")}`);
 }
 
@@ -361,7 +388,7 @@ export function portTown(town, grid, index) {
     places,
     npcs,
     walkers: WALKERS,
-    dressing: [...PETS, ...STANDING],
+    dressing: [...PETS, ...STANDING, ...hungDressing(buildings, index)],
   };
   out.grid.cell = grid.cell_m;
   walkChecks(out);

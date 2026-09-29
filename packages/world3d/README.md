@@ -46,6 +46,38 @@ raw, with a warning. GitHub Pages already gzips GLBs (`content-encoding: gzip` o
 `model/gltf-binary`, checked 2026-09-27): meshopt + gzip is what goes over the wire. The shipped
 `index.json` carries each file's `bytes` (the loading screen's sizes).
 
+**Textured assets.** The library textures a batch of assets (make-it-in-china
+`docs/asset-conventions.md` "Textures": one atlas per asset, base colour + tangent-space normal +
+ORM = occlusion R / roughness G / metalness B, embedded PNGs, UVs on TEXCOORD_0). The game uses
+four: `noodle_shop`, `stool_plastic`, `table_folding`, and `lantern` (hung on the noodle shop's
+`lantern_hooks` by `scripts/port-town.mjs` `HUNG`, as the library's street mock-up does; `mounted`
+dressing is off the walk checks and fades with its building). The rest of the batch (road, pavement,
+awning, AC unit, hanging sign) isn't placed anywhere, so isn't vendored.
+- Sync: `npm run assets:sync -w @silver-tongue/world3d -- --only noodle_shop,lantern,...` refreshes
+  just those GLBs and their `index.json` entries (added when new) and nothing else: the way to take
+  one rebuilt batch without the rest of a library that has moved on. Every copy (sync and build,
+  `scripts/used-assets.mjs copyGlb`) first re-encodes base colour and ORM PNGs as JPEG q88
+  (`scripts/textures.mjs`, Pillow; ORM without chroma subsampling; kept PNG when JPEG isn't
+  smaller, when the image has alpha, or when a normal / emissive slot reads it; the normal map is
+  always PNG), then meshopt, then `scripts/meshopt.mjs checkSurfaces`: same texture and image
+  counts, TEXCOORD_0 on the same primitives, every PNG byte-identical, every JPEG the source's
+  size and well-formed (Pillow decodes each one it writes). The noodle shop: 1,164 KB in the
+  library, 725 KB vendored (1,060 KB with PNGs: over the loading plan's 40 % first-frame budget).
+- Materials (`world.ts` `surfaceMaps`, `Toon.material`): toon carries `map`, `normalMap`,
+  `aoMap`, `emissiveMap`; the real look also `roughnessMap` / `metalnessMap` and the source's own
+  roughness / metalness factors (flat materials keep 0.8 / 0). The textures are shared, not cloned
+  (GLTFLoader's colour space, sampler and `channel`: three 0.186 reads the aoMap from its texture's
+  channel, no uv2). The maps' uuids are in the material key, so textured sources never collapse
+  into one white material; flat palette materials key and convert exactly as before.
+- Tests: node can't decode the PNGs, so `test/helpers.ts readGlb` drops images from the GLBs it
+  loads; `test/textures.test.ts` checks the vendored images and the conversion instead.
+- Known gaps (asset follow-up): the textured versions were baked on the geometry from before the
+  polish pass, so `noodle_shop` (5,520 -> 2,576 tris, bevels gone), `stool_plastic` (584 -> 280)
+  and `table_folding` (632 -> 368) lost their polish; they need a re-bake on the polished geometry.
+  The noodle shop's baked AO (ORM red) is very dark and noisy (mean 0.19, many islands near black):
+  a grainy speckle on the shaded interior behind the counter, in the real look most of all
+  (GTAO darkens it again on top).
+
 The one-off build (`npm run build`), measured 2026-09-27:
 
 | part | KB | note |
@@ -722,6 +754,15 @@ without the flag.
   from an absolute path as in `scripts/cache-repro`) against a served `dist/`: the toon / real /
   real + ramp views of Market Street by the noodle shop, an evening pair, a see-through check each,
   and rAF frame times, into `shots/look/`. `world3d.look()` reports the mode and the composer's CPU ms.
+  `SET=textured` shoots the textured assets at the same spot (06 toon, 07 real, 08 real evening,
+  09 a close camera on the noodle shop's facade, see-*-textured); `CHROME=/usr/bin/google-chrome`
+  when Playwright's own browser isn't downloaded. Frame time with the textured noodle shop, lanterns,
+  stools and table (2026-09-30, Vega 11): real 15.6-17.8 ms mean vs 16.5-17.1 ms untextured, the
+  same within noise.
+- Outline hulls are hidden from GTAO's normal / depth pass (`reallook.ts`: their materials,
+  `world.ts OUTLINE_MATERIALS`, invisible for that pass only). Under its override material a hull
+  is its mesh again, un-pushed, at the same depth: the two z-fought into a diagonal hatch on any
+  mesh that isn't batched (first seen on the textured noodle shop's single mesh).
 
 ## Courses and reading languages
 

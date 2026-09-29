@@ -23,6 +23,8 @@ export interface Placement {
   behaviour?: "scatter";
   /** a character's bark role (src/barks.ts; default: its asset name, else passerby) */
   role?: string;
+  /** dressing hung on a building's anchors (scripts/port-town.mjs HUNG): the building's id */
+  mounted?: string;
 }
 export interface BuildingPlacement extends Placement {
   id: string;

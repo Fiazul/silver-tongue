@@ -60,7 +60,7 @@ function skyEquirect(k: LookSky): THREE.DataTexture {
  * `seeThrough`: seethrough.ts patchSeeThrough, passed in by main.ts (importing it here would split
  * seethrough.ts out of the main bundle into a chunk shared with this one, changing the default page).
  */
-export function createRealLook(renderer: THREE.WebGLRenderer, seeThrough: (m: THREE.Material) => void): RealLook {
+export function createRealLook(renderer: THREE.WebGLRenderer, seeThrough: (m: THREE.Material) => void, hulls: readonly THREE.Material[] = []): RealLook {
   renderer.shadowMap.enabled = true;
   // three 0.186 removed PCFSoftShadowMap (it falls back with a warning): PCF, softened by shadow.radius
   renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -78,6 +78,20 @@ export function createRealLook(renderer: THREE.WebGLRenderer, seeThrough: (m: TH
   gtao.blendIntensity = REAL.aoBlend;
   // the AO's depth / normal pass honours the see-through's dither, else a faded building still darkens what's behind it
   seeThrough(gtao.normalMaterial);
+  // ...and never sees the outline hulls (`hulls`: their materials, world.ts OUTLINE_MATERIALS). Under
+  // the pass's override material a hull is its mesh again, un-pushed, at the same depth: the two
+  // z-fight into a diagonal hatch of wrong normals, dark stripes on any mesh that isn't batched (a
+  // textured asset's one mesh). Hidden by material for the AO pass only (the renderer skips an
+  // object whose own material is invisible, override or not); the colour pass still draws them.
+  const aoRender = gtao.render.bind(gtao);
+  gtao.render = (...args: Parameters<GTAOPass["render"]>) => {
+    for (const m of hulls) m.visible = false;
+    try {
+      aoRender(...args);
+    } finally {
+      for (const m of hulls) m.visible = true;
+    }
+  };
   composer.addPass(renderPass);
   composer.addPass(gtao);
   composer.addPass(new OutputPass());

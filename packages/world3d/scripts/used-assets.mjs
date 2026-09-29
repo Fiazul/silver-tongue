@@ -4,6 +4,7 @@
 // slots of every shell (the same scan as layout.ts usedAssets).
 import { copyFileSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { jpegTextures } from "./textures.mjs";
 
 /** scripts/meshopt.mjs, or null when meshoptimizer isn't installed (then the GLBs ship as they are). */
 async function meshopt() {
@@ -56,11 +57,49 @@ export async function copyUsed(src, out, layoutPaths) {
   for (const a of entries) {
     mkdirSync(join(out, dirname(a.path)), { recursive: true });
     const to = join(out, a.path);
-    const packed = mo?.compressGlb(readFileSync(join(src, a.path)));
-    if (packed) writeFileSync(to, packed);
-    else copyFileSync(join(src, a.path), to);
-    shipped.push({ ...a, bytes: statSync(to).size });
+    shipped.push(copyGlb(mo, src, out, a));
   }
   writeFileSync(join(out, "index.json"), JSON.stringify({ frame: index.frame, axes: index.axes, assets: shipped }));
   return entries.length;
+}
+
+/**
+ * One GLB from `src` to `out` (same relative path): base colour / ORM PNGs as JPEG
+ * (scripts/textures.mjs), then meshopt-compressed when it can be, its textures and UVs checked
+ * kept (scripts/meshopt.mjs checkSurfaces); its index entry with `bytes`.
+ */
+function copyGlb(mo, src, out, a) {
+  const to = join(out, a.path);
+  const raw = readFileSync(join(src, a.path));
+  const jpeg = jpegTextures(raw, a.path);
+  const packed = mo?.compressGlb(jpeg) ?? (jpeg !== raw ? jpeg : null);
+  if (packed) {
+    mo?.checkSurfaces(raw, packed, a.path);
+    writeFileSync(to, packed);
+  } else copyFileSync(join(src, a.path), to);
+  return { ...a, bytes: statSync(to).size };
+}
+
+/**
+ * Refreshes only the named GLBs in the vendored `out` from the library `src` (and their index.json
+ * entries, added when new), leaving every other file as it is: for bringing in one rebuilt batch
+ * (the textured assets) without taking the rest of a library that has moved on. Returns the entries.
+ */
+export async function refreshNamed(src, out, names) {
+  const index = JSON.parse(readFileSync(join(src, "index.json"), "utf8"));
+  const vendored = JSON.parse(readFileSync(join(out, "index.json"), "utf8"));
+  const mo = await meshopt();
+  const done = [];
+  for (const name of names) {
+    const a = index.assets.find((e) => e.name === name);
+    if (!a) throw new Error(`refresh: ${name} is not in ${join(src, "index.json")}`);
+    mkdirSync(join(out, dirname(a.path)), { recursive: true });
+    const entry = copyGlb(mo, src, out, a);
+    const at = vendored.assets.findIndex((e) => e.name === name);
+    if (at >= 0) vendored.assets[at] = entry;
+    else vendored.assets.push(entry);
+    done.push(entry);
+  }
+  writeFileSync(join(out, "index.json"), JSON.stringify(vendored));
+  return done;
 }

@@ -11,17 +11,30 @@
 //   npm run assets:sync -w @silver-tongue/world3d      (WORLD3D_ASSETS=... to point elsewhere)
 //
 // The library defaults to ../assets next to the repo checkout (the make-it-in-china layout).
+//
+//   npm run assets:sync -w @silver-tongue/world3d -- --only noodle_shop,lantern,...
+//
+// refreshes just those GLBs and their index.json entries (added when new), nothing else: one
+// rebuilt batch (e.g. the textured assets) without the rest of a library that has moved on.
 import { spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { portTown, readTownSources, townJsonText } from "./port-town.mjs";
-import { copyUsed } from "./used-assets.mjs";
+import { copyUsed, refreshNamed } from "./used-assets.mjs";
 
 const here = join(dirname(fileURLToPath(import.meta.url)), "..");
 const src = process.env.WORLD3D_ASSETS ?? join(here, "..", "..", "..", "assets");
 const out = join(here, "assets");
 if (!existsSync(join(src, "index.json"))) throw new Error(`no asset library at ${src} (set WORLD3D_ASSETS)`);
+
+const only = process.argv.indexOf("--only");
+if (only >= 0) {
+  const names = (process.argv[only + 1] ?? "").split(",").filter(Boolean);
+  if (!names.length) throw new Error("--only wants a comma-separated list of asset names");
+  for (const e of await refreshNamed(src, out, names)) console.log(`refreshed packages/world3d/assets/${e.path} (${(e.bytes / 1024).toFixed(0)} KB)`);
+  process.exit(0);
+}
 
 // Prune audio that the authoritative manifest no longer ships before copyUsed refreshes assets/.
 const manifest = JSON.parse(readFileSync(join(src, "audio", "manifest.json"), "utf8"));

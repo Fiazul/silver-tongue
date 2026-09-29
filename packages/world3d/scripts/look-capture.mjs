@@ -28,20 +28,39 @@ const variants = [
   { name: "toon", q: "" },
   { name: "real", q: "&look=real" },
   { name: "real-ramp", q: "&look=real&ramp=1" },
+  // its own page: the held dolly never hands the camera back, so no see-through check after it
+  { name: "real-close", q: "&look=real", noSee: true },
 ];
-const shots = [
-  { file: "01-toon.png", v: "toon", day: 0 },
-  { file: "02-real.png", v: "real", day: 0 },
-  { file: "03-real-ramp.png", v: "real-ramp", day: 0 },
-  { file: "04-toon-evening.png", v: "toon", day: 1 },
-  { file: "05-real-evening.png", v: "real", day: 1 },
-];
+/**
+ * SET=textured: the textured assets' set (the noodle shop, street dressing: docs/asset-conventions.md
+ * "Textures" in the library) at the same spot, 06-08 beside 01 / 02 / 05, plus 09, a close camera
+ * on the noodle shop's facade (`close`: a held promo dolly, from == to), and see-*-textured.png.
+ */
+const SET = process.env.SET ?? "";
+/** close on the noodle shop's facade (its front at z ~31.5 facing +z), from the south-east, a little above head height */
+const CLOSE = { from: [-12.2, 3.1, 37.2], to: [-12.2, 3.1, 37.2], lookAt: [-16.6, 2.0, 31.2], seconds: 600 };
+const shots =
+  SET === "textured"
+    ? [
+        { file: "06-toon-textured.png", v: "toon", day: 0 },
+        { file: "07-real-textured.png", v: "real", day: 0 },
+        { file: "08-real-evening-textured.png", v: "real", day: 1 },
+        { file: "09-real-textured-close.png", v: "real-close", day: 0, close: true },
+      ]
+    : [
+        { file: "01-toon.png", v: "toon", day: 0 },
+        { file: "02-real.png", v: "real", day: 0 },
+        { file: "03-real-ramp.png", v: "real-ramp", day: 0 },
+        { file: "04-toon-evening.png", v: "toon", day: 1 },
+        { file: "05-real-evening.png", v: "real", day: 1 },
+      ];
 const args = (process.env.CHROME_ARGS ?? "--use-angle=vulkan --enable-features=Vulkan --enable-gpu --ignore-gpu-blocklist --disable-gpu-vsync --disable-frame-rate-limit").split(" ").filter(Boolean);
-const browser = await chromium.launch({ headless: true, args });
+// CHROME=/usr/bin/google-chrome: a browser of its own when Playwright's download isn't there
+const browser = await chromium.launch({ headless: true, args, ...(process.env.CHROME ? { executablePath: process.env.CHROME } : {}) });
 const report = {};
 /** ONLY=real,real-ramp: a subset of the variants (their shots only) */
 const only = process.env.ONLY?.split(",");
-for (const v of variants.filter((v) => !only || only.includes(v.name))) {
+for (const v of variants.filter((v) => (!only || only.includes(v.name)) && shots.some((s) => s.v === v.name))) {
   const page = await browser.newPage({ viewport: { width: W, height: H } });
   const logs = [];
   const t0 = Date.now();
@@ -65,6 +84,7 @@ for (const v of variants.filter((v) => !only || only.includes(v.name))) {
   for (const s of shots.filter((s) => s.v === v.name)) {
     await page.evaluate((d) => window.world3d.setDaylight(d), s.day);
     await page.evaluate(([x, z]) => window.world3d.teleport(x, z), SPOT);
+    if (s.close) void page.evaluate((c) => void window.world3d.promo("dolly", c), CLOSE); // held for its 600 s: never awaited
     await page.waitForTimeout(2500);
     // frame time: rAF intervals over 3 s (vsync / frame cap off in CHROME_ARGS, so it tracks the work)
     r.frames[s.day] = await page.evaluate(
@@ -91,12 +111,17 @@ for (const v of variants.filter((v) => !only || only.includes(v.name))) {
     console.log(`${s.file}: ${v.name} day=${s.day}`);
   }
   // see-through check (seethrough.ts): the player behind the noodle shop, seen from the street
+  if (v.noSee) {
+    report[v.name] = r;
+    await page.close();
+    continue;
+  }
   await page.evaluate((d) => window.world3d.setDaylight(d), 0);
   await page.evaluate(([x, z]) => window.world3d.teleport(x, z), SEE_SPOT);
   await page.waitForTimeout(3000);
   const st = await page.evaluate(() => window.world3d.seeThrough());
   r.seeThrough = Object.fromEntries(Object.entries(st).filter(([k]) => k !== "slots"));
-  await page.screenshot({ path: join(out, `see-${v.name}.png`) });
+  await page.screenshot({ path: join(out, `see-${v.name}${SET ? `-${SET}` : ""}.png`) });
   report[v.name] = r;
   await page.close();
 }
