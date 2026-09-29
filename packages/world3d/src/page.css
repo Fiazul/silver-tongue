@@ -73,6 +73,10 @@ button { font: inherit; font-weight: 700; color: var(--ink); background: var(--p
 button:hover { background-color: #fff8ea; }
 button:active { transform: translateY(3px); box-shadow: var(--lift-pressed); }
 button:focus-visible { outline: none; box-shadow: var(--shadow), var(--focus); }
+/* A gamepad drives focus: always show where it is (browsers hide rings after a click). */
+html.pad #ui :focus:not(dialog), html.pad #start :focus:not(.st-screen) { outline: 3px solid #2f7a5f; outline-offset: 2px; }
+/* the number-key chips on replies mean nothing on a pad */
+html.pad .replies .option .key { display: none; }
 button:disabled { opacity: 0.45; cursor: default; transform: none; box-shadow: var(--lift-pressed); }
 button.secondary { background: var(--paper-deep); }
 button.primary, .tile-tools .say, .daycard > button, .name button[type="submit"] { background: var(--lacquer); color: var(--paper); font-family: var(--font-display); font-weight: 400; letter-spacing: 0.02em; }

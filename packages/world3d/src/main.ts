@@ -43,6 +43,7 @@ import { PlayerCarry } from "./carry";
 import { applyStart, loadCatalog, rememberedStart, resumePick, type Picked } from "./courses";
 import { CameraPathPlayer, DollyPath, Letterbox, OrbitPath } from "./cutscene";
 import { openSession, type Game, type UiModel } from "./game";
+import { GamepadControls, type GamepadHooks, type PadLayout } from "./gamepad";
 import { Guide, type GuideStep } from "./guide";
 import { MoveInput, toGround } from "./input";
 import { deckAt, gridClass, heldProp, LAYOUT, LayoutIndex, STREET, type AssetIndex, type CameraPath, type Stand, type Vec3 } from "./layout";
@@ -396,6 +397,22 @@ async function main() {
   // move / pointers exist before the flow can reset them (declared below, used by runStartFlow)
   let pointers: PointerControls | undefined;
   const move = new MoveInput();
+  // A gamepad works from the start screens on; the game's side of it is filled in once the game exists.
+  let padGame: GamepadHooks | null = null;
+  let padLabels: PadLayout["labels"] | null = null;
+  new GamepadControls(move, {
+    scope: () => (startOpen ? startRoot : (padGame?.scope() ?? null)),
+    canWalk: () => !startOpen && !!padGame?.canWalk(),
+    menu: () => {
+      if (!startOpen) padGame?.menu();
+    },
+    actions: () => (startOpen ? null : (padGame?.actions() ?? null)),
+    onUse: (layout) => {
+      padLabels = layout.labels;
+      if (padGame) padGame.onUse(layout);
+      else document.documentElement.classList.add("pad");
+    },
+  });
   if (promoMode) {
     // ?promo=1: skip the start flow outright (the remembered course / reading language, or the
     // catalog's first), a fixed name so a promo run is the same game every time.
@@ -1033,6 +1050,24 @@ async function main() {
     onTouch: () => overlay.setTouch(),
   });
   if (window.matchMedia?.("(pointer: coarse)").matches) overlay.setTouch();
+  const padFree = () => !!game && !overlay.blocking && !transitioning && !flyover;
+  padGame = {
+    scope: () => (flyover ? null : overlay.padScope()),
+    canWalk: padFree,
+    menu: () => {
+      if (padFree()) overlay.openMenu();
+    },
+    actions: () => (padFree() ? overlay.actionBar : null),
+    onUse: (layout) => overlay.setPad(layout.labels),
+  };
+  if (padLabels) overlay.setPad(padLabels);
+  // Keys or a mouse again: their hints back.
+  const offPad = () => {
+    padLabels = null;
+    overlay.setPad(null);
+  };
+  window.addEventListener("keydown", (e) => e.isTrusted && offPad(), true);
+  window.addEventListener("pointerdown", (e) => e.pointerType === "mouse" && offPad(), true);
 
   // Keys: overlay first (replies, lists, notebook), then walking and E.
   window.addEventListener("keydown", (e) => {

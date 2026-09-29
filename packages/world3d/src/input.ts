@@ -1,4 +1,4 @@
-// The one movement input: keyboard (WASD / arrows) and the on-screen joystick both feed a single
+// The one movement input: keyboard (WASD / arrows), the on-screen joystick and a gamepad feed a single
 // screen-space vector (x right, y up the screen, length 0..1), which main.ts turns into a ground
 // direction through the camera's axes. Taps (tap-to-walk, tap an NPC) are told apart from joystick
 // drags by `isTap`. Pure maths, no DOM: tested in test/input.test.ts.
@@ -56,10 +56,12 @@ export const MOVE_KEYS: Record<string, [number, number]> = {
   arrowright: [1, 0],
 };
 
-/** Keyboard + joystick in, one screen-space vector out. Keys win while any is held (they are unit length). */
+/** Keyboard + joystick + gamepad in, one screen-space vector out. Keys win while any is held (they are unit length), then the touch stick. */
 export class MoveInput {
   readonly keys = new Set<string>();
   stick: Vec = { x: 0, y: 0 };
+  /** the gamepad's left stick / d-pad (gamepad.ts) */
+  pad: Vec = { x: 0, y: 0 };
 
   /** true if the key walks (and is now held) */
   press(key: string): boolean {
@@ -76,6 +78,7 @@ export class MoveInput {
   clear() {
     this.keys.clear();
     this.stick = { x: 0, y: 0 };
+    this.pad = { x: 0, y: 0 };
   }
 
   /** The screen-space movement vector, length 0..1. */
@@ -88,8 +91,9 @@ export class MoveInput {
     }
     const len = Math.hypot(x, y);
     if (len > 0) return { x: x / len, y: y / len };
-    const s = Math.hypot(this.stick.x, this.stick.y);
-    return s > 1 ? { x: this.stick.x / s, y: this.stick.y / s } : { ...this.stick };
+    const v = this.stick.x || this.stick.y ? this.stick : this.pad;
+    const s = Math.hypot(v.x, v.y);
+    return s > 1 ? { x: v.x / s, y: v.y / s } : { ...v };
   }
 
   get active(): boolean {

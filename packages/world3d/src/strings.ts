@@ -40,6 +40,7 @@ const FALLBACK: Record<string, string> = {
   "walk-hint-touch": "Drag on the left to walk, or tap the street. Tap someone, or the round button, to talk.",
   "name-placeholder": "Your name",
   "you-say": "You: {text}",
+  "walk-hint-pad": "Left stick or d-pad to walk. {confirm} to talk or use, {back} to go back, {notebook} for the notebook, {menu} for the menu.",
   "walk-hint": "Tap the street to walk (or WASD / arrows). Tap someone, or press E next to them, to talk.",
   // the fly-over over the town at the start of a new game
   "cutscene-skip": "Tap to skip",

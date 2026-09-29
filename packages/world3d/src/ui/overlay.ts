@@ -15,6 +15,7 @@ import { BubbleView } from "./bubble";
 import { el } from "./dom";
 import { HudView, type WayCard } from "./hud";
 import { notebookNodes } from "./notebook";
+import type { PadRole } from "../gamepad";
 import { RepliesView } from "./replies";
 import { bubbleArea, clampBox, layoutVars, NO_INSETS, screenLayout, type Insets, type Rect, type ScreenLayout } from "./viewport";
 
@@ -113,6 +114,8 @@ export class Overlay {
   screen: ScreenLayout = screenLayout(1024, 768);
   /** a touch has been seen: the touch look (joystick hint, action button) */
   touch = false;
+  /** a gamepad is what the player uses now: its button names in the prompt and the hints */
+  private pad: Record<PadRole, string> | null = null;
 
   constructor(
     private root: HTMLElement,
@@ -212,7 +215,30 @@ export class Overlay {
     if (this.touch) return;
     this.touch = true;
     document.documentElement.classList.add("touch");
-    if (this.game) this.hint.textContent = this.game.s("walk-hint-touch");
+    if (this.game) this.hint.textContent = this.walkHint();
+  }
+
+  /** A gamepad in use (its button names) or put down for keys / mouse (null). */
+  setPad(labels: Record<PadRole, string> | null) {
+    if (this.pad === labels) return;
+    this.pad = labels;
+    document.documentElement.classList.toggle("pad", !!labels);
+    if (!this.game) return;
+    this.hint.textContent = this.walkHint();
+    if (labels) {
+      this.hint.classList.remove("gone");
+      setTimeout(() => this.hint.classList.add("gone"), 9000);
+    }
+  }
+
+  private walkHint(): string {
+    const s = this.game.s;
+    if (this.pad) return s("walk-hint-pad", this.pad);
+    return s(this.touch ? "walk-hint-touch" : "walk-hint");
+  }
+
+  private promptKey(): string {
+    return this.pad?.confirm ?? this.game.s("prompt-key");
   }
 
   /**
@@ -276,7 +302,7 @@ export class Overlay {
     this.pulse = game.model.notebookPulse;
     this.place = "";
     this.toasts.replaceChildren();
-    this.hint.textContent = s(this.touch ? "walk-hint-touch" : "walk-hint");
+    this.hint.textContent = this.walkHint();
     this.hint.classList.remove("gone");
     setTimeout(() => this.hint.classList.add("gone"), 9000);
     if (this.dayCardView.open) this.dayCardView.close();
@@ -304,6 +330,21 @@ export class Overlay {
   /** Something modal is open: the world ignores taps and keys meant for walking. */
   get blocking(): boolean {
     return this.notebook.open || this.nameForm.open || this.menu.open || this.dayCardView.open || !this.choices.classList.contains("hidden");
+  }
+
+  /** What a gamepad navigates: an open dialog, the choices, the replies, or the action bar once focused; null while it walks. */
+  padScope(): HTMLElement | null {
+    const dialog = [this.dayCardView, this.nameForm, this.menu, this.notebook].find((d) => d.open);
+    if (dialog) return dialog;
+    if (!this.choices.classList.contains("hidden")) return this.choices;
+    const replies = this.replies.node;
+    if (replies.querySelector("button, [tabindex]") && replies.getClientRects().length) return replies;
+    return this.actions.contains(document.activeElement) ? this.actions : null;
+  }
+
+  /** The action bar (notebook, travel, sleep, menu). */
+  get actionBar(): HTMLElement {
+    return this.actions;
   }
 
   /** A course switched in Settings (another reading language or course): its text from here on. */
@@ -489,13 +530,13 @@ export class Overlay {
     this.actionBtn.classList.toggle("hidden", !usable);
     if (usable && this.actionBtn.dataset.label !== label) {
       this.actionBtn.dataset.label = label;
-      this.actionBtn.replaceChildren(el("span", { className: "action-key", textContent: this.game.s("prompt-key") }), el("span", { className: "action-label", textContent: label }));
+      this.actionBtn.replaceChildren(el("span", { className: "action-key", textContent: this.promptKey() }), el("span", { className: "action-label", textContent: label }));
       this.actionBtn.setAttribute("aria-label", label);
     }
     const show = usable && visible;
     this.promptBtn.classList.toggle("hidden", !show);
     if (!show) return;
-    const text = `${this.game.s("prompt-key")} · ${label}`;
+    const text = `${this.promptKey()} · ${label}`;
     if (this.promptBtn.textContent !== text) this.promptBtn.textContent = text;
     // Centred above the point, kept inside the safe area.
     const w = this.promptBtn.offsetWidth;
@@ -581,7 +622,7 @@ export class Overlay {
             ]
           : []),
         ...(this.hooks.way ? [pathToggle()] : []),
-        button(s("help"), () => body.replaceChildren(el("p", { textContent: s("walk-hint") }), button(s("cancel"), home, "secondary"))),
+        button(s("help"), () => body.replaceChildren(el("p", { textContent: this.walkHint() }), button(s("cancel"), home, "secondary"))),
       );
     /** Show path: on / off (wayfinding's ground path hint); relabels itself. */
     const pathToggle = () => {
