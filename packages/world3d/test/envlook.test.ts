@@ -2,22 +2,65 @@
 // The scene-level checks (no blades on the street or a footprint, a core in every tree) are in
 // world.test.ts "real look environment"; the LOD bands and chunks in perf.test.ts "grass LOD".
 import { describe, expect, it } from "vitest";
-import { CANOPY_CORE, FIELD, GRASS, GRASS_LOOK, grassDensityAt, grassMacro } from "../src/envlook";
+import { CANOPY_CORE, FIELD, GRASS, GRASS_LOOK, grassDensityAt, grassMacro, TUFT, tuftTextureData } from "../src/envlook";
 
 describe("the lawn (envlook.ts GRASS, GRASS_LOOK)", () => {
-  it("short blades: near 0.14 m, far 0.17 m tall at the size's top (half the first pass's), at most 200 x 200 blades a band", () => {
-    expect(GRASS.near.size).toEqual([0.06, 0.14]);
-    expect(GRASS.far.size).toEqual([0.11, 0.17]);
-    for (const b of [GRASS.near, GRASS.far]) expect(b.n).toBeLessThanOrEqual(200);
+  it("tuft cards: near 3 crossed quads, far 1 (turned to the camera), the tallest 0.16 m, at most 200 x 200 tufts a band", () => {
+    expect(GRASS.near.size).toEqual([0.13, 0.16]);
+    expect(GRASS.far.size).toEqual([0.26, 0.16]);
+    expect([GRASS.near.quads, GRASS.far.quads]).toEqual([3, 1]);
+    for (const b of [GRASS.near, GRASS.far]) {
+      expect(b.n).toBeLessThanOrEqual(200);
+      expect(b.size[1]).toBeLessThanOrEqual(0.16);
+    }
+    expect(GRASS_LOOK.lean).toBeLessThanOrEqual(0.2); // a few degrees
   });
 
-  it("a dark root and a yellow-green tip (more red, less blue than the lawn's green); thin patches keep a floor of their blades", () => {
-    for (const c of GRASS_LOOK.root) expect(c).toBeLessThan(0.5);
+  it("the colour: the root near the ground's own, a yellow-green tip no brighter than the lawn (luminance <= 1), at most 60 % saturation", () => {
+    for (const c of GRASS_LOOK.root) {
+      expect(c).toBeGreaterThan(0.8);
+      expect(c).toBeLessThanOrEqual(1);
+    }
     const [r, g, b] = GRASS_LOOK.tip;
-    expect(r).toBeGreaterThan(g);
-    expect(b).toBeLessThan(1);
+    expect(r).toBeGreaterThan(g); // toward yellow
+    expect(b).toBeLessThan(g);
+    expect(0.2126 * r + 0.7152 * g + 0.0722 * b).toBeLessThanOrEqual(1);
+    expect(GRASS_LOOK.maxSat).toBeLessThanOrEqual(0.6);
     expect(GRASS_LOOK.clump.floor).toBeGreaterThan(0);
     expect(GRASS_LOOK.clump.floor).toBeLessThan(0.3);
+  });
+
+  it("the tuft texture: 256^2, two variants of 5-8 thin blades each, alpha-tested cover of a sliver of the card, tips thinning out", () => {
+    const d = tuftTextureData().data as Uint8Array;
+    const N = TUFT.n;
+    expect(N).toBeLessThanOrEqual(512);
+    expect(d.length).toBe(N * N * 4);
+    for (const n of TUFT.blades) {
+      expect(n).toBeGreaterThanOrEqual(5);
+      expect(n).toBeLessThanOrEqual(8);
+    }
+    const on = (x: number, y: number) => d[(y * N + x) * 4 + 3] >= TUFT.alphaTest * 255;
+    let cover = 0;
+    for (let q = 0; q < N * N; q++) if (d[q * 4 + 3] >= TUFT.alphaTest * 255) cover++;
+    expect(cover / (N * N)).toBeGreaterThan(0.03);
+    expect(cover / (N * N)).toBeLessThan(0.3); // thin blades, mostly air
+    // each variant: at a third of the height, 4+ separate blades across it
+    for (const v of [0, 1]) {
+      let best = 0;
+      for (let y = Math.floor(N * 0.25); y < N * 0.45; y++) {
+        let runs = 0;
+        for (let x = 0; x < N / 2; x++) if (on(v * (N / 2) + x, y) && (x === 0 || !on(v * (N / 2) + x - 1, y))) runs++;
+        best = Math.max(best, runs);
+      }
+      expect(best, `variant ${v}`).toBeGreaterThanOrEqual(4);
+    }
+    // narrower toward the top: the covered texels in the top quarter well under the bottom quarter's
+    const band = (y0: number, y1: number) => {
+      let c = 0;
+      for (let y = y0; y < y1; y++) for (let x = 0; x < N; x++) if (on(x, y)) c++;
+      return c;
+    };
+    expect(band(N * 0.75, N)).toBeLessThan(band(0, N * 0.25) * 0.3);
   });
 
   it("grassDensityAt: 0 off the lawn's mask; on a full lawn, dense clumps, thin patches and some bare ground", () => {

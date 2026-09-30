@@ -3,8 +3,8 @@
 //   ground    the terrain's grass / path materials take world-projected, generated textures
 //             (grass, packed dirt, a detail normal), dirt worn in along the path edges (a distance
 //             field rasterised from the terrain's own triangles) and in noise patches;
-//   grass     instanced blade cards (2 tris each) on the grass cells round the player, coloured from
-//             the ground under them (dark root, yellow-green tip), in clumps with thin and bare
+//   grass     instanced tuft cards (thin alpha-tested blades; near 3 crossed quads, far 1) on the grass cells round the player, coloured from
+//             the ground under them (its colour at the root, a muted yellow-green tip), in clumps with thin and bare
 //             patches (GRASS_LOOK), swaying in the wind, fading out with distance;
 //   leaves    alpha-cut leaf-cluster cards over every tree canopy (the solid canopy stays, darker, as
 //             the crown's core, and the one that casts: the cards never do, nor do grass or particles),
@@ -37,32 +37,38 @@ export interface EnvDeps {
 export const FIELD = { min: -70, size: 140, n: 512 };
 /**
  * Grass: two toroidal tiles of blades round the player, the LOD bands (near: dense, to 12.5 m;
- * far: an eighth of its density, wider blades, to 30 m, none beyond). Each tile is cut into
+ * far: an eighth of its density, wider cards, to 30 m, none beyond). Each blade instance is a tuft
+ * card (tuftTextureData: thin alpha-tested blades): near `quads` crossed quads, far one quad turned
+ * to the camera; `size`: the card's width and its tallest height (m). Each tile is cut into
  * `chunks` x `chunks` meshes, drawn only when in the camera's frustum and inside the band's fade
  * (grassChunkVisible); lite's far blades take no shadow (a cheaper fragment).
  */
 export const GRASS = {
-  near: { tile: 26, n: 200, fade: [9, 12.5], size: [0.06, 0.14], chunks: 4 },
-  far: { tile: 72, n: 200, fade: [24, 30], size: [0.11, 0.17], chunks: 6 },
+  near: { tile: 26, n: 200, fade: [9, 12.5], size: [0.13, 0.16], chunks: 4, quads: 3 },
+  far: { tile: 72, n: 200, fade: [24, 30], size: [0.26, 0.16], chunks: 6, quads: 1 },
 };
 /**
  * The lawn's look, shared by the blade shader and grassDensityAt (its CPU mirror, for the tests):
  * clumps (macro noise R at `clump.scale` m: a blade stays where its own random is under the
  * density, `floor` .. 1, so thin patches keep `floor` of their blades; the clumps' blades a little
  * taller), bare dirt patches (envBare: the ground shader's dirt patches, the blades gone there) and
- * the blade's colour (a dark base, the lawn's green, a yellow-green tip).
+ * the blade's colour: `root` x the lawn's own colour at the ground (the blades grow out of it), the
+ * lawn's colour up the blade, `tip` (yellow-green, no brighter) at the top, every blade held to
+ * `maxSat` saturation. `lean`: the tuft's random lean (rad, at most).
  */
 export const GRASS_LOOK = {
   clump: { scale: 7.3, offset: 0.61, lo: 0.34, hi: 0.62, floor: 0.12 },
   bare: { patch: [0.6, 0.72], detail: [0.52, 0.62], gone: [0.12, 0.4] },
-  root: [0.34, 0.4, 0.3],
-  tip: [1.34, 1.2, 0.66],
+  root: [0.86, 0.87, 0.84],
+  tip: [1.08, 1.0, 0.7],
+  maxSat: 0.6,
+  lean: 0.12,
 };
 /** lite's far band fade (m): as full's (18-24 m thinned the lawn visibly at the phone's top edge, for little: the far blades are cheap) */
 export const LITE_FAR_FADE = [24, 30];
 
 /** The grass bands a tier draws (lite: the far band nearer). */
-export function grassBands(lite: boolean): { key: "near" | "far"; tile: number; n: number; fade: number[]; size: number[]; chunks: number; shadow: boolean }[] {
+export function grassBands(lite: boolean): { key: "near" | "far"; tile: number; n: number; fade: number[]; size: number[]; chunks: number; quads: number; shadow: boolean }[] {
   return [
     { key: "near", ...GRASS.near, shadow: true },
     { key: "far", ...GRASS.far, ...(lite ? { fade: LITE_FAR_FADE } : {}), shadow: !lite },
@@ -346,6 +352,66 @@ function leafTextureData(): EnvArrays {
       data[o + 2] = Math.round(Math.min(1, col[2]) * 255);
       data[o + 3] = Math.round(best * 255);
     }
+  return { data };
+}
+
+/** The grass tuft card's texture (tuftTextureData): 256^2, linear, clamped; row 0 is the card's foot. */
+function tuftTexture(cache?: EnvCache): THREE.DataTexture {
+  const data = (cache ? cache.memo("tuft", tuftTextureData) : tuftTextureData()).data as Uint8Array;
+  const t = dataTexture(data, TUFT.n, { repeat: false });
+  t.flipY = false;
+  return t;
+}
+
+/** The tuft card: two variants side by side (u 0-0.5, 0.5-1), each `blades` thin blades from the foot, fanning, curved, tapering to a feathered tip. */
+export const TUFT = { n: 256, blades: [6, 8], alphaTest: 0.5 };
+
+/**
+ * The tuft card's texture: RGB a grey shade per blade (a lighter midrib; x 1/0.9 in the shader, mean
+ * ~1), A its coverage (anti-aliased edges, the tip fading out). Transparent texels keep the grey (no
+ * dark fringe in the mips).
+ */
+export function tuftTextureData(): EnvArrays {
+  const N = TUFT.n;
+  const H = N / 2; // a variant's width (px)
+  const rnd = makeRng(31);
+  const data = new Uint8Array(N * N * 4);
+  for (let q = 0; q < N * N; q++) {
+    data[q * 4] = data[q * 4 + 1] = data[q * 4 + 2] = 230;
+    data[q * 4 + 3] = 0;
+  }
+  const alpha = new Float32Array(N * N);
+  for (let variant = 0; variant < 2; variant++) {
+    const count = TUFT.blades[variant];
+    for (let b = 0; b < count; b++) {
+      // the foot near the middle, the blade leaning out the way it stands (a fan), a little curve
+      const u0 = 0.5 + (b / (count - 1) - 0.5) * 0.36 + (rnd() - 0.5) * 0.05;
+      const lean = (u0 - 0.5) * (0.3 + rnd() * 0.3) + (rnd() - 0.5) * 0.08;
+      const curve = (rnd() - 0.5) * 0.1 + Math.sign(lean) * 0.04;
+      const top = 0.55 + rnd() * 0.42;
+      const half = 2.6 + rnd() * 1.6; // half-width at the foot (px)
+      const tone = 0.78 + rnd() * 0.22;
+      for (let y = 0; y < Math.ceil(top * N); y++) {
+        const v = (y + 0.5) / N;
+        const k = v / top; // 0 foot .. 1 tip
+        if (k >= 1) break;
+        const cu = (u0 + lean * k + curve * k * k) * H;
+        const hw = half * Math.pow(1 - k, 0.75);
+        const fade = 1 - smooth(0.78, 1, k); // the feathered tip
+        for (let x = Math.max(0, Math.floor(cu - hw - 2)); x <= Math.min(H - 1, Math.ceil(cu + hw + 2)); x++) {
+          const d = Math.abs(x + 0.5 - cu);
+          const a = Math.max(0, Math.min(1, hw - d + 0.5)) * fade;
+          const q = y * N + variant * H + x;
+          if (a <= alpha[q]) continue;
+          alpha[q] = a;
+          const rib = d < hw * 0.3 ? 1.06 : 0.94 + 0.06 * (1 - d / Math.max(hw, 0.5));
+          const g = Math.round(Math.min(1, tone * rib) * 255);
+          data[q * 4] = data[q * 4 + 1] = data[q * 4 + 2] = g;
+          data[q * 4 + 3] = Math.round(a * 255);
+        }
+      }
+    }
+  }
   return { data };
 }
 
@@ -797,12 +863,32 @@ ${BARE_GLSL}
   if (town && want.has("grass")) {
     const t = textures();
     const f = getField();
-    const grassUniforms = { ...U, envField: { value: f.tex }, envAlbedo: { value: f.albedo }, envGrassTex: { value: t.grass }, envMacro: { value: t.macro } };
+    const grassUniforms = { ...U, envField: { value: f.tex }, envAlbedo: { value: f.albedo }, envGrassTex: { value: t.grass }, envMacro: { value: t.macro }, envTuft: { value: tuftTexture(deps.cache) } };
     const rnd = makeRng(99);
-    // the blade shape, shared by every chunk: a tapered card, 4 vertices, 2 triangles; y = the height fraction
-    const bladePos = new THREE.Float32BufferAttribute([-0.5, 0, 0, 0.5, 0, 0, 0.06, 1, 0, -0.06, 1, 0], 3);
-    const bladeNormal = new THREE.Float32BufferAttribute([0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0], 3);
-    const bladeIndex = new THREE.Uint16BufferAttribute([0, 1, 2, 0, 2, 3], 1);
+    // the tuft card, shared by a band's chunks: `quads` quads crossed round the vertical (60 degrees
+    // apart for 3), each 4 vertices, 2 triangles; y = the height fraction, uv the card's
+    const cardOf = (quads: number) => {
+      const pos: number[] = [];
+      const uv: number[] = [];
+      const index: number[] = [];
+      for (let k = 0; k < quads; k++) {
+        const a = (k * Math.PI) / quads;
+        const c = Math.cos(a);
+        const s = Math.sin(a);
+        const o = k * 4;
+        for (const [x, y] of [[-0.5, 0], [0.5, 0], [0.5, 1], [-0.5, 1]]) {
+          pos.push(c * x, y, s * x);
+          uv.push(x + 0.5, y);
+        }
+        index.push(o, o + 1, o + 2, o, o + 2, o + 3);
+      }
+      return {
+        position: new THREE.Float32BufferAttribute(pos, 3),
+        normal: new THREE.Float32BufferAttribute(pos.map((_, i) => (i % 3 === 1 ? 1 : 0)), 3),
+        uv: new THREE.Float32BufferAttribute(uv, 2),
+        index: new THREE.Uint16BufferAttribute(index, 1),
+      };
+    };
     // the grass cells' height range: the chunks' boxes (+ the tallest blade)
     let ymin = Infinity;
     let ymax = -Infinity;
@@ -824,7 +910,8 @@ ${BARE_GLSL}
           blades[k * 4 + 2] = rnd() * Math.PI * 2;
           blades[k * 4 + 3] = rnd();
         }
-      const m = new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide, name: `env_grass_${key}` });
+      const card = cardOf(spec.quads);
+      const m = new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide, alphaTest: TUFT.alphaTest, name: `env_grass_${key}` });
       m.onBeforeCompile = (s) => {
         Object.assign(s.uniforms, grassUniforms, {
           envTile: { value: spec.tile },
@@ -841,6 +928,7 @@ uniform vec2 envCenter, envFade, envSize, envFieldMin, envWind;
 uniform sampler2D envField, envAlbedo, envGrassTex, envMacro;
 varying vec3 vBlade;
 varying vec2 vBladeY;
+varying vec2 vTuftUv;
 ${BARE_GLSL}
 `,
           "before",
@@ -864,33 +952,58 @@ ${BARE_GLSL}
   float keep = fld.r * inside * step(fract(r * 13.37), dens) * (1.0 - smoothstep(${f3(GRASS_LOOK.bare.gone[0])}, ${f3(GRASS_LOOK.bare.gone[1])}, bare));
   keep *= smoothstep(0.12, 0.7, fld.g + r * 0.35) * (1.0 - smoothstep(envFade.x, envFade.y, bd + r * 1.5));
   keep = keep > 0.08 ? keep : 0.0;
-  float h = envSize.y * (0.55 + 0.9 * r) * mix(0.75, 1.15, dens) * keep;
-  float w = envSize.x * (0.7 + 0.6 * fract(r * 7.13)) * step(0.001, keep);
-  float ca = cos(aBlade.z), sa = sin(aBlade.z);
+  float h = envSize.y * (0.62 + 0.38 * r) * mix(0.8, 1.0, dens) * keep;
+  float w = envSize.x * (0.8 + 0.4 * fract(r * 7.13)) * step(0.001, keep);
+${spec.quads === 1 ? `
+  // one card turned to the camera (about the vertical), a little off it
+  vec2 envTo = cameraPosition.xz - bp;
+  float envA = atan(envTo.y, envTo.x) + 1.5708 + (fract(r * 3.1) - 0.5) * 0.5;
+  float ca = cos(envA), sa = sin(envA);` : `
+  float ca = cos(aBlade.z), sa = sin(aBlade.z);`}
   float bend = position.y * position.y;
   float t = envTime;
   float gust = textureLod(envMacro, bp / 29.0 + vec2(t * 0.031, t * 0.017), 0.0).b;
   float sway = sin(t * 1.8 + bp.x * 0.41 + bp.y * 0.27 + r * 6.2832) * 0.3 + (gust - 0.45) * 1.6;
-  vec3 transformed = vec3(bp.x + ca * position.x * w, fld.b + position.y * h, bp.y + sa * position.x * w);
+  // the card's quads turned by the tuft's angle; the tuft leans a few degrees its own way (GRASS_LOOK.lean)
+  vec2 envXZ = vec2(ca * position.x - sa * position.z, sa * position.x + ca * position.z) * w;
+  vec2 envLean = (vec2(fract(r * 17.3), fract(r * 23.1)) - 0.5) * ${f3(2 * GRASS_LOOK.lean)};
+  vec3 transformed = vec3(bp.x + envXZ.x, fld.b + position.y * h, bp.y + envXZ.y);
+  transformed.xz += envLean * position.y * h;
   transformed.xz += (envWind * sway + vec2(-sa, ca) * (r - 0.5) * 0.8) * bend * h * 0.5;
   vec3 alb = textureLod(envAlbedo, fuv, 0.0).rgb;
   vec3 gt = textureLod(envGrassTex, bp / 2.3, 0.0).rgb * 2.0;
   float tone = textureLod(envMacro, bp / 41.0, 0.0).g;
-  // the lawn's own colour, a little hue and brightness of its own per blade; the base-to-tip ramp in the fragment
-  float hv = fract(r * 5.31);
-  vBlade = alb * gt * mix(vec3(0.84, 0.88, 0.86), vec3(1.14, 1.1, 0.88), tone) * mix(vec3(0.9, 1.05, 0.86), vec3(1.07, 1.0, 0.78), hv) * (0.92 + 0.2 * fract(r * 3.7));
+  // the ground shader's lawn colour here (material x grass texture x macro tone: the blades grow out
+  // of it), a little brightness of its own per tuft; the root-to-tip ramp in the fragment
+  vBlade = alb * gt * mix(vec3(0.84, 0.88, 0.86), vec3(1.14, 1.1, 0.88), tone) * (0.94 + 0.12 * fract(r * 3.7));
   vBladeY = vec2(position.y, 0.45 + 0.55 * fract(r * 9.13));
+  // a variant (u 0-0.5 / 0.5-1), mirrored or not
+  float envU = fract(r * 41.7) < 0.5 ? uv.x : 1.0 - uv.x;
+  vTuftUv = vec2(envU * 0.5 + step(0.5, fract(r * 29.7)) * 0.5, uv.y);
 `,
           "replace",
         );
-        s.fragmentShader = inject(s.fragmentShader, "void main() {", "varying vec3 vBlade;\nvarying vec2 vBladeY;\n", "before");
+        s.fragmentShader = inject(s.fragmentShader, "void main() {", "varying vec3 vBlade;\nvarying vec2 vBladeY;\nvarying vec2 vTuftUv;\nuniform sampler2D envTuft;\n", "before");
         s.fragmentShader = inject(
           s.fragmentShader,
           "#include <color_fragment>",
           /* glsl */ `
-  // dark at the root, the lawn's green up the blade, yellow-green at the tip (each blade its own share of it)
-  vec3 envBladeC = vBlade * mix(${v3(GRASS_LOOK.root)}, vec3(1.0), smoothstep(0.0, 0.55, vBladeY.x));
-  envBladeC = mix(envBladeC, vBlade * ${v3(GRASS_LOOK.tip)}, smoothstep(0.55, 1.0, vBladeY.x) * vBladeY.y);
+  // the tuft's blades (alpha-tested: TUFT.alphaTest); the mips' coverage held up so the far
+  // tufts don't thin out as their alpha averages down
+  vec4 envT = texture2D(envTuft, vTuftUv);
+  vec2 envTs = vTuftUv * ${TUFT.n.toFixed(1)};
+  float envLod = max(0.0, 0.5 * log2(max(dot(dFdx(envTs), dFdx(envTs)), dot(dFdy(envTs), dFdy(envTs)))));
+  diffuseColor.a = envT.a * (1.0 + envLod * 0.35);
+  // the ground's colour at the root, the lawn's up the blade, yellow-green at the tip (each tuft its own share), no more than maxSat saturated
+  vec3 envBladeC = vBlade * mix(${v3(GRASS_LOOK.root)}, vec3(1.0), smoothstep(0.0, 0.5, vBladeY.x));
+  envBladeC = mix(envBladeC, vBlade * ${v3(GRASS_LOOK.tip)}, smoothstep(0.5, 1.0, vBladeY.x) * vBladeY.y);
+  envBladeC *= envT.rgb / 0.9;
+  {
+    float mx = max(envBladeC.r, max(envBladeC.g, envBladeC.b));
+    float mn = min(envBladeC.r, min(envBladeC.g, envBladeC.b));
+    float sat = (mx - mn) / max(mx, 1e-4);
+    if (sat > ${f3(GRASS_LOOK.maxSat)}) envBladeC = mx - (mx - envBladeC) * (${f3(GRASS_LOOK.maxSat)} / sat);
+  }
   diffuseColor.rgb *= envBladeC;`,
         );
         // a blade is lit as the ground under it (its normal is up on both faces)
@@ -916,9 +1029,10 @@ ${BARE_GLSL}
         const data = new Float32Array(ks.length * 4);
         ks.forEach((k, i) => data.set(blades.subarray(k * 4, k * 4 + 4), i * 4));
         const geo = new THREE.InstancedBufferGeometry();
-        geo.setAttribute("position", bladePos);
-        geo.setAttribute("normal", bladeNormal);
-        geo.setIndex(bladeIndex);
+        geo.setAttribute("position", card.position);
+        geo.setAttribute("normal", card.normal);
+        geo.setAttribute("uv", card.uv);
+        geo.setIndex(card.index);
         geo.setAttribute("aBlade", new THREE.InstancedBufferAttribute(data, 4));
         geo.userData.blades = ks.length;
         geo.instanceCount = bladeCount(ks.length, deps.grassDensity ?? 1);
