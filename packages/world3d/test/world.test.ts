@@ -1590,7 +1590,9 @@ describe("see-through: whatever blocks a focus fades as a whole object", () => {
     expect((hullBatch.material as THREE.ShaderMaterial).fragmentShader).toContain("stSeeThrough();");
     // draw calls: no more than before the see-through (0.13 at 17485a1: street 123, tea house 19; the countryside: 119)
     console.log(`see-through draw calls: street ${street.batching.before} -> ${street.batching.after}, tea_house ${tea.batching.before} -> ${tea.batching.after}`);
-    expect(street.batching.after).toBeLessThanOrEqual(123);
+    // the textured library (README "Textured assets"): textured pieces carry UVs and a palette x
+    // headroom factor, so they batch apart from flat pieces of the same palette name: 123 -> 143
+    expect(street.batching.after).toBeLessThanOrEqual(143);
     // Preserve the room batching guard separately from what the interior view adds on purpose: its
     // backdrop, its six enclosure planes and the shell's front-side twins (interior-enclosure.ts
     // interiorFaces: single-sided, so they cannot share a batch with double-sided furniture).

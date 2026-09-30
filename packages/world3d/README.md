@@ -46,37 +46,52 @@ raw, with a warning. GitHub Pages already gzips GLBs (`content-encoding: gzip` o
 `model/gltf-binary`, checked 2026-09-27): meshopt + gzip is what goes over the wire. The shipped
 `index.json` carries each file's `bytes` (the loading screen's sizes).
 
-**Textured assets.** The library textures a batch of assets (make-it-in-china
-`docs/asset-conventions.md` "Textures": one atlas per asset, base colour + tangent-space normal +
-ORM = occlusion R / roughness G / metalness B, embedded PNGs, UVs on TEXCOORD_0). The game uses
-four: `noodle_shop`, `stool_plastic`, `table_folding`, and `lantern` (hung on the noodle shop's
-`lantern_hooks` by `scripts/port-town.mjs` `HUNG`, as the library's street mock-up does; `mounted`
-dressing is off the walk checks and fades with its building). The rest of the batch (road, pavement,
-awning, AC unit, hanging sign) isn't placed anywhere, so isn't vendored.
+**Textured assets.** The library textures every building, street, prop and interior asset it can
+(make-it-in-china `docs/asset-conventions.md` "Textures": one glTF material per palette name, as
+before, all of an asset's textured materials sharing two embedded PNG atlases on TEXCOORD_0: base
+colour (sRGB, a modulation map; `baseColorFactor` = palette colour x a headroom <= 1) and ORM at half
+resolution = occlusion R / roughness G / metalness B; no normal map, the polished geometry carries
+the bevels). Game-owned surfaces stay flat: glass / `pi_glass` / `sky_blue` panes, and the ground,
+grass, water and canopy names `envlook.ts` re-shades. The game ships 60 textured GLBs (every
+used building, street piece, prop and interior, plus `canal_banks`); characters and the town /
+landscape set are flat. Synced 2026-09-30 (branch textured-library).
+- Characters are not taken from the library: its characters are the pre-polish builds (e.g. `cook`
+  1,767 verts, `charcoal` / `cloth_white`; the vendored polished one 2,051, `npc_charcoal` /
+  `npc_ivory`). The vendored characters come from the polish pass (make-it-in-china
+  `.polish/recovered/integrate/assets`, st-rebase `49d6754`); re-syncing them from `../assets` would
+  undo it. Refresh with `--only` and leave the character names out until the library carries them.
 - Sync: `npm run assets:sync -w @silver-tongue/world3d -- --only noodle_shop,lantern,...` refreshes
-  just those GLBs and their `index.json` entries (added when new) and nothing else: the way to take
-  one rebuilt batch without the rest of a library that has moved on. Every copy (sync and build,
-  `scripts/used-assets.mjs copyGlb`) first re-encodes base colour and ORM PNGs as JPEG q88
-  (`scripts/textures.mjs`, Pillow; ORM without chroma subsampling; kept PNG when JPEG isn't
-  smaller, when the image has alpha, or when a normal / emissive slot reads it; the normal map is
-  always PNG), then meshopt, then `scripts/meshopt.mjs checkSurfaces`: same texture and image
-  counts, TEXCOORD_0 on the same primitives, every PNG byte-identical, every JPEG the source's
-  size and well-formed (Pillow decodes each one it writes). The noodle shop: 1,164 KB in the
-  library, 725 KB vendored (1,060 KB with PNGs: over the loading plan's 40 % first-frame budget).
+  just those GLBs and their `index.json` entries (added when new) and nothing else. Every copy
+  (sync and build, `scripts/used-assets.mjs copyGlb`) first re-encodes base colour and ORM PNGs as
+  JPEG q88 (`scripts/textures.mjs`, Pillow; ORM without chroma subsampling; kept PNG when JPEG isn't
+  smaller, e.g. `bottle_water`'s 6 px ORM, when the image has alpha, or when a normal / emissive slot
+  reads it), then meshopt, then `scripts/meshopt.mjs checkSurfaces`: same texture and image counts,
+  TEXCOORD_0 on the same primitives, every PNG byte-identical, every JPEG the source's size and
+  well-formed.
+- Size (dist/assets GLBs, KB, before -> after): buildings 1,155 -> 1,546, interiors 326 -> 638,
+  props 198 -> 373, street 278 -> 461, landscape 352 -> 360, characters 3,558 and town 493
+  unchanged; 6,361 -> 7,430 (gzipped 2,303 -> 3,161). The build total went 14,646 -> 15,728 KB,
+  over `build.mjs` BUDGET (15 MB, which only decides MUSIC_OGG_ONLY: already on). First frame: 3,087
+  of 7,430 KB (41.5 %, `test/loading.test.ts` budget now 43 %; 39.7 % before).
+- Draw calls: a textured material keys on its asset's atlas (below) and textured geometry carries
+  UVs, so textured pieces no longer merge with flat pieces of the same palette colour. Toon street
+  shot (look-capture SET=textured): 70 -> 101 calls; interiors (classic, 1920x1080) 40 / 35 / 32 / 43 /
+  33 -> 62 / 44 / 44 / 66 / 34; `test/world.test.ts` street batching guard 123 -> 143 (tests load
+  without textures, so this counts the UV / factor split only).
 - Materials (`world.ts` `surfaceMaps`, `Toon.material`): toon carries `map`, `normalMap`,
   `aoMap`, `emissiveMap`; the real look also `roughnessMap` / `metalnessMap` and the source's own
   roughness / metalness factors (flat materials keep 0.8 / 0). The textures are shared, not cloned
   (GLTFLoader's colour space, sampler and `channel`: three 0.186 reads the aoMap from its texture's
   channel, no uv2). The maps' uuids are in the material key, so textured sources never collapse
   into one white material; flat palette materials key and convert exactly as before.
+- Evening glow: the lantern is `lantern_red` (textured) + `metal` + `st_brass`, so `envlook.ts`
+  `emissives` gives it the flat `lantern_red` glow (colour (1, 0.16, 0.04) x 2.2, no emissive map);
+  at evening it glows, but the textured lanterns read cream-white under the bloom / tone mapping
+  where the old `lantern_PBR` branch (emissiveMap = map, gain 1.8) kept them red. The
+  `lantern_PBR` branch no longer matches anything.
 - Tests: node can't decode the PNGs, so `test/helpers.ts readGlb` drops images from the GLBs it
-  loads; `test/textures.test.ts` checks the vendored images and the conversion instead.
-- Known gaps (asset follow-up): the textured versions were baked on the geometry from before the
-  polish pass, so `noodle_shop` (5,520 -> 2,576 tris, bevels gone), `stool_plastic` (584 -> 280)
-  and `table_folding` (632 -> 368) lost their polish; they need a re-bake on the polished geometry.
-  The noodle shop's baked AO (ORM red) is very dark and noisy (mean 0.19, many islands near black):
-  a grainy speckle on the shaded interior behind the counter, in the real look most of all
-  (GTAO darkens it again on top).
+  loads; `test/textures.test.ts` checks every vendored textured GLB's atlases against the index's
+  `texture.px` / `orm_px` and the library, and the conversion.
 
 The one-off build (`npm run build`), measured 2026-09-27:
 

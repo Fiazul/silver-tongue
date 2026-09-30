@@ -1,0 +1,124 @@
+{
+ "interiors": [
+  {
+   "file": "noodle_shop-classic-midday.png",
+   "portrait": true,
+   "camera": "gameplay",
+   "calls": 51,
+   "triangles": 43890,
+   "errors": []
+  },
+  {
+   "file": "noodle_shop-full-midday.png",
+   "portrait": true,
+   "camera": "gameplay",
+   "calls": 1,
+   "triangles": 1,
+   "errors": []
+  },
+  {
+   "file": "noodle_shop-full-evening.png",
+   "portrait": true,
+   "camera": "gameplay",
+   "calls": 1,
+   "triangles": 1,
+   "errors": []
+  },
+  {
+   "file": "room-classic-midday.png",
+   "portrait": true,
+   "camera": "gameplay",
+   "calls": 40,
+   "triangles": 25908,
+   "errors": []
+  },
+  {
+   "file": "room-full-midday.png",
+   "portrait": true,
+   "camera": "gameplay",
+   "calls": 1,
+   "triangles": 1,
+   "errors": []
+  },
+  {
+   "file": "room-full-evening.png",
+   "portrait": true,
+   "camera": "gameplay",
+   "calls": 1,
+   "triangles": 1,
+   "errors": []
+  },
+  {
+   "file": "tea_house-classic-midday.png",
+   "portrait": true,
+   "camera": "gameplay",
+   "calls": 39,
+   "triangles": 36000,
+   "errors": []
+  },
+  {
+   "file": "tea_house-full-midday.png",
+   "portrait": true,
+   "camera": "gameplay",
+   "calls": 1,
+   "triangles": 1,
+   "errors": []
+  },
+  {
+   "file": "tea_house-full-evening.png",
+   "portrait": true,
+   "camera": "gameplay",
+   "calls": 1,
+   "triangles": 1,
+   "errors": []
+  },
+  {
+   "file": "shop-classic-midday.png",
+   "portrait": true,
+   "camera": "gameplay",
+   "calls": 51,
+   "triangles": 39522,
+   "errors": []
+  },
+  {
+   "file": "shop-full-midday.png",
+   "portrait": true,
+   "camera": "gameplay",
+   "calls": 1,
+   "triangles": 1,
+   "errors": []
+  },
+  {
+   "file": "shop-full-evening.png",
+   "portrait": true,
+   "camera": "gameplay",
+   "calls": 1,
+   "triangles": 1,
+   "errors": []
+  },
+  {
+   "file": "stairs-classic-midday.png",
+   "portrait": true,
+   "camera": "gameplay",
+   "calls": 28,
+   "triangles": 24452,
+   "errors": []
+  },
+  {
+   "file": "stairs-full-midday.png",
+   "portrait": true,
+   "camera": "gameplay",
+   "calls": 1,
+   "triangles": 1,
+   "errors": []
+  },
+  {
+   "file": "stairs-full-evening.png",
+   "portrait": true,
+   "camera": "gameplay",
+   "calls": 1,
+   "triangles": 1,
+   "errors": []
+  }
+ ]
+}
