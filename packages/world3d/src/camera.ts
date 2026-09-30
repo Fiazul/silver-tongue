@@ -22,6 +22,8 @@ export const CAMERA = {
   sceneLiftPortrait: 0.16,
   /** follow damping, 1/s */
   follow: 3.5,
+  /** the same inside a room (interior-camera.ts): gentler, the room barely needs to move */
+  interiorFollow: 2.5,
   /** aim this far above the feet */
   aimHeight: 1.0,
   /** near / far planes: the town's sky dome is 800 m out, the fly-over starts 400 m away */
@@ -103,8 +105,9 @@ export class CameraRig {
     this.resize(this.size.w, this.size.h, this.compact);
   }
 
-  private applyRoom() {
-    applyInteriorCamera(this.camera, this.room!, this.aim);
+  /** `blend`: this frame's follow step (1: snap to the framing for `aim`). */
+  private applyRoom(blend = 1) {
+    applyInteriorCamera(this.camera, this.room!, this.aim, blend);
     this.fov = this.camera.fov;
   }
 
@@ -128,8 +131,9 @@ export class CameraRig {
   update(dt: number, focus: THREE.Vector3, inScene: boolean) {
     const k = 1 - Math.exp(-CAMERA.follow * dt);
     if (this.room) {
-      this.aim.lerp(focus, 1 - Math.exp(-10 * dt));
-      this.applyRoom();
+      // Gentle follow: the eye drifts inside the room's valid region (interior-camera.ts), ~1 s to settle.
+      this.aim.copy(focus);
+      this.applyRoom(1 - Math.exp(-CAMERA.interiorFollow * dt));
       return;
     }
     this.aim.lerp(new THREE.Vector3(focus.x, focus.y + CAMERA.aimHeight, focus.z), k);
@@ -159,7 +163,11 @@ export class CameraRig {
   }
 }
 
-/** Outline width multiplier: 1 on a desktop; a phone draws it thicker, more so on denser screens (pixel ratio capped at 2, as the renderer's). */
-export function outlineScale(devicePixelRatio: number, compact: boolean): number {
-  return compact ? 1 + 0.3 * Math.min(2, Math.max(1, devicePixelRatio)) : 1;
+/** Interiors: the camera is ~3 m from the player (the street's 19 m), so the world-space hull would
+ * draw ~3x wider and poke through thin parts (backpack straps, shoes) as dark slivers. */
+export const INTERIOR_OUTLINE = 0.4;
+
+/** Outline width multiplier: 1 on a desktop; a phone draws it thicker, more so on denser screens (pixel ratio capped at 2, as the renderer's); INTERIOR_OUTLINE inside a room. */
+export function outlineScale(devicePixelRatio: number, compact: boolean, interior = false): number {
+  return (compact ? 1 + 0.3 * Math.min(2, Math.max(1, devicePixelRatio)) : 1) * (interior ? INTERIOR_OUTLINE : 1);
 }

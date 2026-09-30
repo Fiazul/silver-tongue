@@ -650,6 +650,7 @@ async function main() {
     player.place(stand.pos[0], stand.pos[2], new THREE.Vector3(...stand.facing));
     lastFoot.set(stand.pos[0], stand.pos[2]);
     rig.setSpace(space.layout);
+    setOutlineScale(outlineScale(window.devicePixelRatio || 1, overlay.screen.compact, space.layout.interior));
     rig.snap(player.position);
     marker.visible = false;
     pendingTalk = null;
@@ -1130,7 +1131,7 @@ async function main() {
     real?.setSize(w, h, renderer.getPixelRatio());
     overlay.layout(w, h, safeInsets());
     rig.resize(w, h, overlay.screen.compact);
-    setOutlineScale(outlineScale(dpr, overlay.screen.compact));
+    setOutlineScale(outlineScale(dpr, overlay.screen.compact, space.layout.interior));
   }
   window.addEventListener("resize", resize);
   window.addEventListener("orientationchange", () => setTimeout(resize, 120)); // some browsers report the old size first

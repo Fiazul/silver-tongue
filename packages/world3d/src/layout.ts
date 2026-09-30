@@ -334,6 +334,8 @@ export interface InteriorView {
   bounds: Box2;
   floor: number;
   ceiling: number;
+  /** where the player arrives (x, z): the interior camera must frame it (interior-camera.ts) */
+  entry?: Vec2;
 }
 
 export interface SpaceLayout {
@@ -784,6 +786,7 @@ export class LayoutIndex {
       view: i.outdoor ? undefined : {
         bounds: { min: [-W / 2, -D], max: [W / 2, 0] }, floor: floorY,
         ceiling: this.interiorHeight(i),
+        entry: ((p) => [p[0], p[2]] as Vec2)(this.entrySpawn(id).pos),
       },
       interior: !i.outdoor,
     };

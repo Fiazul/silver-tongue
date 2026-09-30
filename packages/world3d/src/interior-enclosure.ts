@@ -27,11 +27,13 @@ export function buildInteriorEnclosure(scene: THREE.Scene, layout: SpaceLayout, 
     mesh.geometry.setAttribute(SEE_ATTR, seeAttribute(mesh.geometry, mesh, { tag: SEE_NEVER }, undefined, false));
     root.add(mesh);
   };
+  // Walls reach SEAM past the floor plane and the ceiling: no hairline gap along the room's edges.
+  const SEAM = 0.02, wh = h + 2 * SEAM;
   const cy = view.floor + h / 2, cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
-  add("wall_back", w, h, walls, [cx, cy, z0]);
-  add("wall_left", d, h, walls, [x0, cy, cz], 0, Math.PI / 2);
-  add("wall_front", w, h, walls, [cx, cy, z1], 0, Math.PI);
-  add("wall_right", d, h, walls, [x1, cy, cz], 0, -Math.PI / 2);
+  add("wall_back", w, wh, walls, [cx, cy, z0]);
+  add("wall_left", d, wh, walls, [x0, cy, cz], 0, Math.PI / 2);
+  add("wall_front", w, wh, walls, [cx, cy, z1], 0, Math.PI);
+  add("wall_right", d, wh, walls, [x1, cy, cz], 0, -Math.PI / 2);
   add("ceiling", w, d, ceiling, [cx, view.ceiling, cz], Math.PI / 2);
   // Just beneath the original slab: avoids z-fighting and preserves its authored appearance.
   add("floor_inside", w, d, floor, [cx, view.floor - 0.005, cz], -Math.PI / 2);
