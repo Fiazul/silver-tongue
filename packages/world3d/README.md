@@ -946,9 +946,10 @@ Layers (`look.ts ENV_LAYERS`):
   1 quad turned to the camera, both from the same texture; the tallest 0.16 m, each leaning up to
   0.12 rad its own way. In clumps (`GRASS_LOOK.clump`: macro noise at 7.3 m; thin patches keep 12 %
   of their tufts), gone on the bare dirt patches the ground shader draws (`envBare`, the same
-  noise). The colour starts at the ground's own lawn colour at the root (the blades grow out of
-  it), a yellow-green tip no brighter than the lawn, every blade held under 60 % saturation
-  (`GRASS_LOOK.root` / `tip` / `maxSat`). `grassDensityAt` mirrors the shader's density on the CPU
+  noise). The colour: a deep green root (greener and darker than the lawn round it), the lawn's
+  green up the blade, a bright green-yellow tip, 80-90 % saturated (linear) on the town's lawn,
+  capped at 90 % (`GRASS_LOOK.root` / `mid` / `tip` / `maxSat`); the ground shader's lawn under
+  the tufts a touch lusher (`GRASS_LOOK.lawn`, the dirt untouched). `grassDensityAt` mirrors the shader's density on the CPU
   (the tests: 0 on the street and every footprint). Each tile is cut into chunks (near 4x4, far 6x6, 52 meshes), each
   drawn only when it is in the camera's frustum and within its band's reach of the player
   (`grassChunkVisible`, `wrapIntervals`: where a chunk lands as the tile wraps round the player);

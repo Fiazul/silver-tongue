@@ -16,16 +16,29 @@ describe("the lawn (envlook.ts GRASS, GRASS_LOOK)", () => {
     expect(GRASS_LOOK.lean).toBeLessThanOrEqual(0.2); // a few degrees
   });
 
-  it("the colour: the root near the ground's own, a yellow-green tip no brighter than the lawn (luminance <= 1), at most 60 % saturation", () => {
-    for (const c of GRASS_LOOK.root) {
-      expect(c).toBeGreaterThan(0.8);
-      expect(c).toBeLessThanOrEqual(1);
+  it("the colour: a deep green root (greener and darker than the lawn), a bright green-yellow tip, 80-90 % saturated on the town's lawn, never neon", () => {
+    const lawn = [0.371, 0.552, 0.15]; // terrain_town grass_light (linear)
+    const on = (m: number[]) => m.map((c, i) => c * lawn[i]);
+    const sat = (c: number[]) => (Math.max(...c) - Math.min(...c)) / Math.max(...c);
+    const lum = (c: number[]) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+    const [root, mid, tip] = [on(GRASS_LOOK.root), on(GRASS_LOOK.mid), on(GRASS_LOOK.tip)];
+    expect(sat(root)).toBeGreaterThan(sat(lawn)); // greener than the ground
+    expect(lum(root)).toBeLessThan(lum(lawn)); // and darker
+    expect(root[0] / root[1]).toBeLessThan(lawn[0] / lawn[1]);
+    for (const c of [root, mid, tip]) {
+      expect(sat(c)).toBeGreaterThanOrEqual(0.8);
+      expect(Math.min(sat(c), GRASS_LOOK.maxSat)).toBeLessThanOrEqual(0.9);
+      expect(c[1]).toBe(Math.max(...c)); // green, never yellow or blue
     }
-    const [r, g, b] = GRASS_LOOK.tip;
-    expect(r).toBeGreaterThan(g); // toward yellow
-    expect(b).toBeLessThan(g);
-    expect(0.2126 * r + 0.7152 * g + 0.0722 * b).toBeLessThanOrEqual(1);
-    expect(GRASS_LOOK.maxSat).toBeLessThanOrEqual(0.6);
+    expect(tip[0] / tip[1]).toBeGreaterThan(root[0] / root[1]); // the tip toward yellow
+    expect(lum(tip)).toBeGreaterThan(lum(root) * 1.4); // brighter than the root
+    expect(lum(tip)).toBeLessThanOrEqual(lum(lawn) * 1.1); // no glow above the lawn
+    expect(GRASS_LOOK.maxSat).toBeGreaterThanOrEqual(0.8);
+    expect(GRASS_LOOK.maxSat).toBeLessThanOrEqual(0.9);
+    // the ground's lawn lifted a touch, no more
+    expect(GRASS_LOOK.lawn.sat).toBeGreaterThan(1);
+    expect(GRASS_LOOK.lawn.sat).toBeLessThanOrEqual(1.3);
+    expect(GRASS_LOOK.lawn.tint[1]).toBe(Math.max(...GRASS_LOOK.lawn.tint));
     expect(GRASS_LOOK.clump.floor).toBeGreaterThan(0);
     expect(GRASS_LOOK.clump.floor).toBeLessThan(0.3);
   });

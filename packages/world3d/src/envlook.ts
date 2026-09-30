@@ -52,16 +52,20 @@ export const GRASS = {
  * clumps (macro noise R at `clump.scale` m: a blade stays where its own random is under the
  * density, `floor` .. 1, so thin patches keep `floor` of their blades; the clumps' blades a little
  * taller), bare dirt patches (envBare: the ground shader's dirt patches, the blades gone there) and
- * the blade's colour: `root` x the lawn's own colour at the ground (the blades grow out of it), the
- * lawn's colour up the blade, `tip` (yellow-green, no brighter) at the top, every blade held to
- * `maxSat` saturation. `lean`: the tuft's random lean (rad, at most).
+ * the blade's colour, multipliers on the lawn's own (linear) colour: `root` a deep green at the
+ * ground (greener and darker than the lawn round it), `mid` up the blade, `tip` a bright
+ * green-yellow, every blade held to `maxSat` saturation (linear: a healthy, well-watered lawn, not
+ * neon). `lawn`: the ground shader's lawn under the tufts, a touch more saturated (`sat`) and green
+ * (`tint`) so the two agree (the dirt untouched). `lean`: the tuft's random lean (rad, at most).
  */
 export const GRASS_LOOK = {
   clump: { scale: 7.3, offset: 0.61, lo: 0.34, hi: 0.62, floor: 0.12 },
   bare: { patch: [0.6, 0.72], detail: [0.52, 0.62], gone: [0.12, 0.4] },
-  root: [0.86, 0.87, 0.84],
-  tip: [1.08, 1.0, 0.7],
-  maxSat: 0.6,
+  root: [0.3, 0.62, 0.3],
+  mid: [0.5, 0.85, 0.35],
+  tip: [0.75, 1.1, 0.4],
+  maxSat: 0.9,
+  lawn: { sat: 1.18, tint: [0.93, 1.02, 0.86] },
   lean: 0.12,
 };
 /** lite's far band fade (m): as full's (18-24 m thinned the lawn visibly at the phone's top edge, for little: the far blades are cheap) */
@@ -829,6 +833,8 @@ ${BARE_GLSL}
   float envPatch = envBare(envM.r, envM2.g);
   envMix = clamp(max(envWear, envPatch), 0.0, 1.0);
   vec3 envGrass = diffuseColor.rgb * mix(vec3(1.0), envG, envNear) * mix(vec3(0.84, 0.88, 0.86), vec3(1.14, 1.1, 0.88), envM.g);
+  // the lawn a touch lusher (GRASS_LOOK.lawn): the tufts' green agrees with it
+  envGrass = max(mix(vec3(dot(envGrass, vec3(0.2126, 0.7152, 0.0722))), envGrass, ${f3(GRASS_LOOK.lawn.sat)}), 0.0) * ${v3(GRASS_LOOK.lawn.tint)};
   vec3 envDirt = envDirtColor * mix(vec3(1.0), envD, envNear) * mix(0.9, 1.1, envM2.b);
   diffuseColor.rgb = mix(envGrass, envDirt, envMix);
 #else
@@ -994,9 +1000,9 @@ ${spec.quads === 1 ? `
   vec2 envTs = vTuftUv * ${TUFT.n.toFixed(1)};
   float envLod = max(0.0, 0.5 * log2(max(dot(dFdx(envTs), dFdx(envTs)), dot(dFdy(envTs), dFdy(envTs)))));
   diffuseColor.a = envT.a * (1.0 + envLod * 0.35);
-  // the ground's colour at the root, the lawn's up the blade, yellow-green at the tip (each tuft its own share), no more than maxSat saturated
-  vec3 envBladeC = vBlade * mix(${v3(GRASS_LOOK.root)}, vec3(1.0), smoothstep(0.0, 0.5, vBladeY.x));
-  envBladeC = mix(envBladeC, vBlade * ${v3(GRASS_LOOK.tip)}, smoothstep(0.5, 1.0, vBladeY.x) * vBladeY.y);
+  // a deep green at the root, the lawn's green up the blade, a bright green-yellow at the tip (each tuft its own share), no more than maxSat saturated
+  vec3 envBladeC = vBlade * mix(${v3(GRASS_LOOK.root)}, ${v3(GRASS_LOOK.mid)}, smoothstep(0.0, 0.5, vBladeY.x));
+  envBladeC = mix(envBladeC, vBlade * ${v3(GRASS_LOOK.tip)}, smoothstep(0.5, 1.0, vBladeY.x) * (0.4 + 0.6 * vBladeY.y));
   envBladeC *= envT.rgb / 0.9;
   {
     float mx = max(envBladeC.r, max(envBladeC.g, envBladeC.b));
