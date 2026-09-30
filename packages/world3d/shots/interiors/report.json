@@ -28,8 +28,8 @@
    "file": "room-classic-midday.png",
    "portrait": false,
    "camera": "gameplay",
-   "calls": 35,
-   "triangles": 26664,
+   "calls": 37,
+   "triangles": 26688,
    "errors": []
   },
   {
@@ -52,8 +52,8 @@
    "file": "tea_house-classic-midday.png",
    "portrait": false,
    "camera": "gameplay",
-   "calls": 32,
-   "triangles": 36412,
+   "calls": 33,
+   "triangles": 36440,
    "errors": []
   },
   {
@@ -76,8 +76,8 @@
    "file": "shop-classic-midday.png",
    "portrait": false,
    "camera": "gameplay",
-   "calls": 43,
-   "triangles": 42248,
+   "calls": 45,
+   "triangles": 43008,
    "errors": []
   },
   {

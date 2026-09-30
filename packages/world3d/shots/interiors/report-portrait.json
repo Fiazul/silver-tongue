@@ -5,7 +5,7 @@
    "portrait": true,
    "camera": "gameplay",
    "calls": 39,
-   "triangles": 42180,
+   "triangles": 42048,
    "errors": []
   },
   {
@@ -29,7 +29,7 @@
    "portrait": true,
    "camera": "gameplay",
    "calls": 34,
-   "triangles": 26600,
+   "triangles": 26616,
    "errors": []
   },
   {
@@ -52,8 +52,8 @@
    "file": "tea_house-classic-midday.png",
    "portrait": true,
    "camera": "gameplay",
-   "calls": 29,
-   "triangles": 36268,
+   "calls": 30,
+   "triangles": 36208,
    "errors": []
   },
   {
@@ -76,8 +76,8 @@
    "file": "shop-classic-midday.png",
    "portrait": true,
    "camera": "gameplay",
-   "calls": 38,
-   "triangles": 41394,
+   "calls": 40,
+   "triangles": 41708,
    "errors": []
   },
   {
@@ -100,8 +100,8 @@
    "file": "stairs-classic-midday.png",
    "portrait": true,
    "camera": "gameplay",
-   "calls": 27,
-   "triangles": 24452,
+   "calls": 30,
+   "triangles": 24724,
    "errors": []
   },
   {
