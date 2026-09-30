@@ -56,14 +56,14 @@ import type { IntroSource, StartConfig, StartResult } from "./start/flow";
 import { clipsFor, courseIntro } from "./start/intro";
 import * as startText from "./start/strings";
 import { uiLanguage } from "./strings";
-import { PointerControls } from "./touch";
+import { coarsePointer, PointerControls } from "./touch";
 import { LoadingScreen } from "./ui/loading";
 import { Overlay } from "./ui/overlay";
 import type { Insets } from "./ui/viewport";
 import { BUILD } from "./version";
 import { AssetCache, drawCalls, OUTLINE_MATERIALS, SceneSpace, setOutlineScale } from "./world";
 import { patchSeeThrough, SEE_ATTR, SEE_THROUGH, SeeThroughControl, SeeThroughDetector } from "./seethrough";
-import { LOOK } from "./look";
+import { LITE_GRASS, LITE_LAYERS, LOOK, LookValve, lookFor, setLook, type Tier } from "./look";
 import { GuideMarker } from "./marker";
 import { daySteps, edgeArrow, findPath, LostTimer, nextSteps, resolveTarget, type PathGrid, type WayTarget } from "./wayfind";
 import { EdgeArrowView, PathTrail, spaceGrid } from "./wayview";
@@ -79,6 +79,8 @@ import type { WebSessions } from "@silver-tongue/web-common";
  */
 declare const __AUDIO_ROOT__: string;
 const ASSETS = "./assets"; // relative: the page works under a subpath (GitHub Pages /world3d/)
+/** the loading bar's item for the real look's environment build (not a file: loading.ts LoadEvent `work`) */
+const ENV_ITEM = "environment";
 /** a bark ends when the player walks this far past talk range */
 const BARK_LEAVE_M = 1.5;
 /** a tap on the ground this close (m) to the great tree's altar rings its bell */
@@ -198,6 +200,7 @@ async function main() {
   let madeRenderer: THREE.WebGLRenderer | null = null;
   let madeLayout: LayoutIndex | null = null;
   let madeAssets: AssetCache | null = null;
+  let madeReal: ReturnType<(typeof import("./reallook"))["createRealLook"]> | null = null;
   const loadWorld = async () => {
     const renderer = (madeRenderer ??= makeRenderer()); // first: no WebGL says so at once
     const L = (madeLayout ??= new LayoutIndex(LAYOUT, await fetchJson<AssetIndex>(`${ASSETS}/index.json`)));
@@ -221,7 +224,32 @@ async function main() {
     const player = new Player(await assets.actor(LAYOUT.player.character), spaces.get(STREET)!.area);
     // The parcel of an errand, in the player's hands while core has one (state.errand).
     const carry = new PlayerCarry(player.actor, bagAsset ? await assets.instance(bagAsset) : null, bagSpec);
-    return { L, renderer, assets, plan, spaces, player, carry };
+    // The real look (look.ts: the full / lite tier, or `?look=real`): its chunk, the composer and
+    // the town's environment layers, built here behind the loading screen (a load item of their
+    // own): the first frame on screen has them, with no build or shader hitch. null (never loaded) in classic.
+    const real = LOOK.real ? (madeReal ??= (await import("./reallook")).createRealLook(renderer, patchSeeThrough, OUTLINE_MATERIALS, { env: LOOK.env, seeAttr: SEE_ATTR, grassDensity: LOOK.grassDensity })) : null;
+    if (real) await prepareLook(real, spaces.get(STREET)!.scene, player.position);
+    return { L, renderer, assets, plan, spaces, player, carry, real };
+  };
+  /** the real look's town, built and compiled (RealLook.prepare) as the loading bar's last item; a failure there is logged and the first frame builds it instead */
+  const prepareLook = async (real: NonNullable<typeof madeReal>, scene: THREE.Scene, focus: THREE.Vector3) => {
+    load = reduceLoad(load, { type: "start", name: ENV_ITEM, work: true });
+    if (loading.visible) loading.render(loadSummary(load));
+    await new Promise((r) => setTimeout(r, 20)); // the bar shows the item before the build holds the thread
+    const cam = new THREE.PerspectiveCamera(CAMERA.fovDeg, window.innerWidth / Math.max(1, window.innerHeight), CAMERA.near, CAMERA.far);
+    cam.position.set(focus.x + 10, focus.y + 12, focus.z + 12);
+    cam.lookAt(focus);
+    performance.mark("world3d:env-start");
+    try {
+      await real.prepare(scene, cam, focus);
+      load = reduceLoad(load, { type: "done", name: ENV_ITEM });
+    } catch (e) {
+      console.warn("real look: the environment didn't build ahead; the first frame builds it", e);
+      load = reduceLoad(load, { type: "fail", name: ENV_ITEM });
+    }
+    performance.measure("world3d:env", "world3d:env-start");
+    startWatch.poke();
+    if (loading.visible) loading.render(loadSummary(load));
   };
   /** the town, tried until it loads (never rejects: each failure waits on the loading screen's button) */
   const worldReady = retrying(() => startWatch.track(loadWorld()), askRetry);
@@ -414,11 +442,12 @@ async function main() {
   audio = wordAudio(entry);
 
   const world = await worldReady;
-  const { L, renderer, assets, plan, spaces, player, carry } = world;
+  const { L, renderer, assets, plan, spaces, player, carry, real } = world;
   const street = spaces.get("street")!;
   const rig = new CameraRig(renderer.domElement);
-  // `?look=real` (look.ts): the composer and its passes and the environment layers (`&env=`), its own chunk; null (never loaded) otherwise
-  const real = LOOK.real ? (await import("./reallook")).createRealLook(renderer, patchSeeThrough, OUTLINE_MATERIALS, { env: LOOK.env, seeAttr: SEE_ATTR }) : null;
+  /** full on the device's default only: slow first seconds drop the session to lite, once (look.ts LookValve) */
+  const valve = new LookValve(LOOK);
+  let valveLast = 0;
 
   // Where a tap sent the player: a small ring on the ground.
   const marker = new THREE.Mesh(new THREE.RingGeometry(0.18, 0.26, 24), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8 }));
@@ -722,6 +751,7 @@ async function main() {
         ambience: prefs.ambience,
         music: prefs.music,
         ambienceFull: prefs.ambienceFull,
+        graphics: LOOK.tier,
       }),
       // As tui-web's switchTo: another reading language goes on with the game as played (its
       // save is the course's, whatever the reading language); another course plays its last game.
@@ -747,6 +777,16 @@ async function main() {
       setAmbienceFull: (on) => {
         prefs.ambienceFull = on;
         savePrefs(kv, prefs);
+      },
+      // Graphics: saved, applied at the next page load (the toon and the real look build different
+      // materials); the one running now is kept as a choice (the safety valve never overrides it)
+      setGraphics: (tier: Tier) => {
+        prefs.graphics = tier;
+        savePrefs(kv, prefs);
+        valve.manual();
+        if (tier !== LOOK.tier) return true;
+        if (LOOK.source === "auto") setLook({ ...LOOK, source: "pref", reason: "saved choice" });
+        return false;
       },
       replayIntro: () => {
         const intro = courseIntro(course);
@@ -852,7 +892,7 @@ async function main() {
   function playFlyover(path: CameraPath = LAYOUT.town.camera, skippable = true) {
     if (flyover) return;
     if (!path.keys.length) return overlay.hold(false);
-    const touch = overlay.touch || !!window.matchMedia?.("(pointer: coarse)").matches;
+    const touch = overlay.touch || coarsePointer();
     const hint = skippable ? game!.s(touch ? "cutscene-skip" : "cutscene-skip-key") : "";
     const bars = new Letterbox(
       document.body,
@@ -1035,7 +1075,7 @@ async function main() {
     stickZone: () => overlay.screen.stickZone,
     onTouch: () => overlay.setTouch(),
   });
-  if (window.matchMedia?.("(pointer: coarse)").matches) overlay.setTouch();
+  if (coarsePointer()) overlay.setTouch();
 
   // Keys: overlay first (replies, lists, notebook), then walking and E.
   window.addEventListener("keydown", (e) => {
@@ -1065,6 +1105,26 @@ async function main() {
   window.addEventListener("resize", resize);
   window.addEventListener("orientationchange", () => setTimeout(resize, 120)); // some browsers report the old size first
   resize();
+
+  /**
+   * The safety valve (look.ts LookValve): at full by the device's default, the first 3 s of play
+   * (the loading screen gone, the tab visible) averaging over 33 ms a frame drop this session to
+   * lite, live (RealLook.restrict: nothing is rebuilt), with a toast. The saved choice is untouched.
+   */
+  function lookValve() {
+    if (!real || valve.state !== "watching") return;
+    const now = performance.now();
+    if (loading.visible || document.hidden) {
+      valveLast = 0;
+      return;
+    }
+    if (valveLast && valve.frame(now - valveLast)) {
+      real.restrict(LITE_LAYERS, LITE_GRASS);
+      setLook(lookFor("lite", "valve", `valve: ${valve.meanMs} ms a frame over the first ${valve.windowMs / 1000} s at full`));
+      overlay.notify(game!.s("graphics-lite-toast"), "note");
+    }
+    valveLast = now;
+  }
 
   // A start-flow pick plays a new game under that name (a first one, or after a "New game");
   // a returning player's last game resumes.
@@ -1226,10 +1286,16 @@ async function main() {
     }
   }
 
+  let firstFrame = false;
   renderer.setAnimationLoop(() => {
     const dt = Math.min(0.05, clock.getDelta());
     updateSound();
     if (!game) return;
+    if (!firstFrame) {
+      firstFrame = true;
+      performance.mark("world3d:first-frame"); // page open -> the first frame drawn (README "Graphics tiers")
+    }
+    lookValve();
     seeDetector.poll();
     updateGuide(dt);
     updateFootsteps();
@@ -1429,8 +1495,8 @@ async function main() {
       daylight: () => (game ? game.model.hud.slot / game.model.hud.slots : 0),
       /** debug: preview any time of day (0 morning .. 1 evening) regardless of the real slot; the next real game event calls applyDaylight() again and overrides it. */
       setDaylight: (t: number) => space.setDaylight(t),
-      /** the render look (look.ts): `?look=real` [&ramp=1], and the composer's CPU ms per frame when on */
-      look: () => ({ ...LOOK, composerMs: real ? +real.stats.frameMs.toFixed(2) : null, envBuilds: real?.stats.envBuilds ?? 0, shadowMap: renderer.shadowMap.enabled, envLayers: real?.stats.envLayers ?? [], envBuildMs: real?.stats.envBuildMs ?? 0 }),
+      /** the render look (look.ts): the graphics tier, who chose it and why, the valve, the saved choice, and the composer's CPU ms per frame when real */
+      look: () => ({ ...LOOK, valve: { state: valve.state, meanMs: valve.meanMs }, saved: prefs.graphics ?? null, composerMs: real ? +real.stats.frameMs.toFixed(2) : null, envBuilds: real?.stats.envBuilds ?? 0, shadowMap: renderer.shadowMap.enabled, envLayers: real?.stats.envLayers ?? [], envBuildMs: real?.stats.envBuildMs ?? 0 }),
       dayCard: () => game?.model.dayCard,
       /** the parcel: where core says it goes, and whether the player has it in hand */
       errand: () => ({ to: game?.core.state.errand?.to ?? null, carrying: carry.holding, clip: player.actor.state }),

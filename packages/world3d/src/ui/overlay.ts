@@ -10,6 +10,7 @@
 import type { Course, RenderedLine, WordId } from "@silver-tongue/core";
 import type { DayCard, FeedItem, Game, Gloss, UiModel } from "../game";
 import type { GuideStep } from "../guide";
+import { TIERS, type Tier } from "../look";
 import { versionLine } from "../version";
 import { BubbleView } from "./bubble";
 import { el } from "./dom";
@@ -64,6 +65,8 @@ export interface SettingsView {
   music: number;
   /** ambience plays every bed, not just the quiet default (audio.ts AMBIENT_LIGHT_CAPS) */
   ambienceFull: boolean;
+  /** the graphics tier running now (look.ts LOOK.tier) */
+  graphics: Tier;
 }
 
 export interface SettingsHooks {
@@ -77,6 +80,8 @@ export interface SettingsHooks {
   setSfx(on: boolean): void;
   setAmbience(on: boolean): void;
   setAmbienceFull(on: boolean): void;
+  /** Settings → Graphics: saved; true when it differs from the running tier (it applies at the next page load) */
+  setGraphics(tier: Tier): boolean;
   replayIntro(): void;
 }
 
@@ -657,7 +662,8 @@ export class Overlay {
 
   /**
    * Menu → Settings: reading language, course (with the coming-soon ones greyed), name, the four
-   * sound switches (music volume, voice, sound effects, ambience with Light / Full under it), replay
+   * sound switches (music volume, voice, sound effects, ambience with Light / Full under it),
+   * Graphics Full / Lite / Classic (look.ts: saved, applied at the next page load), replay
    * the six words, then the build's version in full (version.ts versionLine). Switching course goes
    * through courses.ts (main.ts).
    */
@@ -740,6 +746,26 @@ export class Overlay {
     const voiceBtn = onOff(() => hooks.current().voice, (on) => hooks.setVoice(on));
     const sfxBtn = onOff(() => hooks.current().sfx, (on) => hooks.setSfx(on));
     const ambienceOn = onOff(() => hooks.current().ambience, (on) => hooks.setAmbience(on), ambienceLabel);
+    // Graphics: Full / Lite / Classic, saved; a change applies when the page reloads (a toast and the line below say so)
+    let graphics = cur.graphics;
+    const graphicsRow = el(
+      "div",
+      { className: "set-options set-graphics" },
+      ...TIERS.map((tier) => {
+        const b = el("button", { textContent: s(`settings-graphics-${tier}`) });
+        b.dataset.tier = tier;
+        b.setAttribute("aria-pressed", String(tier === graphics));
+        b.addEventListener("click", () => {
+          graphics = tier;
+          for (const x of graphicsRow.querySelectorAll("button")) x.setAttribute("aria-pressed", String(x.dataset.tier === graphics));
+          if (hooks.setGraphics(tier)) {
+            say(s("settings-graphics-reload"));
+            this.toast(s("settings-graphics-reload"), "note", 4000);
+          } else say("");
+        });
+        return b;
+      }),
+    );
     const intro = el("button", { textContent: s("settings-intro") });
     intro.addEventListener("click", () => {
       this.menu.close();
@@ -760,6 +786,7 @@ export class Overlay {
         row(s("settings-voice"), el("div", { className: "set-options" }, voiceBtn)),
         row(s("settings-sfx"), el("div", { className: "set-options" }, sfxBtn)),
         row(s("settings-ambience"), el("div", { className: "set-options" }, ambienceOn, ambienceBtn)),
+        row(s("settings-graphics"), graphicsRow),
         el("div", { className: "set-options" }, intro),
         msg,
         versionLine(s),

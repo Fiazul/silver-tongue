@@ -4,8 +4,12 @@
 // core's setSound; sound effects; ambience), whether ambience plays
 // its full set of beds or just the quiet default (ambienceFull), whether the first-steps guide
 // (and wayfinding's "lost?" reminder) is hidden (and whether its note after the first bark was
-// shown), and whether the ground path hint is off. Unreadable or blocked storage: the defaults.
+// shown), whether the ground path hint is off, and the graphics tier the player chose in Settings
+// (look.ts: absent until they choose; look.ts reads it itself, before this loads). Unreadable or
+// blocked storage: the defaults.
 import type { KeyValue } from "@silver-tongue/web-common";
+// type only: look.ts imports PREFS_KEY from here at its own import time (a value import back would be a cycle)
+import type { Tier } from "./look";
 
 export const PREFS_KEY = "silver-tongue:world3d:prefs";
 
@@ -32,7 +36,12 @@ export interface Prefs {
   pathHidden: boolean;
   /** the guide's one-off note after the first bark (src/barks.ts) has been shown */
   barkHint?: boolean;
+  /** Settings → Graphics (look.ts): absent is the device's default; applies from the next page load */
+  graphics?: Tier;
 }
+
+/** look.ts TIERS (a test holds the two lists equal) */
+export const GRAPHICS_TIERS: readonly Tier[] = ["full", "lite", "classic"];
 
 export const DEFAULT_PREFS: Prefs = { voice: true, sfx: true, ambience: true, music: 0.6, musicSet: false, ambienceFull: false, guideHidden: false, pathHidden: false };
 
@@ -71,6 +80,7 @@ export function loadPrefs(kv: KeyValue): Prefs {
       guideHidden: typeof d.guideHidden === "boolean" ? d.guideHidden : DEFAULT_PREFS.guideHidden,
       pathHidden: typeof d.pathHidden === "boolean" ? d.pathHidden : DEFAULT_PREFS.pathHidden,
       ...(d.barkHint === true ? { barkHint: true } : {}),
+      ...(GRAPHICS_TIERS.includes(d.graphics as Tier) ? { graphics: d.graphics } : {}),
     };
   } catch {
     return { ...DEFAULT_PREFS };

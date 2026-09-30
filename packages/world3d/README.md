@@ -732,12 +732,58 @@ never touched.
 - Checked (`test/town.test.ts`): `cameraFull` is the full canonical path (13 keys, 22 s); `camera`
   is still the 5 s cut.
 
-## Real look prototype (`?look=real`)
+## Real look (`?look=real`; the Full / Lite graphics tiers)
 
-A switchable render mode to judge how far lighting and post move the scene off the toon look.
-Default (no param) is the toon look, unchanged: every change is gated on `LOOK.real`
-(`src/look.ts`), and the composer lives in its own chunk (`src/reallook.ts`) that is never fetched
-without the flag.
+Lighting and post over the scene in place of the toon look. It ships as the default on capable
+devices (see "Graphics tiers" below); the toon look is the Classic tier, unchanged: every change is
+gated on `LOOK.real` (`src/look.ts`), and the composer lives in its own chunk (`src/reallook.ts`)
+that is never fetched at Classic.
+
+### Graphics tiers
+
+`src/look.ts` resolves one tier per page load, at import (before any scene is built):
+
+1. The URL, a debug / capture override that wins: `?look=full` or `?look=real` (Full),
+   `?look=lite`, `?look=classic` or `?look=toon`; `?env=a,b` picks the layers (alone: the real
+   look with just those, `&env=` none); `&ramp=1` keeps the toon materials.
+2. The saved choice: Settings → Graphics (`prefs.ts` `graphics`, in `silver-tongue:world3d:prefs`).
+3. The device's default (`autoTier`): Lite on a coarse pointer (`touch.ts coarsePointer`, the same
+   test that turns the touch UI on), `navigator.deviceMemory <= 4` or `hardwareConcurrency <= 4`;
+   Full otherwise.
+
+| tier | look | environment layers |
+| --- | --- | --- |
+| Full | real | all: ground, grass, leaves, sky, bloom, grade, particles |
+| Lite | real | ground, grass at half the blades (`LITE_GRASS`), sky, grade; no bloom, leaf cards or particles |
+| Classic | toon | none; nothing of `reallook.ts` / `envlook.ts` loads |
+
+- Settings → Graphics: Full / Lite / Classic. The choice is saved and applies at the next page load
+  (the toon and the real look build different materials, so it is never switched live); a toast
+  and the Settings line say "Reload the page to switch graphics". Picking the tier already running
+  just saves it (and disarms the safety valve).
+- Loading: at Full / Lite the town's layers are built, their shaders compiled
+  (`renderer.compileAsync`) and one frame drawn under the loading screen, as the bar's last item
+  ("environment", a `work` item: `WORK_SHARE` of the bar, no bytes). The first frame on screen has
+  every layer. Performance marks: `world3d:env` (the build), `world3d:first-frame`.
+- Safety valve (`LookValve`): only at Full chosen by the device's default. If the first 3 s of play
+  (loading screen gone, tab visible; a frame counts 250 ms at most) average over 33 ms a frame, the
+  session drops to Lite live (`RealLook.restrict`: leaf cards and particles hidden, the crowns and
+  the evening glow back to their own, bloom off, half the grass blades; nothing rebuilt) with the
+  toast "Graphics set to Lite for smoother play. Change in Settings." Once; never below Lite; never
+  after a URL tier, a saved tier or a pick in Settings. The saved choice is untouched.
+- `world3d.look()`: `tier`, `source` (`url` / `pref` / `auto` / `valve`), `reason`, `env`,
+  `grassDensity`, `valve { state, meanMs }`, `saved`, plus the composer's ms and the env build ms.
+- Force a tier: the URL (`?look=lite`), or `localStorage` `silver-tongue:world3d:prefs` `graphics`.
+- Shots: `SET=tiers` in `scripts/look-capture.mjs` (20 default desktop, 21 default phone at
+  390x844 with touch, 22 Settings → Graphics, 23 after picking Classic; a promo game seeded first
+  so the plain URL resumes it); `SET=timing TIMING_Q=… RUNS=3` times any build (page open ->
+  loading screen gone -> first frame, the worst frame after, the frame time at the noodle shop).
+- Measured 2026-09-30, Vega 11, 1280x720, `?promo=1`, 3 runs each: page open to the end of the
+  first frame after the loading screen: Full 2.52-3.09 s (loading screen gone at 2.14-2.32 s, env
+  build + compile 0.91-1.28 s inside it, then a 0.36-0.78 s first frame) vs before (c8b2557
+  `?look=real`: gone at 1.39-1.44 s, then a 0.97-1.16 s first frame that built the layers)
+  2.40-2.61 s; Classic 1.65-1.69 s, as the old default. Frame time at the noodle shop (rAF mean /
+  median): Full 18.1-18.3 / 6.6 ms, Lite 15.1-16.3 / 6.5-6.9 ms, Classic 4.4-4.7 / 4.5 ms.
 
 - `?look=real`: sun shadows (PCF, 2048 map, a 44 m ortho box that follows the player snapped to
   shadow texels; three 0.186 dropped PCFSoftShadowMap, `shadow.radius` softens instead), a PMREM
@@ -792,8 +838,8 @@ Layers (`look.ts ENV_LAYERS`):
   from the great tree (~750 points).
 
 The AO pass never sees the grass, leaves, sky or particles (hidden by material, as the hulls).
-First render of the town builds the layers: ~0.4-0.7 s (field raster, textures, leaf sampling), a
-one-off hitch. Shots: `SET=env` in `scripts/look-capture.mjs` (10-14, `see-env-env.png`; per-layer
+The town's layers build under the loading screen (Graphics tiers above): ~0.4-0.7 s (field raster,
+textures, leaf sampling); an interior's (bloom / grade only) on its first render. Shots: `SET=env` in `scripts/look-capture.mjs` (10-14, `see-env-env.png`; per-layer
 spot checks and frame times via `LAYERS_OUT` / `REPORT`). Frame time (2026-09-30, Vega 11,
 1280x720, rAF mean over 3 s at the noodle shop, midday): none 17.5 ms, all 21.8 ms (20.5 morning,
 19.8 evening); alone: ground 17.9, grass 18.1, leaves 17.1, sky 17.4, bloom 18.3, grade 17.1,
@@ -851,7 +897,8 @@ last volume above 0, else 0.6), Voice On / Off (the word clips and barks: core's
 explicit tap on ▶, say it again, a word or the sentence still plays), Sound effects On / Off (UI
 taps, the bubble, doors, coins, the bell…: the sfx bus), Ambience On / Off (the ambient bus; no bed
 starts or downloads while off) with Light / Full under it (`ambienceFull`, below; only while on);
-replay the six words. They and the guide's Hide / Show are kept in `silver-tongue:world3d:prefs`
+Graphics Full / Lite / Classic (applies at the next page load: "Graphics tiers"), replay the six
+words. They and the guide's Hide / Show are kept in `silver-tongue:world3d:prefs`
 (`src/prefs.ts`). An old single `sound: false` migrates to effects, ambience and music off (the
 music's volume one ♪ tap away) with the voices back on: the player who reported it muted to stop
 the music and lost the voices with it, so voices back with the music still off is what they wanted.
@@ -1127,6 +1174,9 @@ that role said last).
   by click, a pointer / touch press that lifts on the row, or Enter / Space; the row itself does.
 - `test/loading.test.ts`: the load plan (every asset once, the first frame's set, NPCs by distance,
   nearest door first) and the progress reducer (bytes, count fallback, server length).
+- `test/look.test.ts`: the graphics tiers: resolution order (URL > saved > device), the auto
+  default per device signal, each tier's layers, the safety valve (drops once, never after a
+  choice, never below Lite), the saved choice in prefs, the loading bar's work item.
 - `test/preload.test.ts`: the preloader's byte accounting (a stale page's sizes), the watchdog
   (fake timers), the retry state machine, the language it picks, and the runner on a fake page:
   the bar by bytes, the module script, a 404, a stall, Retry then Reload, back online, errors

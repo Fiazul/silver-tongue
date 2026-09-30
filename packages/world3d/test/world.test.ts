@@ -15,7 +15,7 @@ import { ScatterMotion, WalkerMotion, WAIT_RANGE } from "../src/streetlife";
 import { placeBubble, screenLayout } from "../src/ui/viewport";
 import { AssetCache, drawCalls, mergeStatic, SceneSpace } from "../src/world";
 import { CameraRig } from "../src/camera";
-import { LOOK } from "../src/look";
+import { LOOK, lookFor, resolveLook } from "../src/look";
 import { FENCE_TIMEOUT_MS, MAX_SAMPLE_AGE_MS, SEE_SILHOUETTE_CODE, fadeTexture, idHistogram, isSeeThrough, SEE_ATTR, SEE_ID0, SEE_NEVER, SEE_THROUGH, seeThroughCompile, SeeThroughControl, SeeThroughDetector, seeUniforms, silhouetteProjection, type Occluder, type SeeSample } from "../src/seethrough";
 import { ASSETS, assetIndex, readGlb, countingCore, course, makeGame, playScene, rightOption, rightTiles } from "./helpers";
 import { createCore } from "@silver-tongue/core";
@@ -617,10 +617,18 @@ describe.skipIf(!assetIndex)("bug 2: daylight is clearly perceptible at each qua
     // world3d.setDaylight(t) (main.ts) is wired straight to this same method, for the browser worker.
     const mainSrc = readFileSync(new URL("../src/main.ts", import.meta.url), "utf8");
     expect(mainSrc).toMatch(/setDaylight:\s*\(t: number\) => space\.setDaylight\(t\)/);
-    // cheap: no shadow maps in the default look. Nothing in the built street casts or receives,
-    // the sun included; the real-look prototype (look.ts, `?look=real`) turns them on only behind
+    // cheap: no shadow maps in the classic (toon) tier. This street was built at classic (look.ts:
+    // no page, or `?look=classic`, or the saved Classic: the same LookState). Nothing in it casts or
+    // receives, the sun included; the real look (the full / lite tiers) turns them on only behind
     // LOOK.real: in world.ts every shadow flag outside setupRealLook (itself called only under
     // LOOK.real) sits on a LOOK.real-gated line, and the renderer's shadow map lives in reallook.ts.
+    expect(LOOK.tier).toBe("classic");
+    for (const classic of [LOOK, resolveLook("?look=classic", "full", { coarse: false }), resolveLook("", "classic", { coarse: false }), lookFor("classic", "pref", "")]) {
+      expect(classic.tier).toBe("classic");
+      expect(classic.real).toBe(false);
+      expect(classic.ramp).toBe(false);
+      expect(classic.env).toEqual([]);
+    }
     expect(sun.castShadow).toBe(false);
     let flagged = 0;
     street.scene.traverse((o) => void ((o.castShadow || o.receiveShadow) && flagged++));
@@ -636,19 +644,21 @@ describe.skipIf(!assetIndex)("bug 2: daylight is clearly perceptible at each qua
     const shadowLines = outside.split("\n").filter((l) => /(castShadow|receiveShadow)\s*=/.test(l));
     expect(shadowLines.length).toBeGreaterThan(0);
     for (const l of shadowLines) expect(l, l.trim()).toMatch(/if \(LOOK\.real\)/);
-    // The environment layers (envlook.ts, `?look=real&env=...`) are reachable only under LOOK.real:
-    // LOOK.env is empty without it; envlook.ts is imported by reallook.ts alone (itself loaded only
-    // behind LOOK.real); every layer is built behind its own `want.has(...)` (the town's also behind
-    // `town`), bloom / grade passes only when on; the space data they read (lookGround) is written
-    // in setupRealLook only; neither chunk value-imports a main-bundle module (it would split it off).
-    expect(LOOK.real).toBe(false);
-    expect(LOOK.env).toEqual([]);
+    // The environment layers (envlook.ts: the tier's, or `?env=...`) are reachable only under
+    // LOOK.real: LOOK.env is empty at classic; envlook.ts is imported by reallook.ts alone (itself
+    // loaded, made and prepared only behind LOOK.real); every layer is built behind its own
+    // `want.has(...)` (the town's also behind `town`), bloom / grade passes only when on; the space
+    // data they read (lookGround) is written in setupRealLook only; neither chunk value-imports a
+    // main-bundle module (it would split it off).
     expect(street.scene.userData.lookGround).toBeUndefined();
     expect(street.scene.getObjectByName("env_sky") ?? street.scene.getObjectByName("env_grass_near") ?? street.scene.getObjectByName("env_leaves")).toBeUndefined();
     const src = (f: string) => readFileSync(new URL(`../src/${f}`, import.meta.url), "utf8");
     const importers = ["main.ts", "world.ts", "game.ts", "camera.ts", "seethrough.ts", "look.ts", "layout.ts", "reallook.ts"].filter((f) => /from "\.\/envlook"/.test(src(f)));
     expect(importers).toEqual(["reallook.ts"]);
-    expect(mainSrc).toMatch(/const real = LOOK\.real \? \(await import\("\.\/reallook"\)\)\.createRealLook\(/);
+    expect(mainSrc).toMatch(/const real = LOOK\.real \? \(madeReal \?\?= \(await import\("\.\/reallook"\)\)\.createRealLook\(/);
+    expect(mainSrc.match(/import\("\.\/reallook"\)\)\.createRealLook/g)?.length).toBe(1);
+    expect(mainSrc).toMatch(/if \(real\) await prepareLook\(real,/);
+    expect(mainSrc.match(/prepareLook\(/g)?.length).toBe(1); // that one call, behind `real`
     expect(mainSrc).not.toMatch(/from "\.\/reallook"/);
     const envSrc = src("envlook.ts");
     const realSrc = src("reallook.ts");
@@ -665,14 +675,15 @@ describe.skipIf(!assetIndex)("bug 2: daylight is clearly perceptible at each qua
     expect(worldSrc.indexOf("userData.lookGround")).toBeLessThan(setupEnd);
   });
 
-  it.skipIf(!assetIndex)("real look environment (envlook.ts): the town's layers build on the real street; grass only on the lawn, never on the path or a footprint; leaves fade with their tree", async () => {
+  it.skipIf(!assetIndex)("real look environment (envlook.ts): the town's layers build on the real street; grass only on the lawn, never on the path or a footprint; leaves fade with their tree; lite (from the start, or the valve's live drop) keeps ground, grass at half, sky, grade", async () => {
     vi.resetModules();
-    vi.doMock("../src/look", async (orig) => ({ ...(await orig<typeof import("../src/look")>()), LOOK: { real: true, ramp: false, env: [] } }));
+    vi.doMock("../src/look", async (orig) => ({ ...(await orig<typeof import("../src/look")>()), LOOK: { ...lookFor("full", "url", "test"), env: [] } }));
     try {
       const world = await import("../src/world");
       const layout = await import("../src/layout");
       const see = await import("../src/seethrough");
       const env = await import("../src/envlook");
+      const look = await import("../src/look");
       const L2 = new layout.LayoutIndex(layout.LAYOUT, assetIndex!);
       const assets = new world.AssetCache(ASSETS, L2, { read: readGlb });
       await assets.preload();
@@ -688,6 +699,14 @@ describe.skipIf(!assetIndex)("bug 2: daylight is clearly perceptible at each qua
       expect(at(-24, 5)).toBe(1);
       expect(at(-17.2, 6.3)).toBe(0); // the trunk
       const aoHidden: THREE.Material[] = [];
+      const material = (re: RegExp) => {
+        let found: THREE.MeshStandardMaterial | undefined;
+        scene.traverse((o) => void (!found && (o as THREE.Mesh).isMesh && re.test(((o as THREE.Mesh).material as THREE.Material).name) && (found = (o as THREE.Mesh).material as THREE.MeshStandardMaterial)));
+        return found!;
+      };
+      const crown = material(/^(canopy_green|leaf_green|leaf_dark|leaf_pale|town_willow)$/);
+      const crownColour = crown.color.clone();
+      const lantern = material(/^(lantern_red|lantern_PBR|glass)$/);
       const e = env.buildEnv(scene, new Set(["ground", "grass", "leaves", "sky", "bloom", "grade", "particles"]), { seeThrough: see.patchSeeThrough, seeAttr: see.SEE_ATTR, aoHidden });
       expect([...e.layers].sort()).toEqual(["bloom", "grade", "grass", "ground", "leaves", "particles", "sky"]);
       for (const n of ["env_grass_near", "env_grass_far", "env_leaves", "env_sky", "env_dust", "env_steam", "env_falling_leaves"]) expect(scene.getObjectByName(n), n).toBeTruthy();
@@ -704,6 +723,26 @@ describe.skipIf(!assetIndex)("bug 2: daylight is clearly perceptible at each qua
       space.setDaylight(1);
       e.update(new THREE.PerspectiveCamera(), new THREE.Vector3(-15.5, 0, 31.5), 2);
       expect(e.evening).toBe(1);
+      expect(lantern.emissiveIntensity).toBeGreaterThan(1); // the evening glow (bloom's emissives)
+      // the safety valve's full -> lite (look.ts LITE_LAYERS, LITE_GRASS), live: nothing built, the rest hidden or thinned
+      const near = scene.getObjectByName("env_grass_near") as THREE.Mesh<THREE.InstancedBufferGeometry>;
+      expect(near.geometry.instanceCount).toBe(200 * 200);
+      e.restrict(new Set(look.LITE_LAYERS), look.LITE_GRASS);
+      expect([...e.layers].sort()).toEqual(["grade", "grass", "ground", "sky"]);
+      expect(near.geometry.instanceCount).toBe(200 * 200 * look.LITE_GRASS);
+      expect(near.visible).toBe(true);
+      for (const n of ["env_leaves", "env_dust", "env_steam", "env_falling_leaves"]) expect(scene.getObjectByName(n)!.visible, n).toBe(false);
+      expect(scene.getObjectByName("env_sky")!.visible).toBe(true);
+      for (const k of ["r", "g", "b"] as const) expect(crown.color[k]).toBeCloseTo(crownColour[k], 6); // the crown's own colour back
+      expect(lantern.emissiveIntensity).toBe(1);
+      e.update(new THREE.PerspectiveCamera(), new THREE.Vector3(-15.5, 0, 31.5), 3);
+      expect(lantern.emissiveIntensity).toBe(1); // and it stays off
+      // lite from the start: its four layers, half the blades, no leaf cards or particles
+      const liteSpace = await world.SceneSpace.create(L2, assets, STREET);
+      const lite = env.buildEnv(liteSpace.scene, new Set(look.LITE_LAYERS), { seeThrough: see.patchSeeThrough, seeAttr: see.SEE_ATTR, aoHidden: [], grassDensity: look.LITE_GRASS });
+      expect([...lite.layers].sort()).toEqual(["grade", "grass", "ground", "sky"]);
+      expect((liteSpace.scene.getObjectByName("env_grass_far") as THREE.Mesh<THREE.InstancedBufferGeometry>).geometry.instanceCount).toBe(200 * 200 * look.LITE_GRASS);
+      for (const n of ["env_leaves", "env_dust", "env_steam", "env_falling_leaves"]) expect(liteSpace.scene.getObjectByName(n), n).toBeUndefined();
       // on an interior: no town layers, the renderer's still on
       const room = await world.SceneSpace.create(L2, assets, "room");
       const r = env.buildEnv(room.scene, new Set(["ground", "grass", "leaves", "sky", "bloom", "grade", "particles"]), { seeThrough: see.patchSeeThrough, seeAttr: see.SEE_ATTR, aoHidden: [] });

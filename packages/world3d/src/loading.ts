@@ -12,7 +12,8 @@
 //           whose room hasn't landed yet waits behind the loading screen (shown after 300 ms)
 //
 // Audio never waits here: the mixer fetches nothing before the first gesture (audio.ts), and the
-// word clips are fetched as they are said.
+// word clips are fetched as they are said. One item is work, not a file: the real look's
+// environment build (main.ts, the full / lite tiers), the bar's last WORK_SHARE.
 import { heldProp, type LayoutIndex, type SpaceLayout, type Vec3 } from "./layout";
 
 export interface LoadPlan {
@@ -102,6 +103,8 @@ export interface LoadItem {
   loaded: number;
   done: boolean;
   failed?: boolean;
+  /** work on the page, not a file (the real look's environment build): no bytes; WORK_SHARE of the bar */
+  work?: true;
 }
 
 export interface LoadState {
@@ -109,7 +112,7 @@ export interface LoadState {
 }
 
 export type LoadEvent =
-  | { type: "start"; name: string; bytes?: number }
+  | { type: "start"; name: string; bytes?: number; work?: boolean }
   | { type: "progress"; name: string; loaded: number; total?: number }
   | { type: "done"; name: string }
   | { type: "fail"; name: string }
@@ -125,10 +128,11 @@ export function reduceLoad(s: LoadState, e: LoadEvent): LoadState {
     // a file that failed and is asked for again (a Retry, the next door) counts from 0 again
     if (i >= 0 && s.items[i].failed) {
       const items = s.items.slice();
-      items[i] = { name: e.name, total: items[i].total, loaded: 0, done: false };
+      items[i] = { name: e.name, total: items[i].total, loaded: 0, done: false, ...(items[i].work ? { work: true as const } : {}) };
       return { items };
     }
     if (i >= 0) return s;
+    if (e.work) return { items: [...s.items, { name: e.name, total: null, loaded: 0, done: false, work: true }] };
     return { items: [...s.items, { name: e.name, total: e.bytes && e.bytes > 0 ? e.bytes : null, loaded: 0, done: false }] };
   }
   if (i < 0) return s;
@@ -152,9 +156,9 @@ export function reduceLoad(s: LoadState, e: LoadEvent): LoadState {
 export interface LoadSummary {
   count: number;
   done: number;
-  /** 0..1: by bytes when every file's size is known, else by count (partly loaded files counting their share where known) */
+  /** 0..1: by bytes when every file's size is known, else by count (partly loaded files counting their share where known); work items WORK_SHARE of it */
   fraction: number;
-  /** bytes loaded / expected (expected null when some size is unknown) */
+  /** bytes loaded / expected (expected null when some size is unknown); files only */
   loaded: number;
   total: number | null;
   /** the file the bar is on now: the first still loading */
@@ -162,16 +166,22 @@ export interface LoadSummary {
   complete: boolean;
 }
 
+/** the bar's share for the work items (together), the files taking the rest */
+export const WORK_SHARE = 0.1;
+
 export function loadSummary(s: LoadState): LoadSummary {
   const count = s.items.length;
   const done = s.items.filter((x) => x.done).length;
-  const loaded = s.items.reduce((n, x) => n + x.loaded, 0);
-  const known = s.items.every((x) => x.total !== null);
-  const total = known ? s.items.reduce((n, x) => n + (x.total ?? 0), 0) : null;
+  const files = s.items.filter((x) => !x.work);
+  const work = s.items.filter((x) => x.work);
+  const loaded = files.reduce((n, x) => n + x.loaded, 0);
+  const known = files.every((x) => x.total !== null);
+  const total = known ? files.reduce((n, x) => n + (x.total ?? 0), 0) : null;
   let fraction: number;
-  if (!count) fraction = 1;
+  if (!files.length) fraction = 1;
   else if (total) fraction = loaded / total;
-  else fraction = s.items.reduce((n, x) => n + (x.done ? 1 : x.total ? x.loaded / x.total : 0), 0) / count;
+  else fraction = files.reduce((n, x) => n + (x.done ? 1 : x.total ? x.loaded / x.total : 0), 0) / files.length;
+  if (work.length) fraction = (files.length ? fraction * (1 - WORK_SHARE) : 0) + (work.filter((x) => x.done).length / work.length) * (files.length ? WORK_SHARE : 1);
   return { count, done, fraction: Math.max(0, Math.min(1, fraction)), loaded, total, current: s.items.find((x) => !x.done)?.name ?? null, complete: done === count };
 }
 

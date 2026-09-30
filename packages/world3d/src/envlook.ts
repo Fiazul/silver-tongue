@@ -22,6 +22,8 @@ export interface EnvDeps {
   seeAttr: string;
   /** materials the AO pass must not see (reallook.ts hides them for its normal / depth pass) */
   aoHidden: THREE.Material[];
+  /** the grass layer's share of its blades (look.ts LITE_GRASS in lite; 1 if absent) */
+  grassDensity?: number;
 }
 
 /** The terrain field: a top-down raster of the town's ground, [-70, 70]^2 (terrain_town's extent). */
@@ -509,6 +511,12 @@ export interface EnvScene {
   /** 0 by day .. 1 in the evening (for the bloom and the grade) */
   readonly evening: number;
   update(camera: THREE.Camera, focus: THREE.Vector3 | undefined, time: number): void;
+  /**
+   * Down to `want` (a subset of what was built: the safety valve's full -> lite, look.ts) and the
+   * grass at `grassDensity` of its blades: the layers left out hide (leaf cards, particles), stop
+   * glowing (bloom's emissives back to their own) or thin out (grass). Nothing is built here.
+   */
+  restrict(want: ReadonlySet<string>, grassDensity: number): void;
 }
 
 export function buildEnv(scene: THREE.Scene, want: ReadonlySet<string>, deps: EnvDeps): EnvScene {
@@ -528,6 +536,12 @@ export function buildEnv(scene: THREE.Scene, want: ReadonlySet<string>, deps: En
   const textures = () => (tex ??= groundTextures());
   let field: Field | undefined;
   const getField = () => (field ??= buildField(scene, ground!));
+  /** what restrict() can take back: the grass meshes (their full blade counts), the leaf cards, the particles, the evening glow */
+  const grassMeshes: THREE.Mesh<THREE.InstancedBufferGeometry>[] = [];
+  const hideable: Record<string, THREE.Object3D[]> = { leaves: [], particles: [] };
+  let glowOn = false;
+  let glow: ((e: number) => void) | null = null;
+  const bladeCount = (full: number, density: number) => Math.round(full * Math.max(0, Math.min(1, density)));
 
   if (town && want.has("ground")) {
     const t = textures();
@@ -639,8 +653,15 @@ uniform vec3 envDirtColor;
           blades[k * 4 + 2] = rnd() * Math.PI * 2;
           blades[k * 4 + 3] = rnd();
         }
+      // shuffled (the blades are opaque and depth-tested: the order draws the same picture), so any
+      // prefix is an even random share of the tile: grassDensity keeps the first so many
+      for (let k = count - 1; k > 0; k--) {
+        const o = Math.floor(rnd() * (k + 1));
+        for (let c = 0; c < 4; c++) [blades[k * 4 + c], blades[o * 4 + c]] = [blades[o * 4 + c], blades[k * 4 + c]];
+      }
       geo.setAttribute("aBlade", new THREE.InstancedBufferAttribute(blades, 4));
-      geo.instanceCount = count;
+      geo.userData.blades = count;
+      geo.instanceCount = bladeCount(count, deps.grassDensity ?? 1);
       const m = new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide, name: `env_grass_${key}` });
       m.onBeforeCompile = (s) => {
         Object.assign(s.uniforms, grassUniforms, {
@@ -704,13 +725,17 @@ varying vec3 vBlade;
       mesh.matrixAutoUpdate = false;
       scene.add(mesh);
       deps.aoHidden.push(m);
+      grassMeshes.push(mesh);
     }
     built.push("grass");
   }
 
   if (town && want.has("leaves")) {
     const leaves = buildLeaves(scene, deps, U);
-    if (leaves) built.push("leaves");
+    if (leaves) {
+      built.push("leaves");
+      hideable.leaves.push(leaves);
+    }
   }
 
   if (town && want.has("sky")) {
@@ -719,13 +744,17 @@ varying vec3 vBlade;
   }
 
   if (town && want.has("particles")) {
+    const before = new Set(scene.children);
     buildParticles(scene, U, deps, updates);
+    hideable.particles.push(...scene.children.filter((o) => !before.has(o)));
     built.push("particles");
   }
 
   if (want.has("bloom")) {
-    const glow = emissives(scene);
-    updates.push((_c, _f, _t, e) => glow(e));
+    const g = emissives(scene);
+    glow = g;
+    glowOn = true;
+    updates.push((_c, _f, _t, e) => void (glowOn && g(e)));
     built.push("bloom");
   }
   if (want.has("grade")) built.push("grade");
@@ -748,6 +777,23 @@ varying vec3 vBlade;
       if (time !== lastT) for (const u of updates) u(camera, f, time, evening);
       lastT = time;
     },
+    restrict(want, grassDensity) {
+      for (const [layer, objs] of Object.entries(hideable))
+        for (const o of objs) {
+          if (want.has(layer) || !o.visible) continue;
+          o.visible = false;
+          (o.userData.restore as (() => void) | undefined)?.();
+        }
+      for (const m of grassMeshes) {
+        m.visible = want.has("grass");
+        m.geometry.instanceCount = bladeCount(m.geometry.userData.blades as number, grassDensity);
+      }
+      if (glow && glowOn && !want.has("bloom")) {
+        glowOn = false;
+        glow(0); // the lanterns, glass and panes back to their own emissive
+      }
+      built.splice(0, built.length, ...built.filter((l) => want.has(l)));
+    },
   };
   return env;
 }
@@ -765,6 +811,7 @@ function buildLeaves(scene: THREE.Scene, deps: EnvDeps, U: { envTime: { value: n
   interface Tri { a: THREE.Vector3; b: THREE.Vector3; c: THREE.Vector3; n: THREE.Vector3; area: number; see: number; colour: THREE.Color }
   const tris: Tri[] = [];
   let total = 0;
+  const casts = sources.map((m) => m.castShadow);
   for (const mesh of sources) {
     const g = mesh.geometry;
     const pos = g.getAttribute("position");
@@ -786,7 +833,8 @@ function buildLeaves(scene: THREE.Scene, deps: EnvDeps, U: { envTime: { value: n
     // the solid crown stays as the core (darker: the shade inside), the cards cast the shadow
     mesh.castShadow = false;
   }
-  for (const m of new Set(sources.map((s) => s.material as THREE.MeshStandardMaterial))) m.color.multiplyScalar(0.62);
+  const crowns = new Set(sources.map((s) => s.material as THREE.MeshStandardMaterial));
+  for (const m of crowns) m.color.multiplyScalar(0.62);
   const count = Math.min(LEAVES.max, Math.round(total * LEAVES.perM2));
   if (!count) return null;
   const rnd = makeRng(5);
@@ -883,6 +931,11 @@ function buildLeaves(scene: THREE.Scene, deps: EnvDeps, U: { envTime: { value: n
   mesh.computeBoundingSphere();
   scene.add(mesh);
   deps.aoHidden.push(material);
+  // EnvScene.restrict without leaves: the crowns as they were (their own colour, casting again)
+  mesh.userData.restore = () => {
+    sources.forEach((s, i) => (s.castShadow = casts[i]));
+    for (const m of crowns) m.color.multiplyScalar(1 / 0.62);
+  };
   return mesh;
 }
 

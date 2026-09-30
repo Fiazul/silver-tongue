@@ -7,6 +7,15 @@ import { isTap, JOYSTICK, joystickVector, knobOffset, type MoveInput, type Vec }
 import type { Rect } from "./ui/viewport";
 import { el } from "./ui/dom";
 
+/**
+ * The page's touch-device test: a coarse primary pointer (a phone, a tablet). main.ts switches the
+ * touch look on with it; look.ts picks the lite graphics tier by it. A laptop's touch screen with a
+ * mouse stays fine: its first touch still switches the look (PointerHooks.onTouch).
+ */
+export function coarsePointer(): boolean {
+  return typeof window !== "undefined" && !!window.matchMedia?.("(pointer: coarse)").matches;
+}
+
 interface Press {
   id: number;
   type: string;

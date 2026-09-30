@@ -1,13 +1,14 @@
-// The "real look" prototype (look.ts, `?look=real`): its own chunk, imported by main.ts only when
-// the flag is on, so the default page never loads or builds any of this. It owns the renderer's
+// The "real look" (look.ts: the full and lite graphics tiers, `?look=real`): its own chunk, imported
+// by main.ts only then, so the classic (toon) page never loads or builds any of this. It owns the renderer's
 // shadow map / tone mapping settings and an EffectComposer: the scene into a multisampled half-float
 // target, GTAO (ground-truth ambient occlusion) over it, then OutputPass (ACES filmic + sRGB). Each
 // space's environment map is a PMREM of a gradient equirect made from its sky (SceneSpace writes
 // scene.userData.lookSky: dome zenith, horizon, the hemisphere's ground), rebuilt when the daylight
 // moves it. GTAO's normal pass carries the see-through cutout. The see-through detector (seethrough.ts) renders its id pass on its own target with the
 // plain renderer and restores the state it touched; the composer doesn't change that.
-// Environment layers (`&env=`, look.ts LOOK.env; default all): envlook.ts builds each space's town
-// layers (ground, grass, leaves, sky, particles) and evening emissives the first time it renders;
+// Environment layers (look.ts LOOK.env: the tier's, or `&env=`): envlook.ts builds each space's town
+// layers (ground, grass, leaves, sky, particles) and evening emissives in prepare() (the town, behind
+// the loading screen: main.ts) or else the first time it renders;
 // here, `bloom` adds an UnrealBloomPass before the output (HDR highlights only, at half its usual
 // resolution) and `grade` folds a lift / gamma / gain + saturation + vignette + grain grade into the
 // OutputPass shader. The AO pass never sees the env's cards, sky or particles (like the hulls).
@@ -43,6 +44,8 @@ export interface RealLookOptions {
   env?: readonly string[];
   /** seethrough.ts SEE_ATTR */
   seeAttr?: string;
+  /** look.ts LOOK.grassDensity: the grass layer's share of its blades */
+  grassDensity?: number;
 }
 
 /**
@@ -83,6 +86,14 @@ export interface RealLook {
   /** `focus`: the player (the grass, dust and shadow box centre on it); the camera's position if absent */
   render(scene: THREE.Scene, camera: THREE.Camera, focus?: THREE.Vector3): void;
   setSize(w: number, h: number, pixelRatio: number): void;
+  /**
+   * Behind the loading screen, before the first frame: `scene`'s environment map and layers built,
+   * its materials' programs compiled (async where the driver can), and one frame drawn so the
+   * composer's passes compile too. The first frame on screen then has every layer and no hitch.
+   */
+  prepare(scene: THREE.Scene, camera: THREE.Camera, focus?: THREE.Vector3): Promise<void>;
+  /** Down to `layers` (a subset of the ones on: the safety valve's full -> lite), the grass at `grassDensity`; every space built so far and every one after. */
+  restrict(layers: readonly string[], grassDensity: number): void;
   /** ms per composer frame, a running mean (window.world3d.lookInfo) */
   readonly stats: { frameMs: number; frames: number; envBuilds: number; envLayers: readonly string[]; envBuildMs: number };
 }
@@ -194,7 +205,9 @@ export function createRealLook(renderer: THREE.WebGLRenderer, seeThrough: (m: TH
   const envs = new WeakMap<THREE.Scene, { version: number; rt: THREE.WebGLRenderTarget }>();
   const stats = { frameMs: 0, frames: 0, envBuilds: 0, envLayers: [] as readonly string[], envBuildMs: 0 };
   const envScenes = new WeakMap<THREE.Scene, EnvScene>();
-  const envDeps = { seeThrough, seeAttr: opts.seeAttr ?? "seeThru", aoHidden };
+  const envDeps = { seeThrough, seeAttr: opts.seeAttr ?? "seeThru", aoHidden, grassDensity: opts.grassDensity ?? 1 };
+  /** every space's layers built so far (restrict reaches them all) */
+  const built: EnvScene[] = [];
   const tStart = performance.now();
   const lerp3 = (out: THREE.Vector3, a: number[], b: number[], t: number) => out.set(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t);
 
@@ -206,6 +219,7 @@ export function createRealLook(renderer: THREE.WebGLRenderer, seeThrough: (m: TH
       e = buildEnv(scene, layers, envDeps);
       stats.envBuildMs = +(performance.now() - b0).toFixed(1);
       envScenes.set(scene, e);
+      built.push(e);
     }
     stats.envLayers = e.layers;
     return e;
@@ -226,36 +240,70 @@ export function createRealLook(renderer: THREE.WebGLRenderer, seeThrough: (m: TH
     stats.envBuilds++;
   }
 
+  let bloomOn = !!bloom;
+  let gradeOn = !!grade;
+  function draw(scene: THREE.Scene, camera: THREE.Camera, focus: THREE.Vector3 | undefined) {
+    const t0 = performance.now();
+    environment(scene);
+    const env = envFor(scene);
+    const time = (t0 - tStart) / 1000;
+    env?.update(camera, focus, time);
+    const evening = env?.evening ?? 0;
+    if (bloom) bloom.strength = REAL.bloom.day + (REAL.bloom.evening - REAL.bloom.day) * evening;
+    if (grade && !gradeOn) {
+      // restricted without grade: the shader stays, at identity
+      const u = grade.uniforms;
+      u.uLift.value.set(0, 0, 0);
+      u.uGamma.value.set(1, 1, 1);
+      u.uGain.value.set(1, 1, 1);
+      u.uSat.value = 1;
+      u.uVignette.value = 0;
+      u.uGrain.value = 0;
+    } else if (grade) {
+      const g = REAL.grade;
+      const u = grade.uniforms;
+      lerp3(u.uLift.value, g.midday.lift, g.evening.lift, evening);
+      lerp3(u.uGamma.value, g.midday.gamma, g.evening.gamma, evening);
+      lerp3(u.uGain.value, g.midday.gain, g.evening.gain, evening);
+      u.uSat.value = g.midday.saturation + (g.evening.saturation - g.midday.saturation) * evening;
+      u.uVignette.value = g.midday.vignette + (g.evening.vignette - g.midday.vignette) * evening;
+      u.uGrain.value = g.grain;
+      // reduced motion: a still grain (no crawl)
+      u.uSeed.value = reducedMotion ? 0 : (stats.frames % 64) * 7.31;
+    }
+    renderPass.scene = scene;
+    renderPass.camera = camera;
+    gtao.scene = scene;
+    gtao.camera = camera;
+    composer.render();
+    return performance.now() - t0;
+  }
+
   return {
     stats,
     render(scene, camera, focus) {
-      const t0 = performance.now();
-      environment(scene);
-      const env = envFor(scene);
-      const time = (t0 - tStart) / 1000;
-      env?.update(camera, focus, time);
-      const evening = env?.evening ?? 0;
-      if (bloom) bloom.strength = REAL.bloom.day + (REAL.bloom.evening - REAL.bloom.day) * evening;
-      if (grade) {
-        const g = REAL.grade;
-        const u = grade.uniforms;
-        lerp3(u.uLift.value, g.midday.lift, g.evening.lift, evening);
-        lerp3(u.uGamma.value, g.midday.gamma, g.evening.gamma, evening);
-        lerp3(u.uGain.value, g.midday.gain, g.evening.gain, evening);
-        u.uSat.value = g.midday.saturation + (g.evening.saturation - g.midday.saturation) * evening;
-        u.uVignette.value = g.midday.vignette + (g.evening.vignette - g.midday.vignette) * evening;
-        u.uGrain.value = g.grain;
-        // reduced motion: a still grain (no crawl)
-        u.uSeed.value = reducedMotion ? 0 : (stats.frames % 64) * 7.31;
-      }
-      renderPass.scene = scene;
-      renderPass.camera = camera;
-      gtao.scene = scene;
-      gtao.camera = camera;
-      composer.render();
-      const ms = performance.now() - t0;
+      const ms = draw(scene, camera, focus);
       stats.frames++;
       stats.frameMs += (ms - stats.frameMs) / Math.min(stats.frames, 120);
+    },
+    async prepare(scene, camera, focus) {
+      environment(scene);
+      envFor(scene);
+      // every material's program, frustum or not (compileAsync: in parallel where KHR_parallel_shader_compile is there)
+      await renderer.compileAsync(scene, camera);
+      draw(scene, camera, focus); // the passes' own programs; under the loading screen
+    },
+    restrict(want, grassDensity) {
+      const keep = new Set(want);
+      for (const l of [...layers]) if (!keep.has(l)) layers.delete(l);
+      envDeps.grassDensity = grassDensity;
+      for (const e of built) e.restrict(layers, grassDensity);
+      if (bloom && bloomOn && !keep.has("bloom")) {
+        bloomOn = false;
+        bloom.enabled = false;
+      }
+      if (gradeOn && !keep.has("grade")) gradeOn = false;
+      stats.envLayers = built.at(-1)?.layers ?? [];
     },
     setSize(w, h, pixelRatio) {
       composer.setPixelRatio(pixelRatio);

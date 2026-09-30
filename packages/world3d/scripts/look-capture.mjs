@@ -1,6 +1,8 @@
-// Real-look comparison shots (src/look.ts, `?look=real`): the same spot in the toon look, the real
-// look and the real look with the toon ramp kept, at morning and evening, plus a frame-time sample
-// of each. Headless Chromium on the machine's GPU (ANGLE Vulkan; without it SwiftShader renders at
+// Real-look comparison shots (src/look.ts, `?look=real`): the same spot in the toon look
+// (`?look=toon`: the classic tier), the real look and the real look with the toon ramp kept, at
+// morning and evening, plus a frame-time sample of each. SET=tiers: the shipped default (no look
+// params) on a desktop and a phone, Settings → Graphics, Classic chosen there (20-23). SET=timing:
+// page open -> loading screen gone -> first frame, the env build, the worst frame after (any build). Headless Chromium on the machine's GPU (ANGLE Vulkan; without it SwiftShader renders at
 // ~1 fps and the follow camera never settles) through Playwright (imported from an absolute path, as
 // scripts/cache-repro does; set PLAYWRIGHT to a local install). Serves nothing itself: point URL at
 // a served dist/ (e.g. `python3 -m http.server 8190 -d dist`).
@@ -27,7 +29,7 @@ const H = Number(process.env.H ?? 720);
 /** the real look's environment layers (look.ts ENV_LAYERS), for SET=env */
 const ENV_LAYERS = ["ground", "grass", "leaves", "sky", "bloom", "grade", "particles"];
 const variants = [
-  { name: "toon", q: "" },
+  { name: "toon", q: "&look=toon" },
   { name: "real", q: "&look=real" },
   { name: "real-ramp", q: "&look=real&ramp=1" },
   // its own page: the held dolly never hands the camera back, so no see-through check after it
@@ -94,13 +96,184 @@ const shots =
         { file: "04-toon-evening.png", v: "toon", day: 1 },
         { file: "05-real-evening.png", v: "real", day: 1 },
       ];
+const tiersSet = SET === "tiers" || SET === "timing";
 const args = (process.env.CHROME_ARGS ?? "--use-angle=vulkan --enable-features=Vulkan --enable-gpu --ignore-gpu-blocklist --disable-gpu-vsync --disable-frame-rate-limit").split(" ").filter(Boolean);
 // CHROME=/usr/bin/google-chrome: a browser of its own when Playwright's download isn't there
 const browser = await chromium.launch({ headless: true, args, ...(process.env.CHROME ? { executablePath: process.env.CHROME } : {}) });
 const report = {};
 /** ONLY=real,real-ramp: a subset of the variants (their shots only) */
 const only = process.env.ONLY?.split(",");
-for (const v of variants.filter((v) => (!only || only.includes(v.name)) && shots.some((s) => s.v === v.name))) {
+/**
+ * Before the page's own scripts: when #loading is hidden (the first time, after the load), and every
+ * rAF interval for 3 s after it; works on a build without the world3d:* performance marks too.
+ */
+const TIMING_INIT = () => {
+  const t = (window.__lookTiming = { hiddenMs: null, frames: [] });
+  const watch = () => {
+    const el = document.querySelector("#loading");
+    if (!el) return requestAnimationFrame(watch);
+    const seen = () => {
+      if (t.hiddenMs !== null || !el.hidden || !window.world3d?.model?.()) return false;
+      t.hiddenMs = performance.now();
+      let last = null;
+      // rAF timestamps: the first one is the frame the loading screen came off; each interval after is one frame
+      const f = (now) => {
+        if (last !== null) t.frames.push(now - last);
+        last = now;
+        if (now - t.hiddenMs < 3000) requestAnimationFrame(f);
+      };
+      requestAnimationFrame(f);
+      return true;
+    };
+    const tick = () => void (seen() || setTimeout(tick, 5));
+    tick();
+  };
+  watch();
+};
+/** the timing a page recorded (TIMING_INIT and the world3d:* marks, when the build has them) */
+const timing = (page) =>
+  page.evaluate(() => {
+    const t = window.__lookTiming;
+    const mark = (n) => performance.getEntriesByName(n)[0];
+    const f = t?.frames ?? [];
+    return {
+      loadingHiddenMs: t?.hiddenMs !== null && t ? Math.round(t.hiddenMs) : null,
+      firstFrameMark: mark("world3d:first-frame") ? Math.round(mark("world3d:first-frame").startTime) : null,
+      envMs: mark("world3d:env") ? Math.round(mark("world3d:env").duration) : null,
+      /** the first frame after the loading screen, and the worst / mean over the 3 s after it (rAF intervals) */
+      firstFrameMs: f.length ? +f[0].toFixed(1) : null,
+      worstFrameMs: f.length ? +Math.max(...f).toFixed(1) : null,
+      meanFrameMs: f.length ? +(f.reduce((a, b) => a + b, 0) / f.length).toFixed(1) : null,
+      look: window.world3d?.look?.() ? (({ tier, source, reason, env, grassDensity, valve, envBuildMs }) => ({ tier, source, reason, env, grassDensity, valve, envBuildMs }))(window.world3d.look()) : null,
+    };
+  });
+const errorsOf = (page) => {
+  const errors = [];
+  page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
+  page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
+  return errors;
+};
+/** a returning player: a promo game ("Mei") saved in this context first, so the plain URL resumes it (no start flow) */
+async function seedSave(ctx) {
+  const p = await ctx.newPage();
+  await p.goto(`${URL_}?promo=1&look=toon`);
+  await p.waitForFunction(() => !!window.world3d?.model?.() && !!window.world3d?.state?.(), null, { timeout: 120000 });
+  await p.waitForTimeout(1500);
+  await p.close();
+}
+async function openPlain(ctx, q = "") {
+  const page = await ctx.newPage();
+  await page.addInitScript(TIMING_INIT);
+  const errors = errorsOf(page);
+  await page.goto(`${URL_}${q}`);
+  await page.waitForFunction(() => !!window.world3d?.model?.() && document.querySelector("#loading")?.hidden, null, { timeout: 120000 });
+  await page.waitForTimeout(4000); // past the valve's 3 s window; the town's people stream in
+  // a resumed first-day game opens on the fly-over: skip it (a tap or click on its letterbox) for the play view
+  if (await page.locator(".letterbox").count()) {
+    await page.locator(".letterbox").first().tap().catch(() => page.locator(".letterbox").first().click({ force: true }).catch(() => {}));
+    await page.waitForTimeout(2500);
+  }
+  return { page, errors };
+}
+/** a frame-time sample: rAF intervals over 3 s */
+const sample = (page) =>
+  page.evaluate(
+    () =>
+      new Promise((res) => {
+        const d = [];
+        let last = performance.now();
+        const t0 = last;
+        const f = (t) => {
+          d.push(t - last);
+          last = t;
+          if (t - t0 < 3000) requestAnimationFrame(f);
+          else {
+            d.sort((a, b) => a - b);
+            res({ n: d.length, meanMs: +(d.reduce((a, b) => a + b, 0) / d.length).toFixed(2), medMs: +d[Math.floor(d.length / 2)].toFixed(2) });
+          }
+        };
+        requestAnimationFrame(f);
+      }),
+  );
+if (SET === "tiers") {
+  // desktop: the default, Settings → Graphics open, Classic picked there and the page reloaded
+  const desk = await browser.newContext({ viewport: { width: W, height: H } });
+  await seedSave(desk);
+  const d = await openPlain(desk);
+  report.desktop = { timing: await timing(d.page), frames: await sample(d.page) };
+  await d.page.screenshot({ path: join(out, "20-default-desktop.png") });
+  console.log(`20-default-desktop.png: ${JSON.stringify(report.desktop.timing.look)}`);
+  await d.page.evaluate(() => [...document.querySelectorAll(".actions button")].find((b) => b.textContent === "Menu")?.click());
+  await d.page.waitForSelector("dialog.menu[open]");
+  await d.page.evaluate(() => [...document.querySelectorAll("dialog.menu button")].find((b) => b.textContent === "Settings")?.click());
+  await d.page.waitForSelector(".set-graphics");
+  await d.page.evaluate(() => document.querySelector(".set-graphics").scrollIntoView({ block: "center" }));
+  await d.page.waitForTimeout(300);
+  await d.page.screenshot({ path: join(out, "22-settings-graphics.png") });
+  report.settings = await d.page.evaluate(() => [...document.querySelectorAll(".set-graphics button")].map((b) => `${b.textContent}${b.getAttribute("aria-pressed") === "true" ? " (on)" : ""}`));
+  console.log(`22-settings-graphics.png: ${report.settings.join(" | ")}`);
+  await d.page.evaluate(() => document.querySelector('.set-graphics button[data-tier="classic"]').click());
+  report.settingsMsg = await d.page.evaluate(() => document.querySelector(".set-msg")?.textContent);
+  report.desktop.errors = d.errors;
+  await d.page.close();
+  const c = await openPlain(desk);
+  report.classic = { timing: await timing(c.page), frames: await sample(c.page), errors: c.errors };
+  await c.page.screenshot({ path: join(out, "23-classic.png") });
+  console.log(`23-classic.png: ${JSON.stringify(report.classic.timing.look)}`);
+  // back to lite and full by the saved choice, for their frame times at the same place
+  for (const tier of ["lite", "full"]) {
+    await c.page.evaluate((t) => {
+      const k = "silver-tongue:world3d:prefs";
+      localStorage.setItem(k, JSON.stringify({ ...JSON.parse(localStorage.getItem(k) ?? "{}"), graphics: t }));
+    }, tier);
+    const x = await openPlain(desk);
+    report[tier] = { timing: await timing(x.page), frames: await sample(x.page), errors: x.errors };
+    await x.page.close();
+  }
+  await c.page.close();
+  await desk.close();
+  // phone: 390x844, touch, a phone's user agent
+  const phone = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    deviceScaleFactor: 3,
+    isMobile: true,
+    hasTouch: true,
+    userAgent: "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Mobile Safari/537.36",
+  });
+  await seedSave(phone);
+  const ph = await openPlain(phone);
+  report.phone = {
+    timing: await timing(ph.page),
+    frames: await sample(ph.page),
+    touch: await ph.page.evaluate(() => ({ touchUi: window.world3d.touch().touchUi, compact: window.world3d.touch().layout.compact, joystickZone: window.world3d.touch().layout.stickZone })),
+    errors: ph.errors,
+  };
+  await ph.page.screenshot({ path: join(out, "21-default-phone.png") });
+  console.log(`21-default-phone.png: ${JSON.stringify(report.phone.timing.look)}`);
+  await ph.page.close();
+  await phone.close();
+} else if (SET === "timing") {
+  // TIMING_Q (e.g. "&look=real", "&look=toon", ""): RUNS fresh promo pages, each timed
+  const runs = [];
+  for (let i = 0; i < Number(process.env.RUNS ?? 3); i++) {
+    const ctx = await browser.newContext({ viewport: { width: W, height: H } });
+    const page = await ctx.newPage();
+    await page.addInitScript(TIMING_INIT);
+    const errors = errorsOf(page);
+    await page.goto(`${URL_}?promo=1${process.env.TIMING_Q ?? ""}`);
+    await page.waitForFunction(() => window.__lookTiming?.frames.length > 0 && performance.now() - window.__lookTiming.hiddenMs > 3100, null, { timeout: 120000, polling: 100 });
+    const t = await timing(page);
+    // then the frame time at SPOT (Market Street by the noodle shop), HUD off, midday, as the variants above
+    await page.evaluate(() => window.world3d.promo("hud", false));
+    await page.evaluate((d) => window.world3d.setDaylight(d), 1 / 3);
+    await page.evaluate(([x, z]) => window.world3d.teleport(x, z), SPOT);
+    await page.waitForTimeout(4000);
+    runs.push({ ...t, spot: await sample(page), errors: errors.length });
+    await ctx.close();
+  }
+  report.timing = runs;
+}
+for (const v of variants.filter((v) => !tiersSet && (!only || only.includes(v.name)) && shots.some((s) => s.v === v.name))) {
   const page = await browser.newPage({ viewport: { width: W, height: H } });
   const logs = [];
   const t0 = Date.now();

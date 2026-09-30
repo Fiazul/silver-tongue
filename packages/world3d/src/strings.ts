@@ -112,6 +112,13 @@ const FALLBACK: Record<string, string> = {
   "settings-ambience": "Ambience",
   "settings-ambience-light": "Light",
   "settings-ambience-full": "Full",
+  // Settings → Graphics (look.ts tiers): saved, applied at the next page load; the safety valve's toast
+  "settings-graphics": "Graphics",
+  "settings-graphics-full": "Full",
+  "settings-graphics-lite": "Lite",
+  "settings-graphics-classic": "Classic",
+  "settings-graphics-reload": "Saved. Reload the page to switch graphics.",
+  "graphics-lite-toast": "Graphics set to Lite for smoother play. Change in Settings.",
   "settings-intro": "Replay the six words",
   "settings-guide": "First-steps guide",
   "settings-switch-failed": "That course didn't load; this one goes on.",
