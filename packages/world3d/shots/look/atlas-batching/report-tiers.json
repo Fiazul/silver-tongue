@@ -1,0 +1,184 @@
+{
+ "desktop": {
+  "timing": {
+   "loadingHiddenMs": 3267,
+   "firstFrameMark": 3229,
+   "envMs": 1404,
+   "firstFrameMs": 2,
+   "worstFrameMs": 51.9,
+   "meanFrameMs": 12.1,
+   "look": {
+    "tier": "full",
+    "source": "auto",
+    "reason": "auto: capable device",
+    "env": [
+     "ground",
+     "grass",
+     "leaves",
+     "sky",
+     "bloom",
+     "grade",
+     "particles"
+    ],
+    "grassDensity": 1,
+    "valve": {
+     "state": "idle",
+     "meanMs": 18
+    },
+    "envBuildMs": 629
+   }
+  },
+  "frames": {
+   "n": 2217,
+   "meanMs": 1.36,
+   "medMs": 0.5
+  },
+  "errors": []
+ },
+ "settings": [
+  "Full (on)",
+  "Lite",
+  "Classic"
+ ],
+ "settingsMsg": "Saved. Reload the page to switch graphics.",
+ "classic": {
+  "timing": {
+   "loadingHiddenMs": 1798,
+   "firstFrameMark": 1635,
+   "envMs": null,
+   "firstFrameMs": 12.1,
+   "worstFrameMs": 231.2,
+   "meanFrameMs": 7.6,
+   "look": {
+    "tier": "classic",
+    "source": "pref",
+    "reason": "saved choice",
+    "env": [],
+    "grassDensity": 1,
+    "valve": {
+     "state": "idle",
+     "meanMs": 0
+    },
+    "envBuildMs": 0
+   }
+  },
+  "frames": {
+   "n": 679,
+   "meanMs": 4.42,
+   "medMs": 4.3
+  },
+  "errors": []
+ },
+ "lite": {
+  "timing": {
+   "loadingHiddenMs": 5046,
+   "firstFrameMark": 4984,
+   "envMs": 1105,
+   "firstFrameMs": 28.4,
+   "worstFrameMs": 53,
+   "meanFrameMs": 13.3,
+   "look": {
+    "tier": "lite",
+    "source": "pref",
+    "reason": "saved choice",
+    "env": [
+     "ground",
+     "grass",
+     "sky",
+     "grade"
+    ],
+    "grassDensity": 0.5,
+    "valve": {
+     "state": "idle",
+     "meanMs": 0
+    },
+    "envBuildMs": 63.9
+   }
+  },
+  "frames": {
+   "n": 1015,
+   "meanMs": 2.96,
+   "medMs": 1
+  },
+  "errors": []
+ },
+ "full": {
+  "timing": {
+   "loadingHiddenMs": 6396,
+   "firstFrameMark": 6298,
+   "envMs": 1054,
+   "firstFrameMs": 27,
+   "worstFrameMs": 121.7,
+   "meanFrameMs": 16.1,
+   "look": {
+    "tier": "full",
+    "source": "pref",
+    "reason": "saved choice",
+    "env": [
+     "ground",
+     "grass",
+     "leaves",
+     "sky",
+     "bloom",
+     "grade",
+     "particles"
+    ],
+    "grassDensity": 1,
+    "valve": {
+     "state": "idle",
+     "meanMs": 0
+    },
+    "envBuildMs": 176
+   }
+  },
+  "frames": {
+   "n": 1445,
+   "meanMs": 2.08,
+   "medMs": 0.6
+  },
+  "errors": []
+ },
+ "phone": {
+  "timing": {
+   "loadingHiddenMs": 3198,
+   "firstFrameMark": 3161,
+   "envMs": 879,
+   "firstFrameMs": 18.2,
+   "worstFrameMs": 69.6,
+   "meanFrameMs": 11.2,
+   "look": {
+    "tier": "lite",
+    "source": "auto",
+    "reason": "auto: coarse pointer",
+    "env": [
+     "ground",
+     "grass",
+     "sky",
+     "grade"
+    ],
+    "grassDensity": 0.5,
+    "valve": {
+     "state": "idle",
+     "meanMs": 0
+    },
+    "envBuildMs": 478.9
+   }
+  },
+  "frames": {
+   "n": 3025,
+   "meanMs": 0.99,
+   "medMs": 0.5
+  },
+  "touch": {
+   "touchUi": true,
+   "compact": true,
+   "joystickZone": {
+    "x": 0,
+    "y": 74,
+    "w": 195,
+    "h": 770
+   }
+  },
+  "errors": []
+ }
+}

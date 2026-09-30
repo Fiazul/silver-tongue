@@ -74,10 +74,48 @@ landscape set are flat. Synced 2026-09-30 (branch textured-library).
   over `build.mjs` BUDGET (15 MB, which only decides MUSIC_OGG_ONLY: already on). First frame: 3,087
   of 7,430 KB (41.5 %, `test/loading.test.ts` budget now 43 %; 39.7 % before).
 - Draw calls: a textured material keys on its asset's atlas (below) and textured geometry carries
-  UVs, so textured pieces no longer merge with flat pieces of the same palette colour. Toon street
-  shot (look-capture SET=textured): 70 -> 101 calls; interiors (classic, 1920x1080) 40 / 35 / 32 / 43 /
-  33 -> 62 / 44 / 44 / 66 / 34; `test/world.test.ts` street batching guard 123 -> 143 (tests load
-  without textures, so this counts the UV / factor split only).
+  UVs, so textured pieces stopped merging with each other and with flat pieces of the same palette
+  colour (toon street shot, look-capture SET=textured: 70 -> 101 calls; interiors, classic
+  1920x1080: 40 / 35 / 32 / 43 / 33 -> 62 / 44 / 44 / 66 / 34). Static families (`world.ts
+  StaticFamilies`, `src/atlas.ts`) bring them back down:
+  - Atlas per space: `SceneSpace.buildStatic` collects the base-colour + ORM images its static
+    textured surfaces use and packs them (`packSpaceAtlas`, once per space: `AssetCache.spaceAtlas`
+    keeps it) into power-of-two pages, base colour at most 2048², ORM at half size with the same
+    layout (one UV set serves both): shelf-packed, tallest first, 8 texels of padding round each
+    image (4 on the ORM page) filled by extending its edges, so trilinear mips don't bleed a
+    neighbour in; what doesn't fit spills onto another page. The images are read through a 2D
+    canvas (`readImage`) and blitted in steps run in <= 4 ms slices (`sliced`, a macrotask between).
+    Pages: RGBA DataTextures, mipmapped on the GPU, LinearMipmapLinear, clamped, the sources' colour
+    space and anisotropy; their CPU copy stays (a lost / restored context uploads it again). Once
+    merged, the per-asset textures nothing in the space draws any more are disposed (their decoded
+    images stay: other spaces pack from them, a held prop still draws them).
+  - Families: every static surface that is opaque, one toon / standard material (see-through
+    patched), no emission, no normal / emissive map, no vertex colours of its own, and not a name
+    something looks up later (`KEEP_APART`: the environment layers' grass / land / water / canopy,
+    the evening glow's lantern / glass / sky_blue, pi_glass, the see-through's canopy parts) joins
+    a family: (atlas page or flat, side, roughness / metalness factors, AO intensity, shadow flags).
+    Each family is one draw: a plain white toon (real look: standard) material, colours per vertex
+    (the source's `color`, linear, as `mergePrimitives` does), with the page as `map` + `aoMap`
+    (+ roughness / metalness maps in the real look) when textured; the UVs remapped into the page
+    (`remapUV`: texel centre for texel centre). Flat members drop their UVs. The see-through tag is
+    baked from the source mesh as before, the outline hulls keep their own shared batch, and each
+    batch lists its parts (`userData.parts`). Anything else batches by its own material, as before.
+  - Measured 2026-09-30 (look-capture 1920x1080, `shots/look/atlas-batching/`, 0 console errors):
+    toon street (SET=textured 06) 101 -> 41 calls; interiors (SET=interiors, classic) noodle shop
+    62 -> 18, room 44 -> 18, tea house 44 -> 18, shop 66 -> 22, stairs 34 -> 19. Frame mean
+    (SET=tiers, same machine, not the same load: indicative) desktop 24.4 -> 12.1 ms, classic 19.2 ->
+    7.6, lite 24.0 -> 13.3, full 30.5 -> 16.1, phone 14.4 -> 11.2. Pages (from the index's
+    `texture.px`): street 2048x2048 + 512x256 (23 sources: a second page, so one more draw per
+    family), noodle shop / tea house / shop 1024x1024, room / stairs 1024x512; ORM half of each.
+    Against `shots/look/textured-library/` (mean abs RGB diff / 255): 06 toon 0.04, 07 real 2.65,
+    09 real close 3.92, 20 default desktop 4.33, 21 phone 1.06, 23 classic 1.97; the differences are
+    all moving things (walkers, idle poses, steam, particles, grass sway, the speech bubble), the
+    static world unchanged in the difference maps.
+  - Headless (`test/scene.test.ts`, no images: flat families only): street 143 -> 92, noodle shop
+    38 -> 17, room 35 -> 17, tea house 32 -> 16, shop 43 -> 22, stairs 31 -> 17; the street guard in
+    `test/world.test.ts` back at 123. `test/atlas.test.ts`: the packer (fit, padding, POT pages,
+    overflow, UV round trip, edge extension, every source texel at its remapped UV) and a textured +
+    flat space merged into one draw per family.
 - Materials (`world.ts` `surfaceMaps`, `Toon.material`): toon carries `map`, `normalMap`,
   `aoMap`, `emissiveMap`; the real look also `roughnessMap` / `metalnessMap` and the source's own
   roughness / metalness factors (flat materials keep 0.8 / 0). The textures are shared, not cloned
@@ -247,8 +285,9 @@ upstream's `tools/test/language-free.test.ts` keeps free of any particular langu
   lifts the picture 16% so player and NPC sit above the reply sheet. Pixel ratio capped at 2;
   outlines thicker on phones (`camera.ts outlineScale`).
 - **Performance:** every space's static meshes (the town's landscape, buildings and props, the
-  rooms' furniture) are merged per material at build time (`world.ts mergeStatic`): the town's 191
-  placements and 9 landscape GLBs come to 45 batches and one outline batch. Characters and what
+  rooms' furniture) are merged at build time (`world.ts mergeStatic`): per material, and since the
+  textured library per family across palette colours (`StaticFamilies`, see "Textured assets"
+  below), the colour in the vertices; one outline batch. Characters and what
   they hold move, so they can't be batched: each is one mesh instead (`world.ts mergePrimitives`
   folds a GLB's palette primitives into one geometry, the colours per vertex), plus its hull. Draw
   calls, unculled (every batch in view; `test/scene.test.ts` counts them headless): the town 1434
@@ -1376,6 +1415,11 @@ that role said last).
   `GRASS_LOOK`, `CANOPY_CORE`), the tuft texture (blades, coverage, tips) and `grassDensityAt` (0 off the mask; clumps, thin and bare patches
   on it); the scene-level checks (no blades on the street or any footprint, a core in every tree)
   are in world.test.ts's real look environment test.
+- `test/atlas.test.ts`: runtime atlas packing (`src/atlas.ts`): pages fit, power-of-two,
+  padded and aligned, overflow onto a second page, the UV remap both ways, edge extension into the
+  padding, every source texel (base colour and ORM) at its remapped UV; static families (`world.ts
+  StaticFamilies`): two assets' atlases in one page, their colours in one draw (vertex colours,
+  see-through ids, texels through the remap), flat colours in one, glass apart, hulls in theirs.
 - `test/perf.test.ts`: the performance pass: each tier's render budget and its URL overrides, the
   render scale's resolution (Lite on a 1080x2400 DPR 2.6 phone under half of Full's 1080p pixels),
   dynamic resolution's thresholds and hysteresis, frame pacing at 60 / 30 on 60-144 Hz displays

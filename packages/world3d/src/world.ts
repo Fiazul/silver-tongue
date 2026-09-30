@@ -11,7 +11,8 @@ import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js
 import { CharacterActor, type ActorOptions } from "./actor";
 import { turnToward } from "./anim";
 import { buildCountryside, flyoverViews, hazeColour, HORIZON, moveClouds, type Part } from "./horizon";
-import { CANOPIES, markSeeThrough, patchSeeThrough, seeAttribute, SEE_ATTR, SEE_FRAG, SEE_FRAG_PARS, SEE_ID0, SEE_NEVER, SEE_OCCLUDER, SEE_VERT, SEE_VERT_PARS, SEE_THROUGH, seeSpecFor, seeUniforms, type Occluder, type SeeSpec } from "./seethrough";
+import { canReadImages, packSources, readImage, sliced, type AtlasSource, type PackedAtlas, type PackRect } from "./atlas";
+import { CANOPIES, isSeeThrough, markSeeThrough, patchSeeThrough, seeAttribute, SEE_ATTR, SEE_FRAG, SEE_FRAG_PARS, SEE_ID0, SEE_NEVER, SEE_OCCLUDER, SEE_VERT, SEE_VERT_PARS, SEE_THROUGH, seeSpecFor, seeUniforms, type Occluder, type SeeSpec } from "./seethrough";
 import { ModuleLoadError } from "./boot";
 import { applyDetail, detailFor } from "./detail";
 import { figureId } from "./barks";
@@ -205,6 +206,33 @@ class Toon {
       this.materials.set(key, toon);
     }
     return toon;
+  }
+
+  /**
+   * The material of a static family batch (StaticFamilies): white, its colours per vertex; with a
+   * packed atlas page, that page's base colour as `map` and its ORM as `aoMap` (+ roughness /
+   * metalness maps in the real look), exactly as Toon.material hands a textured source's maps on.
+   * Plain toon / standard materials (the see-through patch only), one per key.
+   */
+  family(f: { key: string; name: string; side: THREE.Side; roughness: number; metalness: number; aoMapIntensity: number; page: { base: THREE.Texture; orm: THREE.Texture } | null }): THREE.MeshToonMaterial {
+    let m = this.materials.get(f.key);
+    if (m) return m;
+    const maps = f.page ? { map: f.page.base, aoMap: f.page.orm, aoMapIntensity: f.aoMapIntensity } : {};
+    if (LOOK.real && !LOOK.ramp)
+      m = new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        vertexColors: true,
+        roughness: f.roughness,
+        metalness: f.metalness,
+        side: f.side,
+        name: f.name,
+        ...maps,
+        ...(f.page ? { roughnessMap: f.page.orm, metalnessMap: f.page.orm } : {}),
+      }) as unknown as THREE.MeshToonMaterial;
+    else m = new THREE.MeshToonMaterial({ color: 0xffffff, vertexColors: true, gradientMap: this.gradient, side: f.side, name: f.name, ...maps });
+    patchSeeThrough(m);
+    this.materials.set(f.key, m);
+    return m;
   }
 
   flat(hex: string): THREE.MeshToonMaterial {
@@ -414,6 +442,34 @@ export class AssetCache {
     return p;
   }
 
+  /** each space's packed atlas (packSpaceAtlas), packed once: a space built again reuses it */
+  private atlases = new Map<string, Promise<SpaceAtlas | null>>();
+
+  /** The space's atlas pages, packed on first ask (sliced), the same pages after. */
+  spaceAtlas(space: string, roots: THREE.Object3D[]): Promise<SpaceAtlas | null> {
+    let p = this.atlases.get(space);
+    if (!p) {
+      p = packSpaceAtlas(roots);
+      this.atlases.set(space, p);
+    }
+    return p;
+  }
+
+  /**
+   * After a space merged its statics: the per-asset textures its atlas took in and nothing in the
+   * space draws any more are let go on the GPU (dispose; their decoded images stay for other
+   * spaces and whatever else still draws them: three uploads a disposed texture again on its next use).
+   */
+  releaseSources(atlas: SpaceAtlas, scene: THREE.Object3D) {
+    const inUse = new Set<THREE.Texture>();
+    scene.traverse((o) => {
+      const mats = (o as THREE.Mesh).material;
+      if (!mats) return;
+      for (const m of (Array.isArray(mats) ? mats : [mats]) as THREE.MeshStandardMaterial[]) for (const t of [m.map, m.aoMap, m.roughnessMap, m.metalnessMap]) if (t) inUse.add(t);
+    });
+    for (const t of atlas.sources) if (!inUse.has(t)) t.dispose();
+  }
+
   /** Whether an asset's template is loaded (or loading). */
   has(name: string): boolean {
     return this.templates.has(name);
@@ -477,6 +533,241 @@ function worldGeometry(mesh: THREE.Mesh): THREE.BufferGeometry {
   return g;
 }
 
+// ---------------------------------------------------------------------------------------------
+// Static families: one draw per (space, atlas page, material family)
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * Materials something finds by name after the merge, kept on their own material and batched as
+ * before: the environment layers (envlook.ts GRASS_RE / GROUND_RE / WATER_RE / CANOPY_RE, env_*),
+ * the evening glow (envlook.ts `emissives`: lantern_*, glass, sky_blue), the interior windows
+ * (interior-backdrop.ts pi_glass) and textured ground, the see-through's canopy parts
+ * (seethrough.ts CANOPIES).
+ */
+const KEEP_APART = /^(grass_|land_|water_|canopy_green$|leaf_|town_willow$|lantern_|glass$|pi_glass$|sky_blue$|env_|interior_)/;
+
+type SurfaceMaterial = THREE.MeshStandardMaterial & THREE.MeshToonMaterial;
+
+/** A texture a packed atlas can take in: read on UV 0, no transform, not flipped, a decoded image. */
+function packableTexture(t: THREE.Texture | null | undefined): boolean {
+  if (!t) return true;
+  const img = t.image as { width?: number; height?: number } | undefined;
+  return (
+    t.channel === 0 &&
+    !t.flipY &&
+    t.offset.x === 0 &&
+    t.offset.y === 0 &&
+    t.repeat.x === 1 &&
+    t.repeat.y === 1 &&
+    t.rotation === 0 &&
+    !!img &&
+    (img.width ?? 0) > 0 &&
+    (img.height ?? 0) > 0
+  );
+}
+
+/** The ORM image a textured surface reads (aoMap, and in the real look roughness / metalness): one image or none; undefined when they differ. */
+function ormOf(m: SurfaceMaterial): THREE.Texture | null | undefined {
+  const ts = [m.aoMap, m.roughnessMap, m.metalnessMap].filter((t): t is THREE.Texture => !!t);
+  if (!ts.length) return null;
+  return ts.every((t) => t.image === ts[0].image) ? ts[0] : undefined;
+}
+
+const imageIds = new WeakMap<object, number>();
+let nextImageId = 0;
+const imageId = (img: object) => {
+  let id = imageIds.get(img);
+  if (id === undefined) imageIds.set(img, (id = nextImageId++));
+  return id;
+};
+
+/** An atlas source's key: its base-colour image and its ORM image. */
+function sourceKey(m: SurfaceMaterial): string {
+  const orm = ormOf(m);
+  return `${imageId(m.map!.image as object)}|${orm ? imageId(orm.image as object) : "-"}`;
+}
+
+/** Whether a geometry's UVs all lie in [0, 1] (an atlas rect can't repeat): cached per geometry. */
+const uvInside = new WeakMap<THREE.BufferGeometry, boolean>();
+function uvsInUnit(g: THREE.BufferGeometry): boolean {
+  let ok = uvInside.get(g);
+  if (ok === undefined) {
+    const uv = g.getAttribute("uv");
+    ok = !!uv && uv.itemSize === 2;
+    for (let i = 0; ok && i < uv.count; i++) {
+      const u = uv.getX(i);
+      const v = uv.getY(i);
+      if (u < -1e-4 || u > 1 + 1e-4 || v < -1e-4 || v > 1 + 1e-4) ok = false;
+    }
+    uvInside.set(g, ok);
+  }
+  return ok;
+}
+
+/**
+ * A static mesh that can join a family: one opaque toon / standard surface (see-through
+ * patched), no vertex colours of its own, no emission, no normal / emissive / light maps, not a
+ * name something looks up; a textured one only with its maps on UV 0 and UVs in [0, 1]. Null:
+ * it batches by its own material, as before.
+ */
+function familySurface(mesh: THREE.Mesh): SurfaceMaterial | null {
+  if (Array.isArray(mesh.material) || !mesh.visible || (mesh as THREE.SkinnedMesh).isSkinnedMesh || (mesh as THREE.InstancedMesh).isInstancedMesh || mesh.userData.outline) return null;
+  const m = mesh.material as SurfaceMaterial;
+  if (!(m.isMeshToonMaterial || m.isMeshStandardMaterial) || !m.visible || !m.color) return null;
+  if (m.transparent || m.opacity !== 1 || m.alphaTest > 0 || m.vertexColors || m.wireframe || !m.depthWrite || !m.depthTest || m.polygonOffset || !m.colorWrite) return null;
+  if (m.emissive?.getHex() || m.emissiveMap || m.normalMap || m.lightMap || m.bumpMap || m.alphaMap || m.displacementMap || m.envMap) return null;
+  if (KEEP_APART.test(m.name) || Object.keys(m.userData).length || !isSeeThrough(m)) return null;
+  const g = mesh.geometry;
+  if (Object.keys(g.morphAttributes).length || !g.getAttribute("position") || !g.getAttribute("normal") || g.getAttribute("color")) return null;
+  if (m.map) {
+    if (!packableTexture(m.map) || ormOf(m) === undefined || !packableTexture(ormOf(m)) || !uvsInUnit(g)) return null;
+  } else if (m.aoMap || m.roughnessMap || m.metalnessMap) return null;
+  return m;
+}
+
+/** A space's packed atlas pages as textures, and each source's rect (atlas.ts packSources). */
+export interface SpaceAtlas {
+  pages: { w: number; h: number; base: THREE.DataTexture; orm: THREE.DataTexture }[];
+  rects: Map<string, PackRect>;
+  /** the per-asset textures now drawn from the pages (disposed once the space no longer uses them) */
+  sources: Set<THREE.Texture>;
+}
+
+/** An RGBA page as a mipmapped texture (trilinear, mips generated on the GPU after the upload). */
+function pageTexture(data: Uint8Array, w: number, h: number, like: THREE.Texture[]): THREE.DataTexture {
+  const t = new THREE.DataTexture(data, w, h, THREE.RGBAFormat, THREE.UnsignedByteType);
+  t.colorSpace = like[0]?.colorSpace ?? THREE.NoColorSpace;
+  t.flipY = false;
+  t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+  t.magFilter = THREE.LinearFilter;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.generateMipmaps = true;
+  t.anisotropy = Math.max(1, ...like.map((x) => x.anisotropy));
+  // the CPU copy stays: a lost / restored WebGL context (a phone backgrounding the tab) uploads it again
+  t.needsUpdate = true;
+  return t;
+}
+
+/**
+ * Packs the textured static surfaces under `roots` into atlas pages (atlas.ts): once per space,
+ * in slices of <= 4 ms (the loading screen and the street keep drawing). Null when there is
+ * nothing to pack or nothing can read the images (node: the tests' GLBs carry none). `read`: an
+ * image's RGBA at a size (default: a 2D canvas, atlas.ts readImage).
+ */
+export async function packSpaceAtlas(roots: THREE.Object3D[], read?: (t: THREE.Texture, w: number, h: number) => Uint8Array | Uint8ClampedArray): Promise<SpaceAtlas | null> {
+  const sources = new Map<string, AtlasSource<THREE.Texture>>();
+  const textures = new Set<THREE.Texture>();
+  const bases: THREE.Texture[] = [];
+  const orms: THREE.Texture[] = [];
+  for (const root of roots)
+    root.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      const m = familySurface(mesh);
+      if (!m?.map) return;
+      const key = sourceKey(m);
+      const orm = ormOf(m) ?? null;
+      for (const t of [m.map, m.aoMap, m.roughnessMap, m.metalnessMap]) if (t) textures.add(t);
+      if (sources.has(key)) return;
+      const img = m.map.image as { width: number; height: number };
+      sources.set(key, { key, base: m.map, bw: img.width, bh: img.height, orm });
+      bases.push(m.map);
+      if (orm) orms.push(orm);
+    });
+  if (!sources.size || (!read && !canReadImages())) return null;
+  const out: PackedAtlas = { pages: [], rects: new Map() };
+  read ??= (t, w, h) => readImage(t.image as CanvasImageSource & { width: number; height: number }, w, h);
+  await sliced(packSources([...sources.values()], read, out), 4);
+  if (!out.rects.size) return null;
+  const pages = out.pages.map((p) => ({ w: p.w, h: p.h, base: pageTexture(p.base, p.w, p.h, bases), orm: pageTexture(p.orm, p.ow, p.oh, orms) }));
+  pages.forEach((p, i) => {
+    p.base.name = `atlas_${i}_base`;
+    p.orm.name = `atlas_${i}_orm`;
+  });
+  return { pages, rects: out.rects, sources: textures };
+}
+
+/** A family's draw: the material, the atlas page its UVs point into (null: flat, no UVs kept). */
+interface Family {
+  key: string;
+  material: THREE.Material;
+  rect: PackRect | null;
+  page: { w: number; h: number } | null;
+}
+
+/**
+ * Static families (mergeStatic): the static world's opaque surfaces merge across palette
+ * colours, the colour written into the vertices (as mergePrimitives does for characters). A
+ * family is (atlas page or flat, side, roughness / metalness factors, AO intensity, shadow
+ * flags): textured surfaces keep their UVs, remapped into the page; flat ones drop theirs. The
+ * see-through tag and the outline hulls (children with their own shared material) ride along
+ * unchanged.
+ */
+export class StaticFamilies {
+  constructor(
+    private toon: Toon,
+    private atlas: SpaceAtlas | null,
+  ) {}
+
+  /** The mesh's family, or null (it batches by its own material). */
+  of(mesh: THREE.Mesh): Family | null {
+    const m = familySurface(mesh);
+    if (!m) return null;
+    let rect: PackRect | null = null;
+    let pageIndex = -1;
+    if (m.map) {
+      rect = this.atlas?.rects.get(sourceKey(m)) ?? null;
+      if (!rect) return null;
+      pageIndex = rect.page;
+    }
+    const page = pageIndex >= 0 ? this.atlas!.pages[pageIndex] : null;
+    // the real look's flat surfaces are 0.8 / 0 (Toon.material); a textured one keeps its own factors (they scale the ORM)
+    const roughness = m.isMeshStandardMaterial ? m.roughness : 0.8;
+    const metalness = m.isMeshStandardMaterial ? m.metalness : 0;
+    const ao = page ? m.aoMapIntensity : 1;
+    const shadows = LOOK.real ? `${mesh.castShadow ? "c" : ""}${mesh.receiveShadow ? "r" : ""}` : "";
+    const name = page ? `atlas_${pageIndex}` : "flat";
+    const key = `family|${page ? `${page.base.uuid}` : "flat"}|${m.side}|${roughness}|${metalness}|${ao}|${shadows}`;
+    const material = this.toon.family({ key, name: `${name}${m.side === THREE.FrontSide ? "_front" : ""}`, side: m.side, roughness, metalness, aoMapIntensity: ao, page: page && { base: page.base, orm: page.orm } });
+    return { key, material, rect, page };
+  }
+
+  /**
+   * A family member's world geometry (tagged) in the family's layout: float position, normal,
+   * colour (its material's), the see-through tag, UVs remapped into the page when textured,
+   * always indexed.
+   */
+  static layout(geo: THREE.BufferGeometry, mesh: THREE.Mesh, f: Family): THREE.BufferGeometry {
+    const out = new THREE.BufferGeometry();
+    const n = geo.getAttribute("position").count;
+    const float = (name: string, size: number) => {
+      const a = geo.getAttribute(name);
+      const arr = new Float32Array(n * size);
+      for (let i = 0; i < n; i++) for (let k = 0; k < size; k++) arr[i * size + k] = a.getComponent(i, k);
+      return arr;
+    };
+    out.setAttribute("position", new THREE.BufferAttribute(float("position", 3), 3));
+    out.setAttribute("normal", new THREE.BufferAttribute(float("normal", 3), 3));
+    const c = (mesh.material as THREE.MeshStandardMaterial).color;
+    const col = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) col.set([c.r, c.g, c.b], i * 3);
+    out.setAttribute("color", new THREE.BufferAttribute(col, 3));
+    if (f.rect && f.page) {
+      const uv = float("uv", 2);
+      const { x, y, w, h } = f.rect;
+      for (let i = 0; i < uv.length; i += 2) {
+        uv[i] = (x + uv[i] * w) / f.page.w;
+        uv[i + 1] = (y + uv[i + 1] * h) / f.page.h;
+      }
+      out.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+    }
+    out.setAttribute(SEE_ATTR, geo.getAttribute(SEE_ATTR));
+    if (geo.index) out.setIndex(geo.index);
+    else out.setIndex([...Array(n).keys()]);
+    return out;
+  }
+}
+
 /**
  * Merges every static mesh under `roots` (ground, tiles, buildings, props: never characters or
  * anything they hold) into one mesh per batch key, added to `scene`; the source meshes go. The
@@ -485,18 +776,24 @@ function worldGeometry(mesh: THREE.Mesh): THREE.BufferGeometry {
  * Every static mesh (batched or not) gets the see-through tag (seethrough.ts `seeThru`) from its
  * root's `userData.see` (a SeeSpec; none: never fade) and `userData.seeAsset` (canopies): baked
  * per vertex, so one batch holds ground and many independently fading objects in one draw.
+ * `families` (SceneSpace): opaque surfaces merge across colours too, one draw per family
+ * (StaticFamilies); each batch lists its parts (`userData.parts`: material name, first vertex,
+ * vertex count).
  */
-export function mergeStatic(scene: THREE.Object3D, roots: THREE.Object3D[]): number {
+export function mergeStatic(scene: THREE.Object3D, roots: THREE.Object3D[], families?: StaticFamilies): number {
   scene.updateMatrixWorld(true);
   const batches = new Map<string, THREE.Mesh[]>();
   const rootOf = new Map<THREE.Mesh, THREE.Object3D>();
+  const familyOf = new Map<THREE.Mesh, Family>();
   const loose: THREE.Mesh[] = [];
   for (const root of roots)
     root.traverse((o) => {
       const mesh = o as THREE.Mesh;
       if (!mesh.isMesh) return;
       rootOf.set(mesh, root);
-      const key = batchKey(mesh);
+      const fam = families?.of(mesh);
+      if (fam) familyOf.set(mesh, fam);
+      const key = fam ? fam.key : batchKey(mesh);
       if (!key) return void loose.push(mesh);
       const list = batches.get(key) ?? [];
       list.push(mesh);
@@ -513,18 +810,27 @@ export function mergeStatic(scene: THREE.Object3D, roots: THREE.Object3D[]): num
       loose.push(...meshes);
       continue;
     }
-    const merged = mergeGeometries(
-      meshes.map((m) => tag(worldGeometry(m), m, true)),
-      false,
-    );
+    const fam = familyOf.get(meshes[0]);
+    const parts = meshes.map((m) => {
+      const g = tag(worldGeometry(m), m, true);
+      return fam ? StaticFamilies.layout(g, m, familyOf.get(m)!) : g; // each part its own rect
+    });
+    const merged = mergeGeometries(parts, false);
     if (!merged) {
       loose.push(...meshes);
       continue;
     }
     merged.computeBoundingSphere();
     const src = meshes[0];
-    const batch = new THREE.Mesh(merged, src.material);
-    batch.name = `batch:${(src.material as THREE.Material).name || src.name}`;
+    const batch = new THREE.Mesh(merged, fam ? fam.material : src.material);
+    let first = 0;
+    batch.userData.parts = meshes.map((m, i) => {
+      const count = parts[i].getAttribute("position").count;
+      const part = { material: (m.material as THREE.Material).name, first, count };
+      first += count;
+      return part;
+    });
+    batch.name = `batch:${(batch.material as THREE.Material).name || src.name}`;
     batch.matrixAutoUpdate = false;
     batch.userData.batch = meshes.length;
     if (LOOK.real) batch.castShadow = meshes.some((m) => m.castShadow); // real look (look.ts): the batch keeps its parts' shadow flags
@@ -677,6 +983,8 @@ export class SceneSpace {
   readonly occluders: Occluder[] = [];
   /** static batching (mergeStatic): draw calls before / after, meshes merged away */
   batching = { before: 0, after: 0, merged: 0 };
+  /** the space's packed atlas pages (packSpaceAtlas; null: nothing textured, or no images to read) */
+  atlas: SpaceAtlas | null = null;
 
   private constructor(
     readonly L: LayoutIndex,
@@ -818,8 +1126,11 @@ export class SceneSpace {
     // Real look: the enclosure takes the room's shadows like the authored walls it continues.
     if (LOOK.real) enclosure?.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.receiveShadow = true; });
     this.batching.before = drawCalls(scene);
-    this.batching.merged = mergeStatic(scene, statics);
+    // textured statics: their atlases packed into this space's pages (sliced), then one draw per family
+    this.atlas = await this.assets.spaceAtlas(this.id, statics);
+    this.batching.merged = mergeStatic(scene, statics, new StaticFamilies(this.assets.toon, this.atlas));
     this.batching.after = drawCalls(scene);
+    if (this.atlas) this.assets.releaseSources(this.atlas, scene);
     this.staticCalls = { before: this.batching.before, after: this.batching.after };
     if (LOOK.real) this.setupRealLook();
   }
