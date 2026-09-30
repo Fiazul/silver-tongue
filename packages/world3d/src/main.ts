@@ -69,8 +69,8 @@ import { DynamicScale, FramePacer, IDLE_FPS, IDLE_S, LITE_GRASS, LITE_LAYERS, LO
 import { GuideMarker } from "./marker";
 import { FrameGpuTimer, markMs, markSince, Perf, PerfOverlay, stallMarks, textureBytes } from "./perf";
 import { frameSlack, PREFETCH_SLICE_MS, prefetchEnabled, PrefetchScheduler, rankCandidates, reachableFrom, type PrefetchHost, type TimeSlicer } from "./prefetch";
-import { daySteps, edgeArrow, findPath, LostTimer, nextSteps, resolveTarget, type PathGrid, type WayTarget } from "./wayfind";
-import { EdgeArrowView, PathTrail, spaceGrid } from "./wayview";
+import { daySteps, edgeArrowClear, findPath, LostTimer, nextSteps, resolveTarget, type KeepOut, type PathGrid, type WayTarget } from "./wayfind";
+import { EDGE_LABEL_M, EdgeArrowView, PathTrail, spaceGrid } from "./wayview";
 import type { WebSessions } from "@silver-tongue/web-common";
 
 // First thing: the page's preloader (preload.js, inlined in index.html) stops treating errors as
@@ -695,8 +695,8 @@ async function main() {
   let steps: ReturnType<typeof nextSteps> = [];
   /** "Take me there" on a target in this town: the camera glances at it for a moment */
   let glance = 0;
-  /** the HUD's box (for the edge arrow to keep out of), measured with the path, not per frame */
-  let hudBox: DOMRect | null = null;
+  /** the HUD, icon column, action button and narration sheet: the edge arrow keeps out of them (measured twice a second) */
+  let keepOut: KeepOut[] = [];
   let hudClock = 0;
   const waterAt = waterDistance(LAYOUT.town.grid);
   const stride = new StrideClock(player.actor.strideM);
@@ -1532,7 +1532,7 @@ async function main() {
     hudClock -= dt;
     if (hudClock <= 0) {
       hudClock = 0.5;
-      hudBox = overlay.hudRect();
+      keepOut = overlay.keepOutRects();
     }
     // The ground path: not within 3 m of where it ends (a door across the room needs none).
     const walkDist = Math.hypot(player.position.x - wayTarget.walk[0], player.position.z - wayTarget.walk[1]);
@@ -1561,14 +1561,15 @@ async function main() {
     clip.set(x, y + 1.2, z, 1).applyMatrix4(rig.camera.matrixWorldInverse).applyMatrix4(rig.camera.projectionMatrix);
     const view = { w: window.innerWidth, h: window.innerHeight };
     const safe = overlay.screen.safe;
-    const pad = 46;
-    const inset = { top: safe.y + pad, left: safe.x + pad, right: view.w - safe.x - safe.w + pad, bottom: view.h - safe.y - safe.h + pad + 18 };
-    let a = edgeArrow(clip, view, inset);
-    // Under the HUD card: along the same line, below it.
-    if (!a.onScreen && hudBox && a.x < hudBox.right + 24 && a.y < hudBox.bottom + 24) a = edgeArrow(clip, view, { ...inset, top: Math.max(inset.top, hudBox.bottom + 30) });
+    // the phone HUD's 24 px arrow sits 8 px in from the edge (its turned box ~34 px), its label (two short lines) under it
+    const pad = overlay.phone ? 25 : 46;
+    const inset = { top: safe.y + pad, left: safe.x + pad, right: view.w - safe.x - safe.w + pad, bottom: view.h - safe.y - safe.h + pad + (overlay.phone ? 34 : 18) };
+    // Clear of the HUD card, the icon column, the action button and a narration line: along the same line, past them.
+    const a = edgeArrowClear(clip, view, inset, keepOut);
     const t = wayTarget;
     const name = t.kind === "npc" ? game.npcName(t.ref) : t.kind === "bed" ? game.s("way-bed") : game.t(`place-${t.ref}`);
-    edge.update(a, game.s("way-distance", { name, m: Math.round(flat(player.position, t.at)) }));
+    const d = flat(player.position, t.at);
+    edge.update(a, game.s("way-distance", { name, m: Math.round(d) }), d <= EDGE_LABEL_M || !!guideStep);
   }
 
   /** Per frame: an extra being talked to turns to the player (walkers and pigeons do in streetlife.ts); walking off ends the bark; extras turn back after. */

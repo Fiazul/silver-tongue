@@ -152,6 +152,8 @@
     "way-distance": "{name} · {m} মি",
     "way-lost": "আপনার পরের ধাপ: {text}",
     "way-bed": "আপনার বিছানা",
+    "hud-slots-tiny": "◐ {n}",
+    "hud-guide-fold": "নির্দেশিকা দেখান বা গুটিয়ে রাখুন",
     "path-menu-on": "পথ দেখান: চালু",
     "path-menu-off": "পথ দেখান: বন্ধ",
     "bark-continue": "আচ্ছা",

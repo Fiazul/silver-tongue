@@ -212,3 +212,134 @@ export function layoutVars(l: ScreenLayout): Record<string, string> {
   }
   return out;
 }
+
+// ---------------------------------------------------------------------------------------------
+// Phone HUD (html.phone-hud: a phone either way up, a coarse pointer or a window under
+// PHONE_HUD_W wide; page.css "Phone HUD"): one slim status strip top-left, the guide one line
+// under it, a column of round icon buttons on the right edge, narration and dialogue as a
+// bottom sheet. The rects below are the most each piece may take (the strip and the guide line
+// size to their content up to these): page.css places them from --ph-<name>-* and the coverage
+// guard (test/viewport.test.ts) sums them.
+// ---------------------------------------------------------------------------------------------
+
+/** A window narrower than this (CSS px) gets the phone HUD even with a fine pointer. */
+export const PHONE_HUD_W = 700;
+export const PH = {
+  /** nothing closer than this to the safe area's edge */
+  edge: 8,
+  /** the bottom sheets' side margins */
+  side: 12,
+  strip: 30,
+  stripMax: 320,
+  /** the guide line folded to its "Step n/N" pill */
+  pill: 28,
+  pillMax: 120,
+  gap: 6,
+  /** a round icon button and the gap between two in the column */
+  icon: 44,
+  iconGap: 10,
+  /** the contextual action button ("E · Talk to …") */
+  actionW: 168,
+  actionH: 48,
+  /** a narration line's sheet collapsed (two lines) */
+  narration: 60,
+  /** the dialogue sheet may take at most this share of the viewport */
+  sheetShare: 0.285,
+} as const;
+
+export interface PhoneHud {
+  strip: Rect;
+  /** the guide line open, at its widest */
+  guide: Rect;
+  /** the guide line folded (its resting state, GUIDE_FOLD_MS after a step changes) */
+  guidePill: Rect;
+  /** the icon column for `buttons` buttons, bottom-anchored above the narration sheet */
+  column: Rect;
+  /** the column collapsed to ≡ while a sheet is open */
+  menuDock: Rect;
+  actionButton: Rect;
+  narration: Rect;
+  /** the dialogue sheet's largest box, bottom-anchored (it sizes to its content) */
+  sheet: Rect;
+  /** the centre 60% x 50% of the viewport: no HUD piece ever sits in it */
+  centre: Rect;
+}
+
+export const columnHeight = (buttons: number) => buttons * PH.icon + Math.max(0, buttons - 1) * PH.iconGap;
+
+export function phoneHud(l: ScreenLayout, buttons: number = MAX_ACTIONS): PhoneHud {
+  const s = l.safe;
+  const e = PH.edge;
+  const { w: vw, h: vh } = l.viewport;
+  const landscape = l.compact && l.orientation === "landscape";
+  const menuDockX = landscape ? l.replies.x - e - PH.icon : right(s) - e - PH.icon;
+  const menuDock = { x: menuDockX, y: s.y + e, w: PH.icon, h: PH.icon };
+  // Strip and guide: top-left, clear of the ≡ dock (portrait) / the lists' third (landscape).
+  const leftW = (landscape ? l.hud.w : s.w - 2 * e) - PH.icon - e;
+  const strip = { x: s.x + e, y: s.y + e, w: Math.max(0, Math.min(PH.stripMax, leftW)), h: PH.strip };
+  const guide = { x: strip.x, y: bottom(strip) + PH.gap, w: Math.max(0, landscape ? l.hud.w : s.w - 2 * e), h: PH.strip };
+  const guidePill = { x: guide.x, y: guide.y, w: Math.min(PH.pillMax, guide.w), h: PH.pill };
+  const actionButton = { x: right(s) - e - PH.actionW, y: bottom(s) - e - PH.actionH, w: PH.actionW, h: PH.actionH };
+  const narration = landscape
+    ? { x: l.hud.x, y: bottom(s) - e - PH.narration, w: Math.min(l.hud.w, actionButton.x - e - l.hud.x), h: PH.narration }
+    : { x: s.x + PH.side, y: actionButton.y - e - PH.narration, w: s.w - 2 * PH.side, h: PH.narration };
+  const colBottom = landscape ? actionButton.y - e : narration.y - e;
+  const colH = columnHeight(buttons);
+  const column = { x: right(s) - e - PH.icon, y: colBottom - colH, w: PH.icon, h: colH };
+  const sheetX = landscape ? l.replies.x : s.x + PH.side;
+  const sheetW = landscape ? l.replies.w : s.w - 2 * PH.side;
+  const sheetBottom = bottom(s) - e;
+  const cap = sheetW > 0 ? Math.floor((PH.sheetShare * vw * vh) / sheetW) : 0;
+  const sheetH = Math.max(0, Math.min(cap, landscape ? l.replies.h : Math.floor(s.h * 0.5)));
+  const sheet = { x: sheetX, y: sheetBottom - sheetH, w: sheetW, h: sheetH };
+  const centre = { x: vw * 0.2, y: vh * 0.25, w: vw * 0.6, h: vh * 0.5 };
+  return { strip, guide, guidePill, column, menuDock, actionButton, narration, sheet, centre };
+}
+
+/** CSS custom properties for the phone HUD: --ph-<name>-x/-y/-w/-h/-bottom/-right. */
+export function phoneHudVars(p: PhoneHud, viewport: Rect): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const name of ["strip", "guide", "guidePill", "column", "menuDock", "actionButton", "narration", "sheet"] as const) {
+    const r = p[name];
+    const k = name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
+    out[`--ph-${k}-x`] = `${r.x}px`;
+    out[`--ph-${k}-y`] = `${r.y}px`;
+    out[`--ph-${k}-w`] = `${r.w}px`;
+    out[`--ph-${k}-h`] = `${r.h}px`;
+    out[`--ph-${k}-bottom`] = `${viewport.h - bottom(r)}px`;
+    out[`--ph-${k}-right`] = `${viewport.w - right(r)}px`;
+  }
+  return out;
+}
+
+/** Whether the phone HUD applies: a phone either way up, a coarse pointer (or a touch seen), a narrow window. */
+export function usePhoneHud(l: ScreenLayout, coarse: boolean): boolean {
+  return l.compact || coarse || l.viewport.w < PHONE_HUD_W;
+}
+
+/** The area of the union of some rects (CSS px²), clipped to `clip`: a sweep over x. */
+export function unionArea(rects: Rect[], clip: Rect): number {
+  const rs = rects
+    .map((r) => ({ x0: Math.max(r.x, clip.x), x1: Math.min(right(r), right(clip)), y0: Math.max(r.y, clip.y), y1: Math.min(bottom(r), bottom(clip)) }))
+    .filter((r) => r.x1 > r.x0 && r.y1 > r.y0);
+  const xs = [...new Set(rs.flatMap((r) => [r.x0, r.x1]))].sort((a, b) => a - b);
+  let area = 0;
+  for (let i = 0; i + 1 < xs.length; i++) {
+    const a = xs[i];
+    const b = xs[i + 1];
+    const ys = rs.filter((r) => r.x0 <= a && r.x1 >= b).map((r) => [r.y0, r.y1] as const).sort((p, q) => p[0] - q[0]);
+    let covered = 0;
+    let cur: [number, number] | null = null;
+    for (const [y0, y1] of ys) {
+      if (!cur || y0 > cur[1]) {
+        if (cur) covered += cur[1] - cur[0];
+        cur = [y0, y1];
+      } else cur[1] = Math.max(cur[1], y1);
+    }
+    if (cur) covered += cur[1] - cur[0];
+    area += covered * (b - a);
+  }
+  return area;
+}
+
+export const intersects = (a: Rect, b: Rect) => a.x < right(b) && b.x < right(a) && a.y < bottom(b) && b.y < bottom(a);

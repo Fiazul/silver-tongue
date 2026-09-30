@@ -26,12 +26,20 @@ export class BubbleView {
   readonly node = el("div", { className: "bubble hidden" });
   private seq = -1;
   npc: string | null = null;
+  /** the phone HUD: the bubble is the top of the bottom sheet (page.css), not over the head */
+  docked = false;
 
   constructor(
     private course: Course,
     private s: Strings,
     private hooks: BubbleHooks,
-  ) {}
+  ) {
+    // docked in the phone's sheet the line shows two lines; a tap on the sheet (not on a word or a button) opens the rest
+    this.node.addEventListener("click", (e) => {
+      if (!this.docked || (e.target as Element | null)?.closest?.(".tok.tappable, button, [data-nested]")) return;
+      this.node.classList.toggle("open");
+    });
+  }
 
   private shown = false;
 
@@ -62,6 +70,7 @@ export class BubbleView {
     // A bark carries its whole reading (pinyin): under the line, as a slowed line's ruby would.
     const reading = b.reading ? [el("div", { className: "bubble-reading", textContent: b.reading })] : [];
     this.node.replaceChildren(el("div", { className: `bubble-name ${b.kind}`, textContent: b.npcName }), text, ...reading, tools);
+    this.node.classList.remove("open");
     this.node.classList.remove("pop");
     void this.node.offsetWidth; // restart the pop animation
     this.node.classList.add("pop");
@@ -83,6 +92,10 @@ export class BubbleView {
    * pins it top-centre (viewport.ts placeBubble).
    */
   position(x: number, y: number, visible: boolean, area: Rect) {
+    if (this.docked) {
+      if (this.node.style.transform) this.node.style.transform = "";
+      return;
+    }
     const p = placeBubble(x, y, visible, this.node.offsetWidth, this.node.offsetHeight, area);
     this.node.style.transform = `translate(${Math.round(p.x)}px, ${Math.round(p.y)}px)`;
     this.node.classList.toggle("offscreen", p.pinned);

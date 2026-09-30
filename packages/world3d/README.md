@@ -342,8 +342,8 @@ upstream's `tools/test/language-free.test.ts` keeps free of any particular langu
   dragged 10 px or more becomes the joystick, drawn where the thumb landed (radius 60 px, 18% dead
   zone, a half push walks at half speed); a shorter, stiller touch anywhere is a tap (tap-to-walk,
   tap an NPC). Mouse clicks have no time limit. The right-side action button mirrors the prompt
-  ("E · Talk to Wang"); the action column's notebook button is 56 px. Both sit inside the safe
-  area. The touch look (`html.touch`) switches on at the first touch or on a coarse pointer.
+  ("E · Talk to Wang"); the action column is round 44 px icon buttons (Phone HUD below). Both sit
+  inside the safe area. The touch look (`html.touch`) switches on at the first touch or on a coarse pointer.
 - **Layout** (`src/ui/viewport.ts`): on a phone (short side at most 540 px) the panels are placed
   from computed rects written as CSS custom properties. Portrait: one HUD chip row with short
   wording, the objective one line with an ellipsis, the reply panel a bottom sheet (at most 45% of
@@ -368,6 +368,63 @@ upstream's `tools/test/language-free.test.ts` keeps free of any particular langu
   page's one audio element until one goes through (`src/audio.ts unlock`). A line said before
   that (a save resumed mid-scene) is skipped silently; the text is on screen.
 - Debug: `world3d.touch()` gives the last joystick vector, pointers down and the layout in use.
+
+## Phone HUD
+
+On a phone (either way up), a coarse pointer (or once a touch is seen) or a window under 700 px
+wide, `html.phone-hud` (`ui/overlay.ts phoneLayout`) swaps the chrome for a compact one that keeps
+the middle of the picture clear. A desktop window keeps the layout above. Geometry:
+`ui/viewport.ts phoneHud` (the most each piece may take, safe-area insets included, 8 px clear of
+the safe area's edge), written as `--ph-<name>-x/-y/-w/-h/-bottom/-right`; style: page.css "Phone
+HUD". One material everywhere: `rgba(20, 18, 14, .55)` glass, 8 px backdrop blur, a 1 px
+`rgba(255, 255, 255, .12)` hairline, radius 10 (sheets 14); no ink outlines, no hard shadows.
+
+| piece | where | what |
+| --- | --- | --- |
+| status strip | top-left, 30 px tall, at most 320 px | place · D1 · ¥20 · ◐ 4 (actions left) · the ♪ as a 16 px icon (44 px hit area; struck through when off), 12 px type |
+| guide line | under the strip | the step and the objective on one line with an ellipsis, the sub-line (rent due) after it; "Take me there" a 28 px round compass button at its end (44 px hit area). A tap folds it to a 28 px "Step 1/5" pill (a chevron shows which way); it folds itself 6 s after a step changes (`ui/hud.ts GUIDE_FOLD_MS`), a tap opens it again |
+| icon column | right edge, above the narration line | 44 px round buttons, 10 px apart: Notebook (book), Go to (map pin), the mentor (mortarboard, when there is one), Sleep (moon), Menu (≡). Inline SVG (`ui/icons.ts`, `currentColor`, nothing fetched); `aria-label` and `title` carry the label; a long press (450 ms) shows it for 1.2 s and doesn't press (`LONG_PRESS_MS`, `TIP_MS`), hover shows it with a mouse; a gold focus ring |
+| action button | bottom-right | "E · Talk to …" when something is in reach, 48 px tall, at most 168 px |
+| narration | bottom sheet above the action button | the newest toast only (a new one replaces it), 14 px, two lines then "…"; a tap opens the rest, a tap anywhere else dismisses it; a coloured left edge per tone. While a dialogue sheet is open it goes up where the strip was, one line (the echo of the reply just picked, "You: …", is not repeated) |
+| dialogue sheet | bottom, full width minus 12 px, above the safe area | the speech bubble docks here (`Overlay.sheet`; `BubbleView.docked`: no head tracking): a speaker chip, … and ▶ beside it, the line at 18 px in two lines (a tap on the sheet opens the rest; word taps still look words up), a bark's reading; under it the replies, 44 px rows 8 px apart, the title row's price and ? up beside the speaker. At most 28.5% of the viewport (`PH.sheetShare`), then the replies scroll. While it is open the strip and guide step aside and the column folds to ≡, top-right |
+| lists | the same sheet | Go to… and the topic list, 44 px rows |
+| dialogs | centred | Menu (Settings inside), the notebook, the day card, the name: the same glass, darker (.88) |
+| edge arrow | screen edge | 24 px; its name and distance (11 px, on the glass) only within 12 m or while the first-steps guide points at it (`wayview.ts EDGE_LABEL_M`); kept clear of the strip, the column, the action button and a narration line (`wayfind.ts edgeArrowClear`: each box pushes the side of the screen it hugs; the boxes measured twice a second: `Overlay.keepOutRects`); on the outer thirds the label hangs inwards |
+| walk hint, place name | under the guide line; 17% down | small, on the glass; both fade as before |
+
+Every function stays within two taps: Notebook, Go to, Sleep, Menu (one), Settings, music (Menu
+→, or the ♪ in the strip: one). Motion: the sheets slide up 160 ms ease-out, the strip and the
+column fade in; nothing bounces (the wallet flashes gold instead of growing, the notebook's pulse
+is a ring); none of it under `prefers-reduced-motion`. New strings: `hud-slots-tiny`,
+`hud-guide-fold` (`src/strings.ts`, bn / zh in `locale/`); the world3d chrome's strings live there,
+not in `packages/view` (`UI_KEYS` / `VN_UI_KEYS` list the TUI's and the visual novel's).
+
+**Coverage guard.** `test/phone-hud.test.ts` on the rects, at 390x844 and 844x390 with and without
+notch insets and on small phones: idle (strip, the guide pill, the column) at most 12% of the
+viewport and nothing in the centre 60% x 50%; the guide line open at its widest at most 12% at
+390x844 either way up (15% on a smaller phone); a dialogue sheet at its tallest plus the ≡ at most
+30%. On the rendered page: `SET=phone-hud` (390x844 at 3x, touch, a phone's user agent) shoots
+21-default-phone (as `SET=tiers`), 01-idle, 02-guide-expanded, 03-dialogue-3-replies,
+04-goto-open, 05-menu-open, 06-notebook-open and a desktop 20-default-desktop into
+`shots/look/phone-hud/` (07 / 08: the shop's goods prompt and word card under the phone HUD, from
+`PORTRAIT=1 SET=interiors ROOMS=shop`), measuring every visible chrome box from the DOM (their union's share of
+the viewport, what reaches the centre, what is within 8 px of the edge) into the report;
+`scripts/phone-hud-check.mjs` asserts it. Measured at 390x844 (`report.json`; the old HUD, the same
+script on the c70c0d5 build: `before-report.json`):
+
+| state | before | now |
+| --- | --- | --- |
+| idle (guide folded) | 16.6%, the action column in the centre | 6.9%, centre clear |
+| guide line open | 16.6% | 9.5%, centre clear |
+| dialogue, 3 replies | 58.5% | 27.1% (29.8% with a long narration line up at the top) |
+| first view (narration, walk hint, place name up) | 29.4% | 15.5%, centre clear |
+
+
+```sh
+nice -n 15 python3 -m http.server 9217 -b 127.0.0.1 -d dist &
+SET=phone-hud CHROME=/usr/bin/google-chrome URL=http://127.0.0.1:9217/ REPORT=shots/look/phone-hud/report.json nice -n 15 node scripts/look-capture.mjs shots/look/phone-hud
+node scripts/phone-hud-check.mjs shots/look/phone-hud/report.json
+```
 
 ## Architecture
 
@@ -1696,6 +1753,11 @@ that role said last).
   a bark in the game (bubble, reading, meaning, clip on the bark player, "…" closes, core unchanged,
   meaning in bn, the one-off hint, sound off, a story NPC with nothing to say, the Go to list and
   core inputs ending it); a held walker / pigeon.
+- `test/phone-hud.test.ts`: the phone HUD's coverage guard on `phoneHud`'s rects (idle at most
+  12%, nothing in the centre 60% x 50%, a dialogue sheet at most 30%), every piece 8 px inside the
+  safe area, pieces shown together apart, 44 px targets, page.css's glass (no ink outlines, no
+  scale in its keyframes, the sheet's 160 ms slide, a focus ring), the icons, the `hud-` strings in
+  bn / zh, the guide line folding 6 s after a step and on a tap, the edge arrow kept clear.
 - `test/anim.test.ts`: the animation state machine and `CharacterActor`'s clip / no-bones fallbacks.
 - `test/animator.test.ts`: the procedural animator (NPCs; the player keeps its clips): no spring in the
   head (idle / dialogue / walk-round traces), no pops across every state and reaction (a

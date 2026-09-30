@@ -15,9 +15,15 @@ import { versionLine } from "../version";
 import { BubbleView } from "./bubble";
 import { el } from "./dom";
 import { HudView, type WayCard } from "./hud";
+import { icon } from "./icons";
 import { notebookNodes } from "./notebook";
 import { RepliesView } from "./replies";
-import { bubbleArea, clampBox, layoutVars, NO_INSETS, screenLayout, type Insets, type Rect, type ScreenLayout } from "./viewport";
+import { bubbleArea, clampBox, layoutVars, NO_INSETS, phoneHud, phoneHudVars, screenLayout, usePhoneHud, type Insets, type Rect, type ScreenLayout } from "./viewport";
+
+/** A press held this long on a phone HUD icon button shows its label instead of pressing it (ms). */
+export const LONG_PRESS_MS = 450;
+/** how long that label stays up (ms) */
+export const TIP_MS = 1200;
 
 export interface SavedGame {
   label: string;
@@ -108,6 +114,10 @@ export class Overlay {
   /** touch: the prompt as a fixed thumb button, bottom-right */
   private actionBtn = el("button", { className: "action-btn hidden" });
   private floats = el("div", { className: "floats" });
+  /** the speech bubble and the reply panel: on the phone HUD one bottom sheet (page.css), elsewhere `display: contents` (each placed on its own) */
+  private sheet = el("div", { className: "sheet" });
+  /** the phone HUD is on (html.phone-hud) */
+  phone = false;
   private seenFeed = 0;
   private dayChanges = 0;
   private seenDayCard = 0;
@@ -128,10 +138,17 @@ export class Overlay {
     private course: Course,
     private hooks: OverlayHooks,
   ) {
-    root.append(this.toasts, this.choices, this.actions, this.gloss, this.notebook, this.nameForm, this.menu, this.dayCardView, this.fade, this.hint, this.banner, this.promptBtn, this.actionBtn, this.floats);
+    root.append(this.sheet, this.toasts, this.choices, this.actions, this.gloss, this.notebook, this.nameForm, this.menu, this.dayCardView, this.fade, this.hint, this.banner, this.promptBtn, this.actionBtn, this.floats);
     // A tap anywhere else closes the gloss popover.
     document.addEventListener("pointerdown", (e) => {
       if (!this.gloss.contains(e.target as Node)) this.gloss.classList.add("hidden");
+      // the phone's narration sheet: a tap anywhere else dismisses it
+      if (this.phone && !this.toasts.contains(e.target as Node)) for (const c of [...this.toasts.children]) c.classList.add("out");
+    });
+    // a tap on a narration line opens it past its two lines (or closes it again)
+    this.toasts.addEventListener("click", (e) => {
+      const t = (e.target as Element | null)?.closest?.(".toast");
+      if (t && this.phone) t.classList.toggle("open");
     });
     this.promptBtn.addEventListener("click", () => this.hooks.onPrompt());
     this.actionBtn.addEventListener("click", () => this.hooks.onPrompt());
@@ -214,6 +231,29 @@ export class Overlay {
     doc.classList.toggle("compact", this.screen.compact);
     doc.classList.toggle("portrait", this.screen.orientation === "portrait");
     doc.classList.toggle("landscape", this.screen.orientation === "landscape");
+    this.phoneLayout();
+  }
+
+  /** The phone HUD (viewport.ts phoneHud): its rects as --ph-* properties, html.phone-hud, the bubble docked in the sheet. */
+  private phoneLayout() {
+    const doc = document.documentElement;
+    const coarse = this.touch || (typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches);
+    this.phone = usePhoneHud(this.screen, coarse);
+    for (const [k, v] of Object.entries(phoneHudVars(phoneHud(this.screen), this.screen.viewport))) doc.style.setProperty(k, v);
+    doc.classList.toggle("phone-hud", this.phone);
+    if (this.bubble) this.bubble.docked = this.phone;
+  }
+
+  /**
+   * Boxes the screen-edge arrow keeps out of (main.ts, twice a second): the HUD, and on the phone
+   * HUD the icon column, the action button and the narration sheet.
+   */
+  keepOutRects(): Rect[] {
+    const nodes: Element[] = [this.actions, this.actionBtn, ...(this.hud ? [this.hud.node] : []), ...[...this.toasts.children].filter((c) => !c.classList.contains("out"))];
+    return nodes
+      .map((n) => n.getBoundingClientRect())
+      .filter((r) => r.width > 0 && r.height > 0)
+      .map((r) => ({ x: r.left, y: r.top, w: r.width, h: r.height }));
   }
 
   /** The first touch: the touch look (action button instead of the floating prompt, the joystick hint). */
@@ -221,6 +261,7 @@ export class Overlay {
     if (this.touch) return;
     this.touch = true;
     document.documentElement.classList.add("touch");
+    this.phoneLayout();
     if (this.game) this.hint.textContent = this.game.s("walk-hint-touch");
   }
 
@@ -277,7 +318,9 @@ export class Overlay {
       sfx,
       lang: this.lang,
     });
-    this.root.append(this.hud.node, this.bubble.node, this.replies.node);
+    this.bubble.docked = this.phone;
+    this.root.append(this.hud.node);
+    this.sheet.append(this.bubble.node, this.replies.node);
     this.seenFeed = 0;
     this.dayChanges = game.model.dayChanges;
     this.seenDayCard = game.model.dayCard?.seq ?? 0;
@@ -322,6 +365,8 @@ export class Overlay {
 
   render(m: UiModel) {
     this.hud.render(m.hud, m.objective, this.guideStep, this.way);
+    // a line or a reply panel is up: the phone HUD folds its column to ≡ and hides the guide line
+    document.documentElement.classList.toggle("sheet-open", !!(m.bubble || m.reply));
     this.bubble.render(m.bubble);
     this.replies.render(m.reply);
     this.renderChoices(m);
@@ -377,26 +422,26 @@ export class Overlay {
   private renderActions(m: UiModel) {
     const { s } = this.game;
     const buttons: HTMLButtonElement[] = [];
-    const nb = el("button", { className: "notebook-btn", textContent: s("notebook") });
+    const nb = this.actionButton("notebook", s("notebook"), "notebook-btn");
     nb.dataset.sfx = "none"; // openNotebook plays notebook_open
     nb.addEventListener("click", () => this.openNotebook());
     buttons.push(nb);
     if (m.mode === "explore") {
-      const go = el("button", { textContent: s("travel") });
+      const go = this.actionButton("travel", s("travel"), "travel-btn");
       go.addEventListener("click", () => this.game.travel());
       buttons.push(go);
     }
     if (m.mentor) {
-      const b = el("button", { className: "mentor", textContent: m.mentor.label });
+      const b = this.actionButton("mentor", m.mentor.label, "mentor");
       b.addEventListener("click", () => this.game.visitMentor());
       buttons.push(b);
     }
     if (m.canSleep) {
-      const b = el("button", { className: "sleep", textContent: m.sleepLabel });
+      const b = this.actionButton("sleep", m.sleepLabel, "sleep");
       b.addEventListener("click", () => this.game.sleep());
       buttons.push(b);
     }
-    const menu = el("button", { className: "secondary", textContent: s("menu") });
+    const menu = this.actionButton("menu", s("menu"), "secondary menu-btn");
     menu.addEventListener("click", () => this.openMenu());
     buttons.push(menu);
     const key = buttons.map((b) => b.textContent).join("|");
@@ -411,6 +456,42 @@ export class Overlay {
       void (b as HTMLElement | null)?.offsetWidth;
       b?.classList.add("pulse");
     }
+  }
+
+  /**
+   * An action-column button: its label (desktop: the button's text; the phone HUD: a round icon,
+   * the label an aria-label and a tip on hover or a long press, which then doesn't press it).
+   */
+  private actionButton(name: string, label: string, className: string): HTMLButtonElement {
+    const b = el("button", { className: `${className} act-btn`, title: label }, icon(name), el("span", { className: "act-label", textContent: label }));
+    b.setAttribute("aria-label", label);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let tipped = false;
+    const cancel = () => clearTimeout(timer);
+    b.addEventListener("pointerdown", () => {
+      tipped = false;
+      if (!this.phone) return;
+      cancel();
+      timer = setTimeout(() => {
+        tipped = true;
+        b.classList.add("tip");
+        setTimeout(() => b.classList.remove("tip"), TIP_MS);
+      }, LONG_PRESS_MS);
+    });
+    for (const type of ["pointerup", "pointercancel", "pointerleave"]) b.addEventListener(type, cancel);
+    // the long press showed the label: the click that follows the lift is not a press
+    b.addEventListener(
+      "click",
+      (e) => {
+        if (!tipped) return;
+        tipped = false;
+        e.stopImmediatePropagation();
+        e.preventDefault();
+      },
+      true,
+    );
+    b.addEventListener("contextmenu", (e) => this.phone && e.preventDefault());
+    return b;
   }
 
   private renderFeed(feed: FeedItem[]) {
@@ -440,7 +521,9 @@ export class Overlay {
     for (const fx of m.walletFx) {
       if (fx.seq <= this.seenFx) continue;
       this.seenFx = fx.seq;
-      const r = this.hud.walletRect();
+      // the wallet chip, or where it sits when the phone HUD has stepped aside for a sheet
+      const w = this.hud.walletRect();
+      const r = w && w.width > 0 ? w : null;
       const node = el(
         "div",
         { className: `float ${fx.delta > 0 ? "good" : "bad"} fx-${fx.reason}` },

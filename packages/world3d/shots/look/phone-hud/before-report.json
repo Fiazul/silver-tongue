@@ -1,0 +1,476 @@
+{
+ "phoneHud": {
+  "default": {
+   "file": "21-default-phone.png",
+   "viewport": [
+    390,
+    844
+   ],
+   "coverage": 0.2939,
+   "centre": [
+    ".actions",
+    ".way-edge-label"
+   ],
+   "nearEdge": [
+    ".way-edge-label -14px"
+   ],
+   "phoneHud": false,
+   "boxes": [
+    {
+     "sel": ".hud .chips",
+     "x": 8,
+     "y": 8,
+     "w": 282,
+     "h": 23
+    },
+    {
+     "sel": ".hud .objective",
+     "x": 8,
+     "y": 35,
+     "w": 374,
+     "h": 29
+    },
+    {
+     "sel": ".actions",
+     "x": 219,
+     "y": 558,
+     "w": 163,
+     "h": 206
+    },
+    {
+     "sel": ".toast",
+     "x": 8,
+     "y": 74,
+     "w": 374,
+     "h": 88
+    },
+    {
+     "sel": ".way-edge-arrow",
+     "x": 25,
+     "y": 359,
+     "w": 42,
+     "h": 42
+    },
+    {
+     "sel": ".way-edge-label",
+     "x": -14,
+     "y": 401,
+     "w": 121,
+     "h": 16
+    },
+    {
+     "sel": ".hint",
+     "x": 98,
+     "y": 689,
+     "w": 195,
+     "h": 75
+    },
+    {
+     "sel": ".build-version",
+     "x": 346,
+     "y": 830,
+     "w": 38,
+     "h": 10
+    }
+   ],
+   "errors": 0
+  },
+  "idle": {
+   "file": "01-idle.png",
+   "viewport": [
+    390,
+    844
+   ],
+   "coverage": 0.1664,
+   "centre": [
+    ".actions",
+    ".way-edge-label"
+   ],
+   "nearEdge": [
+    ".way-edge-label -14px"
+   ],
+   "phoneHud": false,
+   "boxes": [
+    {
+     "sel": ".hud .chips",
+     "x": 8,
+     "y": 8,
+     "w": 282,
+     "h": 23
+    },
+    {
+     "sel": ".hud .objective",
+     "x": 8,
+     "y": 35,
+     "w": 374,
+     "h": 29
+    },
+    {
+     "sel": ".actions",
+     "x": 219,
+     "y": 558,
+     "w": 163,
+     "h": 206
+    },
+    {
+     "sel": ".way-edge-arrow",
+     "x": 25,
+     "y": 359,
+     "w": 42,
+     "h": 42
+    },
+    {
+     "sel": ".way-edge-label",
+     "x": -14,
+     "y": 401,
+     "w": 121,
+     "h": 16
+    },
+    {
+     "sel": ".build-version",
+     "x": 346,
+     "y": 830,
+     "w": 38,
+     "h": 10
+    }
+   ],
+   "errors": 0
+  },
+  "guide": {
+   "file": "02-guide-expanded.png",
+   "viewport": [
+    390,
+    844
+   ],
+   "coverage": 0.1664,
+   "centre": [
+    ".actions",
+    ".way-edge-label"
+   ],
+   "nearEdge": [
+    ".way-edge-label -14px"
+   ],
+   "phoneHud": false,
+   "boxes": [
+    {
+     "sel": ".hud .chips",
+     "x": 8,
+     "y": 8,
+     "w": 282,
+     "h": 23
+    },
+    {
+     "sel": ".hud .objective",
+     "x": 8,
+     "y": 35,
+     "w": 374,
+     "h": 29
+    },
+    {
+     "sel": ".actions",
+     "x": 219,
+     "y": 558,
+     "w": 163,
+     "h": 206
+    },
+    {
+     "sel": ".way-edge-arrow",
+     "x": 25,
+     "y": 359,
+     "w": 42,
+     "h": 42
+    },
+    {
+     "sel": ".way-edge-label",
+     "x": -14,
+     "y": 401,
+     "w": 121,
+     "h": 16
+    },
+    {
+     "sel": ".build-version",
+     "x": 346,
+     "y": 830,
+     "w": 38,
+     "h": 10
+    }
+   ],
+   "errors": 0
+  },
+  "goto": {
+   "file": "04-goto-open.png",
+   "viewport": [
+    390,
+    844
+   ],
+   "coverage": 0.8617,
+   "centre": [
+    ".choices"
+   ],
+   "nearEdge": [],
+   "phoneHud": false,
+   "boxes": [
+    {
+     "sel": ".hud .chips",
+     "x": 8,
+     "y": 8,
+     "w": 282,
+     "h": 23
+    },
+    {
+     "sel": ".hud .objective",
+     "x": 8,
+     "y": 35,
+     "w": 374,
+     "h": 29
+    },
+    {
+     "sel": ".choices",
+     "x": 8,
+     "y": 74,
+     "w": 374,
+     "h": 711
+    },
+    {
+     "sel": ".build-version",
+     "x": 346,
+     "y": 830,
+     "w": 38,
+     "h": 10
+    }
+   ],
+   "errors": 0
+  },
+  "menu": {
+   "file": "05-menu-open.png",
+   "viewport": [
+    390,
+    844
+   ],
+   "coverage": 0.1558,
+   "centre": [
+    ".actions"
+   ],
+   "nearEdge": [],
+   "phoneHud": false,
+   "boxes": [
+    {
+     "sel": ".hud .chips",
+     "x": 8,
+     "y": 8,
+     "w": 282,
+     "h": 23
+    },
+    {
+     "sel": ".hud .objective",
+     "x": 8,
+     "y": 35,
+     "w": 374,
+     "h": 29
+    },
+    {
+     "sel": ".actions",
+     "x": 219,
+     "y": 558,
+     "w": 163,
+     "h": 206
+    },
+    {
+     "sel": ".build-version",
+     "x": 346,
+     "y": 830,
+     "w": 38,
+     "h": 10
+    }
+   ],
+   "errors": 0
+  },
+  "notebook": {
+   "file": "06-notebook-open.png",
+   "viewport": [
+    390,
+    844
+   ],
+   "coverage": 0.1558,
+   "centre": [
+    ".actions"
+   ],
+   "nearEdge": [],
+   "phoneHud": false,
+   "boxes": [
+    {
+     "sel": ".hud .chips",
+     "x": 8,
+     "y": 8,
+     "w": 282,
+     "h": 23
+    },
+    {
+     "sel": ".hud .objective",
+     "x": 8,
+     "y": 35,
+     "w": 374,
+     "h": 29
+    },
+    {
+     "sel": ".actions",
+     "x": 219,
+     "y": 558,
+     "w": 163,
+     "h": 206
+    },
+    {
+     "sel": ".build-version",
+     "x": 346,
+     "y": 830,
+     "w": 38,
+     "h": 10
+    }
+   ],
+   "errors": 0
+  },
+  "npc": "wang",
+  "replies": 3,
+  "dialogue": {
+   "file": "03-dialogue-3-replies.png",
+   "viewport": [
+    390,
+    844
+   ],
+   "coverage": 0.5852,
+   "centre": [
+    ".toast",
+    ".toast",
+    ".bubble",
+    ".replies"
+   ],
+   "nearEdge": [
+    ".replies 4px"
+   ],
+   "phoneHud": false,
+   "boxes": [
+    {
+     "sel": ".hud .chips",
+     "x": 8,
+     "y": 8,
+     "w": 282,
+     "h": 23
+    },
+    {
+     "sel": ".hud .objective",
+     "x": 8,
+     "y": 35,
+     "w": 374,
+     "h": 27
+    },
+    {
+     "sel": ".toast",
+     "x": 8,
+     "y": 74,
+     "w": 374,
+     "h": 142
+    },
+    {
+     "sel": ".toast",
+     "x": 8,
+     "y": 215,
+     "w": 374,
+     "h": 38
+    },
+    {
+     "sel": ".bubble",
+     "x": 86,
+     "y": 266,
+     "w": 174,
+     "h": 100
+    },
+    {
+     "sel": ".replies",
+     "x": 4,
+     "y": 600,
+     "w": 382,
+     "h": 240
+    },
+    {
+     "sel": ".build-version",
+     "x": 346,
+     "y": 830,
+     "w": 38,
+     "h": 10
+    }
+   ],
+   "errors": 3
+  },
+  "desktop": {
+   "file": "20-default-desktop.png",
+   "viewport": [
+    1280,
+    720
+   ],
+   "coverage": 0.1849,
+   "centre": [
+    ".toast",
+    ".banner"
+   ],
+   "nearEdge": [],
+   "phoneHud": false,
+   "boxes": [
+    {
+     "sel": ".hud .chips",
+     "x": 8,
+     "y": 8,
+     "w": 481,
+     "h": 24
+    },
+    {
+     "sel": ".hud .objective",
+     "x": 8,
+     "y": 38,
+     "w": 301,
+     "h": 85
+    },
+    {
+     "sel": ".actions",
+     "x": 1062,
+     "y": 543,
+     "w": 210,
+     "h": 168
+    },
+    {
+     "sel": ".toast",
+     "x": 380,
+     "y": 86,
+     "w": 520,
+     "h": 70
+    },
+    {
+     "sel": ".toast",
+     "x": 385,
+     "y": 168,
+     "w": 511,
+     "h": 34
+    },
+    {
+     "sel": ".banner",
+     "x": 320,
+     "y": 158,
+     "w": 640,
+     "h": 96
+    },
+    {
+     "sel": ".build-version",
+     "x": 1236,
+     "y": 706,
+     "w": 38,
+     "h": 10
+    }
+   ],
+   "errors": 0
+  },
+  "errors": [
+   "Failed to load resource: the server responded with a status of 404 (File not found)",
+   "Failed to load resource: the server responded with a status of 404 (File not found)",
+   "Failed to load resource: the server responded with a status of 404 (File not found)"
+  ]
+ }
+}

@@ -1,0 +1,412 @@
+{
+ "phoneHud": {
+  "default": {
+   "file": "21-default-phone.png",
+   "viewport": [
+    390,
+    844
+   ],
+   "coverage": 0.193,
+   "centre": [],
+   "nearEdge": [],
+   "phoneHud": true,
+   "boxes": [
+    {
+     "sel": ".hud .chips",
+     "x": 8,
+     "y": 8,
+     "w": 237,
+     "h": 30
+    },
+    {
+     "sel": ".hud .objective",
+     "x": 8,
+     "y": 44,
+     "w": 374,
+     "h": 30
+    },
+    {
+     "sel": ".actions",
+     "x": 338,
+     "y": 506,
+     "w": 44,
+     "h": 206
+    },
+    {
+     "sel": ".toast",
+     "x": 12,
+     "y": 726,
+     "w": 366,
+     "h": 54
+    },
+    {
+     "sel": ".way-edge-arrow",
+     "x": 10,
+     "y": 359,
+     "w": 30,
+     "h": 30
+    },
+    {
+     "sel": ".way-edge-label",
+     "x": 13,
+     "y": 389,
+     "w": 51,
+     "h": 47
+    },
+    {
+     "sel": ".hint",
+     "x": 8,
+     "y": 82,
+     "w": 300,
+     "h": 42
+    },
+    {
+     "sel": ".build-version",
+     "x": 338,
+     "y": 830,
+     "w": 46,
+     "h": 10
+    }
+   ],
+   "errors": 0
+  },
+  "idle": {
+   "file": "01-idle.png",
+   "viewport": [
+    390,
+    844
+   ],
+   "coverage": 0.0685,
+   "centre": [],
+   "nearEdge": [],
+   "phoneHud": true,
+   "boxes": [
+    {
+     "sel": ".hud .chips",
+     "x": 8,
+     "y": 8,
+     "w": 237,
+     "h": 30
+    },
+    {
+     "sel": ".hud .objective",
+     "x": 8,
+     "y": 44,
+     "w": 94,
+     "h": 28
+    },
+    {
+     "sel": ".actions",
+     "x": 338,
+     "y": 506,
+     "w": 44,
+     "h": 206
+    },
+    {
+     "sel": ".way-edge-arrow",
+     "x": 10,
+     "y": 359,
+     "w": 30,
+     "h": 30
+    },
+    {
+     "sel": ".way-edge-label",
+     "x": 13,
+     "y": 389,
+     "w": 51,
+     "h": 47
+    },
+    {
+     "sel": ".build-version",
+     "x": 338,
+     "y": 830,
+     "w": 46,
+     "h": 10
+    }
+   ],
+   "errors": 0
+  },
+  "guide": {
+   "file": "02-guide-expanded.png",
+   "viewport": [
+    390,
+    844
+   ],
+   "coverage": 0.0946,
+   "centre": [],
+   "nearEdge": [],
+   "phoneHud": true,
+   "boxes": [
+    {
+     "sel": ".hud .chips",
+     "x": 8,
+     "y": 8,
+     "w": 237,
+     "h": 30
+    },
+    {
+     "sel": ".hud .objective",
+     "x": 8,
+     "y": 44,
+     "w": 374,
+     "h": 30
+    },
+    {
+     "sel": ".actions",
+     "x": 338,
+     "y": 506,
+     "w": 44,
+     "h": 206
+    },
+    {
+     "sel": ".way-edge-arrow",
+     "x": 10,
+     "y": 359,
+     "w": 30,
+     "h": 30
+    },
+    {
+     "sel": ".way-edge-label",
+     "x": 13,
+     "y": 389,
+     "w": 51,
+     "h": 47
+    },
+    {
+     "sel": ".build-version",
+     "x": 338,
+     "y": 830,
+     "w": 46,
+     "h": 10
+    }
+   ],
+   "errors": 0
+  },
+  "goto": {
+   "file": "04-goto-open.png",
+   "viewport": [
+    390,
+    844
+   ],
+   "coverage": 0.619,
+   "centre": [
+    ".choices"
+   ],
+   "nearEdge": [],
+   "phoneHud": true,
+   "boxes": [
+    {
+     "sel": ".hud .chips",
+     "x": 8,
+     "y": 8,
+     "w": 237,
+     "h": 30
+    },
+    {
+     "sel": ".hud .objective",
+     "x": 8,
+     "y": 44,
+     "w": 374,
+     "h": 30
+    },
+    {
+     "sel": ".choices",
+     "x": 12,
+     "y": 330,
+     "w": 366,
+     "h": 506
+    },
+    {
+     "sel": ".build-version",
+     "x": 338,
+     "y": 830,
+     "w": 46,
+     "h": 10
+    }
+   ],
+   "errors": 0
+  },
+  "menu": {
+   "file": "05-menu-open.png",
+   "viewport": [
+    390,
+    844
+   ],
+   "coverage": 0.0846,
+   "centre": [],
+   "nearEdge": [],
+   "phoneHud": true,
+   "boxes": [
+    {
+     "sel": ".hud .chips",
+     "x": 8,
+     "y": 8,
+     "w": 237,
+     "h": 30
+    },
+    {
+     "sel": ".hud .objective",
+     "x": 8,
+     "y": 44,
+     "w": 374,
+     "h": 30
+    },
+    {
+     "sel": ".actions",
+     "x": 338,
+     "y": 506,
+     "w": 44,
+     "h": 206
+    },
+    {
+     "sel": ".build-version",
+     "x": 338,
+     "y": 830,
+     "w": 46,
+     "h": 10
+    }
+   ],
+   "errors": 0
+  },
+  "notebook": {
+   "file": "06-notebook-open.png",
+   "viewport": [
+    390,
+    844
+   ],
+   "coverage": 0.0585,
+   "centre": [],
+   "nearEdge": [],
+   "phoneHud": true,
+   "boxes": [
+    {
+     "sel": ".hud .chips",
+     "x": 8,
+     "y": 8,
+     "w": 237,
+     "h": 30
+    },
+    {
+     "sel": ".hud .objective",
+     "x": 8,
+     "y": 44,
+     "w": 94,
+     "h": 28
+    },
+    {
+     "sel": ".actions",
+     "x": 338,
+     "y": 506,
+     "w": 44,
+     "h": 206
+    },
+    {
+     "sel": ".build-version",
+     "x": 338,
+     "y": 830,
+     "w": 46,
+     "h": 10
+    }
+   ],
+   "errors": 0
+  },
+  "npc": "wang",
+  "replies": 3,
+  "dialogue": {
+   "file": "03-dialogue-3-replies.png",
+   "viewport": [
+    390,
+    844
+   ],
+   "coverage": 0.2705,
+   "centre": [
+    ".sheet"
+   ],
+   "nearEdge": [],
+   "phoneHud": true,
+   "boxes": [
+    {
+     "sel": ".actions",
+     "x": 338,
+     "y": 8,
+     "w": 44,
+     "h": 44
+    },
+    {
+     "sel": ".sheet",
+     "x": 12,
+     "y": 598,
+     "w": 366,
+     "h": 238
+    }
+   ],
+   "errors": 0
+  },
+  "desktop": {
+   "file": "20-default-desktop.png",
+   "viewport": [
+    1280,
+    720
+   ],
+   "coverage": 0.2033,
+   "centre": [
+    ".banner"
+   ],
+   "nearEdge": [],
+   "phoneHud": false,
+   "boxes": [
+    {
+     "sel": ".hud .chips",
+     "x": 8,
+     "y": 8,
+     "w": 481,
+     "h": 24
+    },
+    {
+     "sel": ".hud .objective",
+     "x": 8,
+     "y": 38,
+     "w": 301,
+     "h": 85
+    },
+    {
+     "sel": ".actions",
+     "x": 1062,
+     "y": 543,
+     "w": 210,
+     "h": 168
+    },
+    {
+     "sel": ".toast",
+     "x": 380,
+     "y": 86,
+     "w": 520,
+     "h": 70
+    },
+    {
+     "sel": ".hint",
+     "x": 328,
+     "y": 679,
+     "w": 625,
+     "h": 27
+    },
+    {
+     "sel": ".banner",
+     "x": 320,
+     "y": 158,
+     "w": 640,
+     "h": 96
+    },
+    {
+     "sel": ".build-version",
+     "x": 1228,
+     "y": 706,
+     "w": 46,
+     "h": 10
+    }
+   ],
+   "errors": 0
+  },
+  "errors": []
+ }
+}

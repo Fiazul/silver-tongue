@@ -152,6 +152,8 @@
     "way-distance": "{name} · {m} 米",
     "way-lost": "你的下一步：{text}",
     "way-bed": "你的床",
+    "hud-slots-tiny": "◐ {n}",
+    "hud-guide-fold": "展开或收起指引",
     "path-menu-on": "显示路线：开",
     "path-menu-off": "显示路线：关",
     "bark-continue": "好的",

@@ -20,6 +20,11 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #edd9b8; col
 .replies, .choices, dialog, .nb-body, .bubble-line, textarea { touch-action: pan-y; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
 #ui { position: fixed; inset: 0; pointer-events: none; }
 #ui > * { pointer-events: auto; }
+/* the speech bubble and the reply panel (Overlay.sheet): one bottom sheet on the phone HUD (below), no box of its own elsewhere */
+.sheet { display: contents; }
+.sheet > * { pointer-events: auto; }
+/* the phone HUD's parts (below): icons, the strip's "◐ 4", the guide line's pill and chevron; text elsewhere */
+.ico, .chip .tiny, .obj-pill, .obj-fold { display: none; }
 /* One z-order for the overlay's layers that share a band (ui/viewport.ts; Overlay.bubbleArea moves the
    bubble out of the toasts' and the reply sheet's bands every frame, at every breakpoint): the bubble
    under the reply sheet and the lists, the place banner under the toasts, the toasts and the HUD over
@@ -67,7 +72,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #edd9b8; col
 /* Promo capture only (main.ts world3d.promo("hud", false)): every DOM chrome node hidden except the
    speech bubble and reply sheet (a scene's dialogue is part of the trailer); the wayfinding marker
    and ground path are hidden in Three.js itself (main.ts promoChromeOff), not by this rule. */
-#ui.promo-chrome-off > *:not(.bubble):not(.replies) { visibility: hidden; }
+#ui.promo-chrome-off > *:not(.bubble):not(.replies):not(.sheet) { visibility: hidden; }
 .hidden { display: none !important; }
 button { font: inherit; font-weight: 700; color: var(--ink); background: var(--paper); border: var(--border); border-radius: var(--radius-sm); padding: 0.45em 0.9em; cursor: pointer; box-shadow: var(--shadow); transition: transform var(--t-fast) ease, box-shadow var(--t-fast) ease, background-color var(--t-fast) ease; }
 button:hover { background-color: #fff8ea; }
@@ -333,3 +338,203 @@ html:not(.touch) .action-btn { display: none !important; }
 /* landscape phone: lists in the right third, anchored top */
 .compact.landscape .replies { top: auto; }
 .compact.landscape .choices { top: var(--choices-y); }
+
+/* ---------------------------------------------------------------------------------------------
+   Phone HUD (html.phone-hud: a phone either way up, a coarse pointer or a touch seen, a window
+   under 700 px wide; ui/overlay.ts phoneLayout). Rects: ui/viewport.ts phoneHud via --ph-<name>-*.
+   One material for every piece: translucent dark glass, a hairline, no ink outlines or hard
+   shadows. A slim status strip and a one-line guide top-left, a column of round icon buttons on
+   the right edge, narration and dialogue as a bottom sheet; the middle of the picture stays clear.
+   --------------------------------------------------------------------------------------------- */
+html.phone-hud {
+  --ph-bg: rgba(20, 18, 14, 0.55);
+  --ph-bg-strong: rgba(20, 18, 14, 0.68);
+  --ph-line: 1px solid rgba(255, 255, 255, 0.12);
+  --ph-blur: blur(8px);
+  --ph-text: #f6efe2;
+  --ph-dim: rgba(246, 239, 226, 0.68);
+}
+html.phone-hud .ico { display: inline-grid; place-items: center; line-height: 0; }
+html.phone-hud .ico svg { display: block; width: 22px; height: 22px; }
+
+/* the status strip: place · day · money · actions left · music */
+html.phone-hud .hud { left: var(--ph-strip-x); top: var(--ph-strip-y); width: var(--ph-guide-w); height: auto; max-width: none; overflow: visible; gap: 6px; animation: ph-fade 240ms ease-out both; }
+html.phone-hud .hud .chips { flex-wrap: nowrap; align-items: center; gap: 0; height: var(--ph-strip-h); max-width: var(--ph-strip-w); padding: 0 2px 0 10px; overflow: visible; background: var(--ph-bg); -webkit-backdrop-filter: var(--ph-blur); backdrop-filter: var(--ph-blur); border: var(--ph-line); border-radius: 10px; color: var(--ph-text); }
+html.phone-hud .hud .chip { flex: none; padding: 0; background: none; border: 0; border-radius: 0; box-shadow: none; color: inherit; font-family: var(--font-body); font-size: 12px; font-weight: 600; letter-spacing: normal; line-height: 1; white-space: nowrap; }
+html.phone-hud .hud .chip + .chip::before { content: "·"; margin: 0 6px; opacity: 0.45; font-weight: 400; }
+html.phone-hud .hud .chip.place { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-weight: 700; }
+html.phone-hud .hud .chip .long, html.phone-hud .hud .chip.rank, html.phone-hud .hud .chip.slots .short { display: none; }
+html.phone-hud .hud .chip .short, html.phone-hud .hud .chip .tiny { display: inline; }
+html.phone-hud .hud .chip.wallet { font-variant-numeric: tabular-nums; }
+html.phone-hud .hud .chip.wallet.bump { animation: ph-flash 0.6s ease-out; }
+html.phone-hud .hud .chip.wallet.late, html.phone-hud .hud .chip.slots.out { color: #ff9f8f; background: none; }
+html.phone-hud .hud .chip.errand { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: #9fe0c0; }
+html.phone-hud .hud .chip.errand::before { content: "· \25A3\00a0"; margin: 0 0 0 6px; opacity: 1; }
+/* the ♪: a 16 px icon, a 44 px hit area */
+html.phone-hud .hud .chip.sound { position: relative; display: grid; place-items: center; width: 28px; height: 28px; margin-left: 2px; padding: 0; border-radius: 8px; opacity: 1; text-decoration: none; }
+html.phone-hud .hud .chip.sound::before { content: none; }
+html.phone-hud .hud .chip.sound::after { content: ""; position: absolute; inset: -8px; }
+html.phone-hud .hud .chip.sound .snd-text { display: none; }
+html.phone-hud .hud .chip.sound .ico svg { width: 16px; height: 16px; }
+html.phone-hud .hud .chip.sound.off, html.phone-hud .hud .chip.sound.none { opacity: 0.55; }
+html.phone-hud .hud .chip.sound.off .ico { position: relative; }
+html.phone-hud .hud .chip.sound.off .ico::after { content: ""; position: absolute; left: -2px; right: -2px; top: 50%; height: 1.5px; background: currentColor; transform: rotate(-45deg); }
+
+/* the guide: one line under the strip, a tap folds it to its "Step n/N" pill (ui/hud.ts fold) */
+html.phone-hud .objective { position: relative; pointer-events: auto !important; cursor: pointer; display: flex; align-items: center; gap: 6px; height: var(--ph-guide-h); max-width: var(--ph-guide-w); padding: 0 1px 0 8px; background: var(--ph-bg); -webkit-backdrop-filter: var(--ph-blur); backdrop-filter: var(--ph-blur); border: var(--ph-line); border-radius: 10px; box-shadow: none; color: var(--ph-text); font-size: 12.5px; white-space: nowrap; }
+html.phone-hud .objective.guide { border-color: rgba(232, 182, 76, 0.5); }
+html.phone-hud .objective::after { content: ""; position: absolute; inset: -7px 0; z-index: -1; } /* the hit area: under the line's own content (Take me there) */
+html.phone-hud .obj-fold { display: inline-grid; flex: none; opacity: 0.7; }
+html.phone-hud .obj-fold svg { width: 14px; height: 14px; }
+html.phone-hud .obj-text { display: block; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: inherit; font-weight: 600; }
+html.phone-hud .obj-tag { display: none; }
+html.phone-hud .obj-step { margin-right: 6px; padding: 1px 6px; background: rgba(255, 255, 255, 0.12); font-size: 11px; font-weight: 700; letter-spacing: normal; vertical-align: 0; }
+html.phone-hud .obj-sub { display: inline; flex: 0 1000 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: inherit; opacity: 0.7; }
+html.phone-hud .obj-sub::before { content: "· "; }
+html.phone-hud .obj-next { display: none; }
+/* Take me there: a 28 px round icon at the line's end, a 44 px hit area */
+html.phone-hud .hud .obj-go { position: relative; flex: none; display: grid; place-items: center; width: 28px; height: 28px; margin: 0 0 0 auto; padding: 0; border: 0; border-radius: 50%; background: var(--gold); color: #1d1714; box-shadow: none; }
+html.phone-hud .hud .obj-go::after { content: ""; position: absolute; inset: -8px; }
+html.phone-hud .hud .obj-go:active { transform: none; box-shadow: none; filter: brightness(0.9); }
+html.phone-hud .obj-go .obj-go-text { display: none; }
+html.phone-hud .obj-go .ico svg { width: 18px; height: 18px; }
+html.phone-hud .objective.folded { height: var(--ph-guide-pill-h); max-width: var(--ph-guide-pill-w); padding: 0 10px 0 6px; border-radius: 999px; overflow: hidden; }
+html.phone-hud .objective.folded .obj-text, html.phone-hud .objective.folded .obj-sub, html.phone-hud .hud .objective.folded .obj-go { display: none; }
+html.phone-hud .objective.folded .obj-pill { display: inline; font-size: 12px; font-weight: 700; }
+html.phone-hud .objective.folded .obj-fold svg { transform: rotate(180deg); }
+/* a line or a reply panel is up: the strip and the guide step aside (the ≡ stays, the sheet has the talk) */
+html.phone-hud.sheet-open .hud { display: none; }
+
+/* the icon column on the right edge: Notebook, Go to, (the mentor), Sleep, Menu; labels on hover or a long press */
+html.phone-hud .actions { left: auto; top: auto; right: var(--ph-column-right); bottom: var(--ph-column-bottom); width: auto; max-width: none; max-height: none; flex-direction: column; align-items: flex-end; gap: 10px; animation: ph-fade 240ms ease-out both; }
+html.phone-hud .actions .act-btn { position: relative; display: grid; place-items: center; width: 44px; height: 44px; min-width: 44px; min-height: 44px; max-width: none; padding: 0; overflow: visible; border: var(--ph-line); border-radius: 50%; background: var(--ph-bg); -webkit-backdrop-filter: var(--ph-blur); backdrop-filter: var(--ph-blur); box-shadow: none; color: var(--ph-text); -webkit-touch-callout: none; }
+html.phone-hud .actions .act-btn:hover { background-color: var(--ph-bg-strong); }
+html.phone-hud .actions .act-btn:active { transform: none; box-shadow: none; background-color: rgba(20, 18, 14, 0.8); }
+html.phone-hud .actions .act-btn:focus-visible { box-shadow: none; outline: 2px solid var(--gold); outline-offset: 2px; }
+html.phone-hud .actions .notebook-btn { background-color: rgba(31, 107, 79, 0.62); }
+html.phone-hud .actions .mentor { background-color: rgba(92, 60, 128, 0.58); }
+html.phone-hud .actions .notebook-btn.pulse { animation: ph-ring 0.9s ease-out 2; }
+html.phone-hud .actions .act-label { position: absolute; right: calc(100% + 8px); top: 50%; transform: translateY(-50%); padding: 5px 9px; white-space: nowrap; font-size: 12px; font-weight: 600; color: var(--ph-text); background: var(--ph-bg-strong); -webkit-backdrop-filter: var(--ph-blur); backdrop-filter: var(--ph-blur); border: var(--ph-line); border-radius: 8px; opacity: 0; pointer-events: none; transition: opacity 120ms ease-out; }
+html.phone-hud .actions .act-btn.tip .act-label { opacity: 1; }
+@media (hover: hover) { html.phone-hud .actions .act-btn:hover .act-label, html.phone-hud .actions .act-btn:focus-visible .act-label { opacity: 1; } }
+/* a sheet open: the column folds to ≡, top-right (beside the lists' third on a landscape phone) */
+html.phone-hud.sheet-open body .actions { display: flex; top: var(--ph-menu-dock-y); bottom: auto; right: var(--ph-menu-dock-right); animation: none; }
+html.phone-hud.sheet-open .actions .act-btn:not(.menu-btn) { display: none; }
+
+/* the contextual action button ("E · Talk to …") */
+html.phone-hud .action-btn { left: auto; top: auto; right: var(--ph-action-button-right); bottom: var(--ph-action-button-bottom); width: auto; max-width: var(--ph-action-button-w); height: var(--ph-action-button-h); gap: 8px; padding: 0 14px 0 5px; background: var(--ph-bg-strong); -webkit-backdrop-filter: var(--ph-blur); backdrop-filter: var(--ph-blur); border: var(--ph-line); box-shadow: none; color: var(--ph-text); font-size: 13px; font-weight: 600; }
+html.phone-hud .action-btn:active { transform: none; box-shadow: none; }
+html.phone-hud .action-btn .action-key { width: 38px; height: 38px; font-size: 1.05rem; }
+
+/* narration (the toasts): the newest line in a bottom sheet, two lines, a tap opens it, a tap elsewhere dismisses it */
+html.phone-hud .toasts { left: var(--ph-narration-x); top: auto; bottom: var(--ph-narration-bottom); width: var(--ph-narration-w); max-height: none; overflow: visible; transform: none; gap: 0; pointer-events: auto !important; }
+html.phone-hud .toast { display: none; }
+/* the 8 px above and below are transparent borders, not padding: a clamped line's overflow is clipped at the padding box, so no third line peeks out; the hairline is an outline, the tone's edge a 3 px gradient stripe */
+html.phone-hud .toast:last-child { --tone: rgba(255, 255, 255, 0.35); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; cursor: pointer; padding: 0 12px 0 14px; background: linear-gradient(90deg, var(--tone) 3px, transparent 3px), var(--ph-bg-strong); -webkit-backdrop-filter: var(--ph-blur); backdrop-filter: var(--ph-blur); border: 0; border-top: 8px solid transparent; border-bottom: 8px solid transparent; border-radius: 10px; outline: 1px solid rgba(255, 255, 255, 0.12); outline-offset: -1px; box-shadow: none; color: var(--ph-text); font-size: 14px; line-height: 1.35; text-align: left; animation: ph-up 160ms ease-out; }
+html.phone-hud .toast.open:last-child { display: block; max-height: 40vh; overflow-y: auto; }
+html.phone-hud .toast.out { opacity: 0; transform: translateY(8px); }
+html.phone-hud .toast.good { --tone: #7fd8a8; }
+html.phone-hud .toast.bad { --tone: #ff8f7f; }
+html.phone-hud .toast.note { --tone: #c9a6ec; }
+html.phone-hud .toast.guide { --tone: var(--gold); }
+html.phone-hud .toast.you { --tone: #8cbcf0; }
+html.phone-hud .toast.place { font-size: 14px; }
+/* a dialogue sheet open: a narration line goes up where the strip was, one line (a tap opens it); the echo of the reply just picked isn't repeated */
+html.phone-hud.sheet-open:not(.compact.landscape) .toasts { top: var(--ph-strip-y); bottom: auto; left: var(--ph-strip-x); width: calc(var(--ph-menu-dock-x) - var(--ph-strip-x) - 8px); align-items: flex-start; }
+html.phone-hud.sheet-open:not(.compact.landscape) .toast:last-child { max-width: min(100%, 260px); -webkit-line-clamp: 1; border-top-width: 5px; border-bottom-width: 5px; font-size: 12px; animation: ph-fade 160ms ease-out; }
+html.phone-hud.sheet-open .toast.you:last-child { display: none; }
+
+/* dialogue: the bubble (speaker chip, the line in two lines, … and ▶) over the replies (44 px rows), one sheet */
+html.phone-hud .sheet { position: fixed; left: var(--ph-sheet-x); bottom: var(--ph-sheet-bottom); width: var(--ph-sheet-w); max-height: var(--ph-sheet-h); z-index: 8; display: flex; flex-direction: column; overflow: hidden; background: var(--ph-bg-strong); -webkit-backdrop-filter: var(--ph-blur); backdrop-filter: var(--ph-blur); border: var(--ph-line); border-radius: 14px; color: var(--ph-text); animation: ph-up 160ms ease-out; }
+html.phone-hud .sheet:not(:has(> :not(.hidden))) { display: none; }
+html.phone-hud .sheet .bubble { position: relative; left: auto; top: auto; flex: none; max-width: none; transform: none !important; will-change: auto; display: grid; grid-template-columns: auto auto 1fr; grid-template-areas: "name tools ." "line line line" "reading reading reading"; align-items: center; column-gap: 8px; padding: 8px 12px 2px; background: none; border: 0; border-radius: 0; box-shadow: none; cursor: default; }
+html.phone-hud .sheet .bubble::after { display: none; }
+html.phone-hud .sheet .bubble-name { grid-area: name; padding: 3px 9px; border-radius: 999px; background: rgba(255, 255, 255, 0.1); color: var(--gold); font-family: var(--font-body); font-size: 11px; font-weight: 700; letter-spacing: 0.02em; line-height: 1.2; }
+html.phone-hud .sheet .bubble-name.reaction { color: #ff9f8f; }
+html.phone-hud .sheet .bubble-name.bark { color: #9fe0c0; }
+html.phone-hud .sheet .bubble-tools { grid-area: tools; justify-content: flex-start; margin: 0; gap: 4px; }
+html.phone-hud .sheet .bubble-line { grid-area: line; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; max-height: none; margin: 2px -10px 0; padding: 0 10px; font-size: 18px; line-height: 1.3; }
+html.phone-hud .sheet .bubble.open .bubble-line { display: block; max-height: 30vh; overflow-y: auto; }
+html.phone-hud .sheet .bubble-reading { grid-area: reading; margin: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--ph-dim); opacity: 1; font-size: 12px; }
+html.phone-hud .sheet .tok.tappable { border-bottom-color: rgba(255, 255, 255, 0.35); }
+html.phone-hud .sheet .tok.fresh { border-bottom-color: rgba(255, 150, 130, 0.85); }
+html.phone-hud .sheet .tok.tappable:hover { background: rgba(255, 255, 255, 0.12); }
+html.phone-hud .sheet rt { color: var(--gold); }
+html.phone-hud .sheet .tok.guide-pulse { animation: ph-word 0.9s ease-in-out 3; }
+html.phone-hud .sheet button.icon { position: relative; min-width: 30px; height: 30px; padding: 0 8px; border: var(--ph-line); border-radius: 8px; background: rgba(255, 255, 255, 0.1); box-shadow: none; color: var(--ph-text); font-size: 13px; }
+html.phone-hud .sheet button.icon::after { content: ""; position: absolute; inset: -7px; }
+html.phone-hud .sheet button.icon:active { transform: none; box-shadow: none; background: rgba(255, 255, 255, 0.2); }
+html.phone-hud .sheet button.help.on { background: var(--ph-text); color: #1d1714; }
+html.phone-hud .sheet .hint-chip { border: var(--ph-line); box-shadow: none; background: rgba(255, 255, 255, 0.14); color: var(--ph-text); }
+html.phone-hud .sheet .hint-chip[aria-expanded="true"] { background: rgba(251, 243, 226, 0.94); color: #1d1714; box-shadow: none; }
+html.phone-hud .sheet .replies { position: static; left: auto; top: auto; bottom: auto; flex: 0 1 auto; min-height: 0; width: auto; max-height: none; transform: none; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 4px 10px 10px; background: none; border: 0; border-radius: 0; box-shadow: none; }
+html.phone-hud .sheet .replies.guide-glow { animation: ph-glow 1.1s ease-in-out 2; }
+html.phone-hud .sheet .replies-title { flex: none; padding: 0 2px; color: var(--ph-dim); font-size: 11px; }
+/* under a line, the replies' title row (price, ?) sits at the sheet's top right, beside the speaker */
+html.phone-hud .sheet:has(> .bubble:not(.hidden)) .replies-title { position: absolute; top: 8px; right: 12px; gap: 6px; padding: 0; }
+html.phone-hud .sheet:has(> .bubble:not(.hidden)) .replies-title > span:first-child { display: none; }
+html.phone-hud .sheet .reply-cost { margin: 0; color: #ff9f8f; font-size: 12px; }
+html.phone-hud .sheet .option { flex: none; min-height: 44px; margin: 0; padding: 4px 8px 4px 10px; gap: 8px; border: var(--ph-line); border-radius: 10px; background: rgba(255, 255, 255, 0.08); box-shadow: none; color: var(--ph-text); font-size: 16px; }
+html.phone-hud .sheet .option:hover { background: rgba(255, 255, 255, 0.14); }
+html.phone-hud .sheet .option:active, html.phone-hud .sheet .option:has([data-nested]:active) { transform: none; box-shadow: none; }
+html.phone-hud .sheet .option:active { background: rgba(255, 255, 255, 0.2); }
+html.phone-hud .sheet .option:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
+html.phone-hud .sheet .option .key { min-width: 0.9em; color: var(--ph-dim); opacity: 1; font-size: 11px; }
+html.phone-hud .sheet .option.continue { justify-content: center; font-size: 18px; }
+html.phone-hud .sheet .tile { border: var(--ph-line); background: rgba(255, 255, 255, 0.1); color: var(--ph-text); box-shadow: none; font-size: 18px; }
+html.phone-hud .sheet .tile-answer { font-size: 18px; border-bottom-color: rgba(255, 255, 255, 0.3); }
+html.phone-hud .sheet .tile-tools button { min-height: 40px; border: var(--ph-line); background: rgba(255, 255, 255, 0.1); color: var(--ph-text); box-shadow: none; font-size: 13px; }
+html.phone-hud .sheet .tile-tools .say { background: var(--lacquer); }
+html.phone-hud .sheet .note { color: var(--ph-dim); }
+
+/* the lists (Go to…, the topics): the same sheet, 44 px rows */
+html.phone-hud .choices { left: var(--ph-sheet-x); top: auto; bottom: var(--ph-sheet-bottom); width: var(--ph-sheet-w); max-height: min(60vh, calc(100vh - 32px)); overflow-y: auto; transform: none; gap: 8px; padding: 10px; background: var(--ph-bg-strong); -webkit-backdrop-filter: var(--ph-blur); backdrop-filter: var(--ph-blur); border: var(--ph-line); border-radius: 14px; box-shadow: none; color: var(--ph-text); animation: ph-up 160ms ease-out; }
+html.phone-hud .choices h2 { margin: 0 2px 2px; color: var(--gold); font-family: var(--font-body); font-size: 13px; font-weight: 700; letter-spacing: normal; }
+html.phone-hud .choices .choice { flex: none; min-height: 44px; padding: 0 12px; border: var(--ph-line); border-radius: 10px; background: rgba(255, 255, 255, 0.08); box-shadow: none; color: var(--ph-text); font-size: 14px; font-weight: 600; }
+html.phone-hud .choices .choice.secondary { background: transparent; color: var(--ph-dim); }
+html.phone-hud .choices .choice:active { transform: none; box-shadow: none; background: rgba(255, 255, 255, 0.2); }
+
+/* the dialogs (Menu, Settings, the notebook, the day card, the name): the same glass, darker */
+html.phone-hud dialog { width: min(94vw, 420px); padding: 14px; background: rgba(24, 21, 17, 0.88); background-image: none; -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); border: var(--ph-line); border-radius: 16px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35); color: var(--ph-text); animation: ph-up 160ms ease-out; }
+html.phone-hud dialog::backdrop { background: rgba(10, 9, 7, 0.35); }
+html.phone-hud dialog h2 { font-family: var(--font-body); font-size: 17px; font-weight: 700; letter-spacing: normal; color: var(--gold); }
+html.phone-hud dialog h3 { font-family: var(--font-body); font-size: 13px; font-weight: 700; color: var(--ph-dim); }
+html.phone-hud dialog button { border: var(--ph-line); border-radius: 10px; background: rgba(255, 255, 255, 0.08); box-shadow: none; color: var(--ph-text); font-size: 14px; font-weight: 600; }
+html.phone-hud dialog button:hover { background-color: rgba(255, 255, 255, 0.14); }
+html.phone-hud dialog button:active { transform: none; box-shadow: none; background-color: rgba(255, 255, 255, 0.2); }
+html.phone-hud dialog button:focus-visible { box-shadow: none; outline: 2px solid var(--gold); outline-offset: 1px; }
+html.phone-hud dialog button.primary, html.phone-hud .daycard > button, html.phone-hud .name button[type="submit"] { background: var(--lacquer); border-color: transparent; color: var(--paper); }
+html.phone-hud .set-label, html.phone-hud .settings-version { color: var(--ph-dim); }
+html.phone-hud .set-options button[aria-pressed="true"] { background: rgba(47, 138, 104, 0.45); border-color: rgba(127, 216, 168, 0.6); box-shadow: none; }
+html.phone-hud .set-options button.soon { background: transparent; border: 1px dashed rgba(255, 255, 255, 0.25); color: var(--ph-dim); }
+html.phone-hud .set-msg { color: #7fd8a8; }
+html.phone-hud .set-msg.err, html.phone-hud .menu .err, html.phone-hud .name .err { color: #ff9f8f; }
+html.phone-hud dialog input, html.phone-hud dialog textarea { border: var(--ph-line); box-shadow: none; }
+html.phone-hud .nb-line .c-yellow { color: #f0c465; }
+html.phone-hud .nb-line .c-cyan { color: #86d6e2; }
+html.phone-hud .dc-row { border-bottom-color: rgba(255, 255, 255, 0.12); }
+html.phone-hud .dc-row.good b { color: #7fd8a8; }
+html.phone-hud .dc-row.bad b, html.phone-hud .dc-late { color: #ff9f8f; }
+html.phone-hud .gloss { border: var(--ph-line); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); }
+
+/* the transient pieces: the walk hint under the guide, the place's name small and high, the edge arrow 24 px */
+html.phone-hud .hint { left: var(--ph-strip-x); top: calc(var(--ph-guide-y) + var(--ph-guide-h) + 8px); bottom: auto; transform: none; max-width: min(300px, calc(100vw - 80px)); padding: 6px 10px; background: var(--ph-bg); -webkit-backdrop-filter: var(--ph-blur); backdrop-filter: var(--ph-blur); border: var(--ph-line); color: var(--ph-text); font-size: 12px; text-align: left; }
+html.phone-hud .banner { top: 17%; }
+html.phone-hud .banner-name { font-size: 1.45rem; -webkit-text-stroke: 0; text-shadow: 0 2px 10px rgba(0, 0, 0, 0.55); }
+html.phone-hud .banner-desc { display: none; } /* the name alone: the line is in the narration */
+html.phone-hud .way-edge-arrow { left: -12px; top: -12px; width: 24px; height: 24px; border: 0; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35); }
+html.phone-hud .way-edge-arrow::after { left: 8px; top: 6px; border-left-width: 9px; border-top-width: 6px; border-bottom-width: 6px; }
+html.phone-hud .way-edge.side-left .way-edge-label, html.phone-hud .way-edge.side-right .way-edge-label { max-width: 60px; white-space: normal; line-height: 1.25; transform: none; }
+html.phone-hud .way-edge.side-left .way-edge-label { left: -12px; text-align: left; }
+html.phone-hud .way-edge.side-right .way-edge-label { left: auto; right: -12px; text-align: right; }
+html.phone-hud .way-edge-label { top: 15px; padding: 2px 7px; background: var(--ph-bg); -webkit-backdrop-filter: var(--ph-blur); backdrop-filter: var(--ph-blur); border: var(--ph-line); color: var(--ph-text); font-size: 11px; font-weight: 600; }
+
+@keyframes ph-fade { from { opacity: 0; } }
+@keyframes ph-up { from { opacity: 0; transform: translateY(16px); } }
+@keyframes ph-flash { 30% { color: var(--gold); } }
+@keyframes ph-ring { 50% { box-shadow: 0 0 0 3px rgba(232, 182, 76, 0.85); } }
+@keyframes ph-glow { 50% { box-shadow: inset 0 0 0 2px rgba(232, 182, 76, 0.8); } }
+@keyframes ph-word { 50% { background: rgba(232, 182, 76, 0.45); } }
+@media (prefers-reduced-motion: reduce) {
+  html.phone-hud .hud, html.phone-hud .actions, html.phone-hud .sheet, html.phone-hud .choices, html.phone-hud .toast:last-child, html.phone-hud dialog { animation: none; }
+}

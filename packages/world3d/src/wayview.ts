@@ -118,6 +118,9 @@ export class PathTrail {
   }
 }
 
+/** The label shows within this distance of the target (m), or while the first-steps guide targets it. */
+export const EDGE_LABEL_M = 12;
+
 /** The screen-edge arrow: a gold badge pointing at an off-screen target, with its name and distance. */
 export class EdgeArrowView {
   readonly node = el("div", { className: "way-edge hidden" });
@@ -125,23 +128,34 @@ export class EdgeArrowView {
   private label = el("span", { className: "way-edge-label" });
   private text = "";
   private shown = false;
+  private side = "mid";
 
   constructor() {
     this.node.setAttribute("aria-hidden", "true");
     this.node.append(this.arrow, this.label);
   }
 
-  /** At the arrow's spot, pointing along its angle; null or on screen: hidden. */
-  update(a: EdgeArrow | null, text: string) {
+  /** At the arrow's spot, pointing along its angle; null or on screen: hidden. `label`: its name and distance under it (near, or the guide's target). */
+  update(a: EdgeArrow | null, text: string, label = true) {
     const show = !!a && !a.onScreen;
     if (show !== this.shown) {
       this.shown = show;
       this.node.classList.toggle("hidden", !show);
     }
     if (!show) return;
+    this.label.classList.toggle("hidden", !label);
     if (text !== this.text) {
       this.text = text;
       this.label.textContent = text;
+    }
+    // which third of the screen it is in: the label hangs inwards from the arrow on the outer thirds
+    // (page.css .way-edge.side-*), clear of the screen edge and of the icon column the arrow keeps out of
+    const vw = typeof innerWidth === "number" ? innerWidth : 0;
+    const side = !vw ? "mid" : a!.x < vw * 0.35 ? "left" : a!.x > vw * 0.65 ? "right" : "mid";
+    if (side !== this.side) {
+      this.node.classList.remove(`side-${this.side}`);
+      this.node.classList.add(`side-${side}`);
+      this.side = side;
     }
     this.node.style.transform = `translate3d(${a!.x.toFixed(1)}px, ${a!.y.toFixed(1)}px, 0)`;
     this.arrow.style.transform = `rotate(${a!.angle.toFixed(3)}rad)`;

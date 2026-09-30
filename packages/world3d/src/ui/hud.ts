@@ -10,6 +10,10 @@ import type { Objective } from "../objective";
 import type { Strings } from "../strings";
 import { versionTag } from "../version";
 import { el } from "./dom";
+import { icon } from "./icons";
+
+/** The phone HUD's guide line folds to its "Step n/N" pill this long after its step changes (ms). */
+export const GUIDE_FOLD_MS = 6000;
 
 /** Wayfinding's part of the objective card (main.ts, from wayfind.ts). */
 export interface WayCard {
@@ -41,6 +45,22 @@ export class HudView {
     private music?: () => boolean,
   ) {
     this.node.append(this.chips, this.objective, versionTag());
+    // The phone HUD's guide line (page.css "Phone HUD"): a tap folds it to its step pill, or opens
+    // it again; it folds by itself GUIDE_FOLD_MS after a new step. Elsewhere the class is unused.
+    this.objective.addEventListener("click", () => this.fold(!this.objective.classList.contains("folded")));
+  }
+
+  private foldTimer: ReturnType<typeof setTimeout> | undefined;
+
+  /** Folds the guide line to its pill (or opens it, folding again GUIDE_FOLD_MS later). */
+  fold(on: boolean) {
+    clearTimeout(this.foldTimer);
+    this.objective.classList.toggle("folded", on);
+    this.objective.setAttribute("aria-expanded", String(!on));
+    if (!on) {
+      this.foldTimer = setTimeout(() => this.fold(true), GUIDE_FOLD_MS);
+      (this.foldTimer as { unref?: () => void }).unref?.();
+    }
   }
 
   /** Draws the last render again (the ♪ chip after the music changed outside the model). */
@@ -61,10 +81,16 @@ export class HudView {
       // Long and short wording in each chip: page.css shows the short one on a portrait phone (one row).
       const both = (long: string, short: string) => [el("span", { className: "long", textContent: long }), el("span", { className: "short", textContent: short })];
       this.chips.replaceChildren(
-        el("span", { className: "chip place", textContent: h.placeName }),
+        el("span", { className: "chip place", textContent: h.placeName, title: h.placeName }),
         el("span", { className: "chip day" }, ...both(this.s("day", { n: h.day }), this.s("day-short", { n: h.day }))),
         this.wallet,
-        el("span", { className: `chip slots${h.slotsLeft === 0 ? " out" : ""}` }, ...both(this.s("slots-left", { n: h.slotsLeft }), this.s("slots-short", { n: h.slotsLeft }))),
+        el(
+          "span",
+          { className: `chip slots${h.slotsLeft === 0 ? " out" : ""}`, title: this.s("slots-left", { n: h.slotsLeft }) },
+          ...both(this.s("slots-left", { n: h.slotsLeft }), this.s("slots-short", { n: h.slotsLeft })),
+          // the phone strip's "◐ 4"
+          el("span", { className: "tiny", textContent: this.s("hud-slots-tiny", { n: h.slotsLeft }) }),
+        ),
         el("span", { className: "chip rank", textContent: h.rankName }),
         // The TUI status line's parcel marker, naming where it goes.
         ...(h.errand
@@ -86,10 +112,15 @@ export class HudView {
       ];
       const line = guide?.text ?? o?.text;
       const text = line ? el("div", { className: "obj-text" }, ...tags, line) : null;
+      // the phone line's fold chevron (the whole line is the button; this only shows which way it goes)
+      const chevron = icon("chevron");
+      chevron.classList.add("obj-fold");
       const next = way?.next ? [el("div", { className: "obj-next", textContent: this.s("way-next", { text: way.next }) })] : [];
       const take = way?.take ? [this.takeButton()] : [];
-      this.objective.replaceChildren(...(text ? [text] : []), ...next, ...(o?.sub ? [el("div", { className: "obj-sub", textContent: o.sub })] : []), ...take);
+      this.objective.title = this.s("hud-guide-fold");
+      this.objective.replaceChildren(chevron, ...(way ? [el("span", { className: "obj-pill", textContent: this.s("way-step", way.step) })] : []), ...(text ? [text] : []), ...next, ...(o?.sub ? [el("div", { className: "obj-sub", textContent: o.sub })] : []), ...take);
       if (textChanged) {
+        this.fold(false);
         this.objective.classList.remove("new");
         void this.objective.offsetWidth;
         this.objective.classList.add("new");
@@ -99,7 +130,9 @@ export class HudView {
 
   /** "Take me there": a button (the card is otherwise untappable). */
   private takeButton(): HTMLElement {
-    const b = el("button", { className: "obj-go", textContent: this.s("way-take") });
+    const b = el("button", { className: "obj-go" }, icon("route"), el("span", { className: "obj-go-text", textContent: this.s("way-take") }));
+    b.setAttribute("aria-label", this.s("way-take"));
+    b.title = this.s("way-take");
     b.addEventListener("click", (e) => {
       e.stopPropagation();
       this.onTake();
@@ -111,7 +144,8 @@ export class HudView {
   private soundChip(sound: Hud["sound"]): HTMLElement {
     if (this.music) {
       const on = this.music();
-      const b = el("button", { className: `chip sound music ${on ? "on" : "off"}`, textContent: this.t(on ? "sound-on" : "sound-off"), title: this.s("music-toggle") });
+      const b = el("button", { className: `chip sound music ${on ? "on" : "off"}`, title: this.s("music-toggle") }, icon("music"), el("span", { className: "snd-text", textContent: this.t(on ? "sound-on" : "sound-off") }));
+      b.setAttribute("aria-label", this.s("music-toggle"));
       b.setAttribute("aria-pressed", String(on));
       b.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -121,7 +155,8 @@ export class HudView {
     }
     const text = this.t(`sound-${sound}`);
     if (sound === "none") return el("span", { className: "chip sound none", textContent: text });
-    const b = el("button", { className: `chip sound ${sound}`, textContent: text, title: this.s("sound-toggle") });
+    const b = el("button", { className: `chip sound ${sound}`, title: this.s("sound-toggle") }, icon("music"), el("span", { className: "snd-text", textContent: text }));
+    b.setAttribute("aria-label", this.s("sound-toggle"));
     b.setAttribute("aria-pressed", String(sound === "on"));
     b.addEventListener("click", (e) => {
       e.stopPropagation();

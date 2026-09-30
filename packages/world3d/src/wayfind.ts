@@ -392,6 +392,32 @@ export function edgeArrow(clip: { x: number; y: number; w: number }, view: { w: 
   return { onScreen: false, x: cx + dx * k, y: cy + dy * k, angle: Math.atan2(dy, dx) };
 }
 
+/** A screen box the edge arrow keeps out of (CSS px). */
+export type KeepOut = { x: number; y: number; w: number; h: number };
+
+/**
+ * The edge arrow kept out of screen boxes (the HUD strip, the icon column, the narration sheet):
+ * an arrow landing within `pad` of one moves along the same line from the centre, the rectangle's
+ * side on the box's screen edge pushed past the box, until it lands clear (at most one push a box).
+ */
+export function edgeArrowClear(clip: { x: number; y: number; w: number }, view: { w: number; h: number }, inset: EdgeInsets, boxes: KeepOut[], pad = 24): EdgeArrow {
+  const e = { ...inset };
+  let a = edgeArrow(clip, view, e);
+  for (let i = 0; i <= boxes.length && !a.onScreen; i++) {
+    const b = boxes.find((r) => a.x > r.x - pad && a.x < r.x + r.w + pad && a.y > r.y - pad && a.y < r.y + r.h + pad);
+    if (!b) break;
+    // the screen edge the box hugs (a wide box: top or bottom, a tall one: left or right): that side of
+    // the rectangle moves past it, so each box pushes once and the arrow can't bounce between two
+    const side = b.w >= b.h ? (b.y < view.h - b.y - b.h ? "top" : "bottom") : b.x < view.w - b.x - b.w ? "left" : "right";
+    if (side === "top") e.top = Math.max(e.top, b.y + b.h + pad + 6);
+    else if (side === "bottom") e.bottom = Math.max(e.bottom, view.h - b.y + pad + 6);
+    else if (side === "left") e.left = Math.max(e.left, b.x + b.w + pad + 6);
+    else e.right = Math.max(e.right, view.w - b.x + pad + 6);
+    a = edgeArrow(clip, view, e);
+  }
+  return a;
+}
+
 // ------------------------------------------------------------------------------------------------
 // Never lost
 

@@ -149,6 +149,9 @@ const FALLBACK: Record<string, string> = {
   "way-distance": "{name} · {m} m",
   "way-lost": "Your next step: {text}",
   "way-bed": "Your bed",
+  // the phone HUD (page.css "Phone HUD"): the strip's actions left today, the guide line's fold
+  "hud-slots-tiny": "◐ {n}",
+  "hud-guide-fold": "Show or fold the guide",
   "path-menu-on": "Show path: on",
   "path-menu-off": "Show path: off",
   // barks (src/barks.ts): everyone outside the course says a line; the prompt names them by role

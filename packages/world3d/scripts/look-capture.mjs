@@ -1,6 +1,7 @@
 // Real-look comparison shots (src/look.ts, `?look=real`): the same spot in the toon look
 // (`?look=toon`: the classic tier), the real look and the real look with the toon ramp kept, at
-// morning and evening, plus a frame-time sample of each. SET=tiers: the shipped default (no look
+// morning and evening, plus a frame-time sample of each. SET=phone-hud: the phone HUD's states and
+// their measured chrome coverage (README "Phone HUD"). SET=tiers: the shipped default (no look
 // params) on a desktop and a phone, Settings → Graphics, Classic chosen there (20-23). SET=timing:
 // page open -> loading screen gone -> first frame, the env build, the worst frame after (any build). Headless Chromium on the machine's GPU (ANGLE Vulkan; without it SwiftShader renders at
 // ~1 fps and the follow camera never settles) through Playwright (imported from an absolute path, as
@@ -96,7 +97,7 @@ const shots =
         { file: "04-toon-evening.png", v: "toon", day: 1 },
         { file: "05-real-evening.png", v: "real", day: 1 },
       ];
-const tiersSet = SET === "tiers" || SET === "timing" || SET === "interiors";
+const tiersSet = SET === "tiers" || SET === "timing" || SET === "interiors" || SET === "phone-hud";
 const args = (process.env.CHROME_ARGS ?? "--use-angle=vulkan --enable-features=Vulkan --enable-gpu --ignore-gpu-blocklist --disable-gpu-vsync --disable-frame-rate-limit").split(" ").filter(Boolean);
 // CHROME=/usr/bin/google-chrome: a browser of its own when Playwright's download isn't there
 const browser = await chromium.launch({ headless: true, args, ...(process.env.CHROME ? { executablePath: process.env.CHROME } : {}) });
@@ -272,6 +273,159 @@ if (SET === "tiers") {
     await ctx.close();
   }
   report.timing = runs;
+}
+// SET=phone-hud (README "Phone HUD"): the phone HUD's states at 390x844, 3x DPR, touch, a phone's
+// user agent, and one desktop shot; each state's chrome measured from the DOM (the coverage guard:
+// the union of the chrome's boxes over the viewport, and whether any box reaches the centre 60% x
+// 50%) into the report; scripts/phone-hud-check.mjs asserts it. Works on an older build too (its
+// "before" numbers): it measures the same pieces by their old classes.
+/** in the page: every visible chrome box, their union's share of the viewport, and what reaches the centre */
+const MEASURE = () => {
+  const vw = innerWidth;
+  const vh = innerHeight;
+  const sel = [".hud .chips", ".hud .objective", ".actions", ".action-btn", ".prompt", ".toast", ".sheet", ".bubble", ".replies", ".choices", ".way-edge-arrow", ".way-edge-label", ".hint", ".banner", ".build-version"];
+  const boxes = [];
+  const seen = new Set();
+  for (const s of sel)
+    for (const n of document.querySelectorAll(s)) {
+      if (seen.has(n) || n.closest("dialog")) continue;
+      // inside the phone sheet only the sheet counts (its box holds the bubble's and the replies')
+      if ((s === ".bubble" || s === ".replies") && n.parentElement?.classList.contains("sheet") && getComputedStyle(n.parentElement).display !== "contents") continue;
+      seen.add(n);
+      let hidden = false;
+      for (let e = n; e && e !== document.body; e = e.parentElement) {
+        const c = getComputedStyle(e);
+        if (c.display === "none" || c.visibility === "hidden" || Number(c.opacity) < 0.05) hidden = true;
+      }
+      const r = n.getBoundingClientRect();
+      if (hidden || r.width < 1 || r.height < 1) continue;
+      boxes.push({ sel: s, x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) });
+    }
+  const clip = (b) => ({ x0: Math.max(0, b.x), x1: Math.min(vw, b.x + b.w), y0: Math.max(0, b.y), y1: Math.min(vh, b.y + b.h) });
+  const union = (bs) => {
+    const rs = bs.map(clip).filter((r) => r.x1 > r.x0 && r.y1 > r.y0);
+    const xs = [...new Set(rs.flatMap((r) => [r.x0, r.x1]))].sort((a, b) => a - b);
+    let area = 0;
+    for (let i = 0; i + 1 < xs.length; i++) {
+      const ys = rs.filter((r) => r.x0 <= xs[i] && r.x1 >= xs[i + 1]).map((r) => [r.y0, r.y1]).sort((a, b) => a[0] - b[0]);
+      let cov = 0;
+      let cur = null;
+      for (const [a, b] of ys) {
+        if (!cur || a > cur[1]) {
+          if (cur) cov += cur[1] - cur[0];
+          cur = [a, b];
+        } else cur[1] = Math.max(cur[1], b);
+      }
+      if (cur) cov += cur[1] - cur[0];
+      area += cov * (xs[i + 1] - xs[i]);
+    }
+    return area;
+  };
+  const c = { x: vw * 0.2, y: vh * 0.25, w: vw * 0.6, h: vh * 0.5 };
+  const inCentre = boxes.filter((b) => b.x < c.x + c.w && c.x < b.x + b.w && b.y < c.y + c.h && c.y < b.y + b.h).map((b) => b.sel);
+  const edge = (b) => Math.min(b.x, b.y, vw - b.x - b.w, vh - b.y - b.h);
+  return {
+    viewport: [vw, vh],
+    coverage: +(union(boxes) / (vw * vh)).toFixed(4),
+    centre: inCentre,
+    nearEdge: boxes.filter((b) => b.sel !== ".build-version" && edge(b) < 8).map((b) => `${b.sel} ${edge(b)}px`),
+    phoneHud: document.documentElement.classList.contains("phone-hud"),
+    boxes,
+  };
+};
+const tap = (page, js) => page.evaluate(js);
+if (SET === "phone-hud") {
+  report.phoneHud = {};
+  const shot = async (page, errors, file, state) => {
+    await page.waitForTimeout(400); // the sheet's 160 ms slide, a frame or two
+    await page.screenshot({ path: join(out, file) });
+    const m = await page.evaluate(MEASURE);
+    report.phoneHud[state] = { file, ...m, errors: errors.length };
+    console.log(`${file}: coverage ${(m.coverage * 100).toFixed(1)}%, centre [${m.centre.join(", ")}], errors ${errors.length}`);
+  };
+  const phone = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    deviceScaleFactor: 3,
+    isMobile: true,
+    hasTouch: true,
+    userAgent: "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Mobile Safari/537.36",
+  });
+  await seedSave(phone);
+  const { page, errors } = await openPlain(phone);
+  // 21: as SET=tiers shoots it (the narration line, the walk hint and the place's name may be up)
+  await shot(page, errors, "21-default-phone.png", "default");
+  // idle: a tap away from the narration dismisses it; the hint and the banner gone; the guide folded (6 s)
+  await tap(page, () => document.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true })));
+  await page.waitForTimeout(Number(process.env.IDLE_WAIT ?? 9000));
+  await tap(page, () => document.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true })));
+  await shot(page, errors, "01-idle.png", "idle");
+  // the guide line opened
+  await tap(page, () => {
+    const o = document.querySelector(".hud .objective");
+    if (o && (o.classList.contains("folded") || !document.documentElement.classList.contains("phone-hud"))) o.click();
+  });
+  await shot(page, errors, "02-guide-expanded.png", "guide");
+  // Go to… open, then closed
+  await tap(page, () => (document.querySelector(".actions .travel-btn") ?? [...document.querySelectorAll(".actions button")].find((b) => /Go to/.test(b.textContent)))?.click());
+  await page.waitForSelector(".choices:not(.hidden)", { timeout: 10000 }).catch(() => {});
+  await shot(page, errors, "04-goto-open.png", "goto");
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
+  // Menu open, then closed
+  await tap(page, () => (document.querySelector(".actions .menu-btn") ?? [...document.querySelectorAll(".actions button")].find((b) => b.textContent === "Menu"))?.click());
+  await page.waitForSelector("dialog.menu[open]", { timeout: 10000 }).catch(() => {});
+  await shot(page, errors, "05-menu-open.png", "menu");
+  await tap(page, () => document.querySelector("dialog.menu")?.close());
+  await page.waitForTimeout(300);
+  // the notebook open, then closed
+  await tap(page, () => document.querySelector(".actions .notebook-btn")?.click());
+  await page.waitForSelector("dialog.notebook[open]", { timeout: 10000 }).catch(() => {});
+  await shot(page, errors, "06-notebook-open.png", "notebook");
+  await tap(page, () => document.querySelector("dialog.notebook")?.close());
+  await page.waitForTimeout(300);
+  // a dialogue: talk to the objective's NPC, on through the lines until a reply panel with 3+ options
+  const npc = await page.evaluate(() => window.world3d.objective()?.goal?.npc ?? null);
+  report.phoneHud.npc = npc;
+  if (npc) {
+    let opts = 0;
+    for (let i = 0; i < 90 && opts < 3; i++) {
+      await page.waitForTimeout(700);
+      const r = await page.evaluate(() => {
+        const m = window.world3d.model();
+        if (m?.mode === "explore" && !m.reply) return { explore: true, npc: window.world3d.objective()?.goal?.npc ?? null, day: m.dayCard };
+        return m?.reply ? { mode: m.reply.mode, n: m.reply.options?.length ?? 0 } : null;
+      });
+      if (!r) continue;
+      // between scenes: the objective's NPC again (the next scene); a day card: close it
+      if (r.explore) {
+        await page.evaluate(() => document.querySelector("dialog.daycard[open] button")?.click());
+        if (r.npc) await page.evaluate((n) => window.world3d.talk(n), r.npc);
+        continue;
+      }
+      if (r.mode === "pick" && r.n >= 3) opts = r.n;
+      else if (r.mode === "tiles") await page.evaluate(() => [...document.querySelectorAll(".replies .tile-tools button")].at(-1)?.click());
+      // the right reply (core's run: the option whose key is the combo's), so the scene goes on
+      else
+        await page.evaluate(() => {
+          const run = window.world3d.state()?.run;
+          const key = run?.combo ? Object.keys(run.combo).sort().map((k) => `${k}=${run.combo[k]}`).join("|") : "";
+          const i = Math.max(0, run?.options?.indexOf(key) ?? 0);
+          document.querySelectorAll(".replies .option")[i]?.click();
+        });
+    }
+    report.phoneHud.replies = opts;
+    await page.waitForTimeout(1200); // the line said, the sheet settled
+    await shot(page, errors, "03-dialogue-3-replies.png", "dialogue");
+  }
+  await page.close();
+  await phone.close();
+  // desktop, landscape: the default view, unchanged
+  const desk = await browser.newContext({ viewport: { width: W, height: H } });
+  await seedSave(desk);
+  const d = await openPlain(desk);
+  await shot(d.page, d.errors, "20-default-desktop.png", "desktop");
+  report.phoneHud.errors = [...errors, ...d.errors];
+  await desk.close();
 }
 // SET=interiors uses the actual gameplay camera after arrival: no dolly or alternate pose.
 // PORTRAIT=1 captures the same camera/clamp at 390x844, with phone touch/compact UI detection.
