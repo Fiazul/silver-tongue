@@ -866,6 +866,67 @@ spot checks and frame times via `LAYERS_OUT` / `REPORT`). Frame time (2026-09-30
 particles 17.1 (run-to-run noise ~1-2 ms; the median frame is 6-7 ms in every case, the mean
 carries the see-through's sync reads).
 
+### Performance (`?perf=1`, `shots/perf/`)
+
+Measured first, then fixed by category, each behind the tier's render budget (`look.ts BUDGETS`,
+`budgetFor`); `shots/perf/before.md` has the before tables and the ranked top five costs,
+`shots/perf/after.md` the before -> after summary and every after capture.
+
+- Probe: `?perf=1` (`src/perf.ts`, off by default: nothing is wrapped without it). Per frame: the
+  rAF interval, CPU ms of the callback and of its sections, GPU ms per pass
+  (`EXT_disjoint_timer_query_webgl2`, exclusive: shadow, colour, aoNormal, ao, bloom, output, fxaa,
+  seeThrough), draw calls and triangles over the whole frame, and flags: a synchronous read-back
+  (any caller of `readRenderTargetPixels`), a slow shader link / status or texture upload, an asset
+  landing, the env build. A frame over 50 ms gets a cause (`longFrameCause`). `world3d.perf("start")`
+  / `("stop")` / `("mem")` (texture and render-target memory, estimated).
+- Capture: `scripts/perf-capture.mjs` (Playwright, Chrome on the machine's GPU, a fresh browser per
+  row, vsync off unless `CHROME_ARGS` says otherwise): tiers x desktop 1920x1080 DPR 1 and a phone
+  at 1080x2400 DPR 2.6 x the noodle shop spot and the fly-over, 10 s each, plus each page's load
+  (first frame, bytes before it, the env build, a second visit). `FPS_Q` / `EXTRA_Q` add query
+  knobs; `scripts/perf-report.mjs` builds `after.md` from the JSON. Phone rows are emulated pixels
+  on this GPU, not a phone.
+- Render scale: the renderer (every pass) draws at `min(dpr, dprCap) x renderScale` and the browser
+  scales the canvas up; the HUD is DOM and stays crisp. Full: cap 2, scale 1. Lite: cap 1.5, scale
+  0.75 (a 2.6x phone: 466x1038, 19 % of its pixels, 23 % of a 1080p desktop's), and dynamic
+  resolution (`DynamicScale`): 10 % less scale when the p95 frame cost of two 60-frame windows runs
+  over 1.2x the budget (20 ms at 60 fps), 10 % more after three under 0.72x (12 ms), 0.5-0.75, two
+  windows' rest after a change; its signal is the GPU timer where the browser has it, else the
+  interval between drawn frames. `?scale=`, `?dpr=`, `?dynres=0|1`.
+- AO: GTAO at half resolution with 8 + 8 samples (`?ao=half`, Full), upsampled depth-aware
+  (`aoComposite`: of the four AO texels round a pixel, each weighed by how close its depth is to
+  the pixel's) in the same pass that composites it onto the scene (GTAOPass's copy + blend
+  replaced); Lite has none (`?ao=off`); `?ao=full` is the old full-resolution pass. The scene
+  draws into its own target with a depth texture; the post passes run on plain single-sample
+  targets (render targets at 1080p: 277 MB before, 110 MB after).
+- Antialiasing: FXAA after the output pass (which writes an 8-bit target for it) in place of 4x
+  MSAA (4 ms of the colour pass at 1080p); the canvas's own antialias is off in the real look.
+  `?msaa=`, `?fxaa=0|1`.
+- Shadows: the sun's map redraws only when due (`ShadowScheduler`, the light's
+  `shadow.autoUpdate` off): at once when the sun or the shadow box moves (its centre in 2 m steps,
+  `SHADOW_CELL`), else every 2nd frame (Full) / 3rd (Lite) while animated casters (the player at
+  least) are in the box, never in a still scene. Lite's map is 1024. Grass, leaf cards and
+  particles never cast. `?shadow=`, `?shadowEvery=`.
+- See-through read-back: never synchronous (Real look, "See-through" above; `test/perf.test.ts`
+  greps the source for any other read-back in the frame loop).
+- Grass: the LOD bands and frustum-culled chunks (Environment layers, `grass`).
+- Frame pacing (`FramePacer`, the real look only; Classic still draws every animation frame): at
+  most 60 frames a second (a 120 / 144 Hz display is capped), or 30 from Settings → Frame rate
+  (`prefs.ts fps`, applied at once) or `?fps=30`; `?fps=0` uncapped (captures). A callback within a
+  quarter frame of its slot draws, a missed slot is dropped (no catch-up burst); dt comes from the
+  clock at each drawn frame, so the game runs at the same speed at any rate. At 30 the frames and
+  the GPU's busy time per second halve (Lite), and the Vega 11 sits at its lowest clock.
+- Idle: no pointer, key, touch or wheel input for `IDLE_S` (20) s outside a cutscene paces at
+  `IDLE_FPS` (30); a hidden tab gets no animation frames at all (the browser's own).
+- Loading: the env build's generated data is cached in IndexedDB (Environment layers:
+  `src/envcache.ts`); a repeat visit builds in 50-140 ms instead of 400-700. `prepare()` draws its
+  frame behind the loading screen with nothing culled, so the driver's per-mesh pipelines exist
+  before play shows them. Streaming by distance was measured and not built: every static asset the
+  town uses has a placement within 60 m of the spawn (the fly-over and the spawn see all of it), so
+  a 60 m cut defers no bytes; the town's people already stream in after the first frame, and the
+  GLBs' textures are inside the GLBs (assets are read-only here).
+- `world3d.look()` reports the budget, the scale, the pacer's rate, the grass chunks drawn, the
+  shadow redraws, the env timings and cache hits (Graphics tiers).
+
 ## Courses and reading languages
 
 As the browser TUI (0.13): `src/courses.ts` `pickCourse` fetches the catalog `courses/index.json`,
@@ -1140,6 +1201,12 @@ that role said last).
   see-through (segment/AABB hits and exclusions, eased whole-root fades and texture uploads, the
   shader patch against three's toon shader, per-vertex ids through mergeStatic, and the real town's
   spawn/tree and never-faded-ground behavior with draw calls unchanged).
+- `test/perf.test.ts`: the performance pass: each tier's render budget and its URL overrides, the
+  render scale's resolution (Lite on a 1080x2400 DPR 2.6 phone under half of Full's 1080p pixels),
+  dynamic resolution's thresholds and hysteresis, frame pacing at 60 / 30 on 60-144 Hz displays
+  with dt-correct game time, the shadow map's redraw triggers, the grass LOD bands, chunk wrap and
+  culling, the probe's long-frame causes, the saved frame rate, and a source grep: no synchronous
+  GPU read-back (`readRenderTargetPixels`, a waiting `clientWaitSync`, `finish()`) in the frame loop.
 - `test/parity.test.ts`: the Input / GameEvent unions from core's source against
   `INPUT_AFFORDANCES`, this README's table and the dispatcher, and each Input sent through the
   Game API.

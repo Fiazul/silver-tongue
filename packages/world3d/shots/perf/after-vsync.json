@@ -1,0 +1,1536 @@
+[
+ {
+  "tier": "full",
+  "view": "desktop",
+  "scenario": "spot",
+  "gpuTimer": true,
+  "load": {
+   "firstFrameMs": 3419,
+   "envMs": 1554,
+   "bytesBeforeFirst": 8016950,
+   "filesBeforeFirst": 94,
+   "bytesTotal": 9303490,
+   "look": {
+    "tier": "full",
+    "source": "url",
+    "reason": "url: look=full",
+    "real": true,
+    "ramp": false,
+    "env": [
+     "ground",
+     "grass",
+     "leaves",
+     "sky",
+     "bloom",
+     "grade",
+     "particles"
+    ],
+    "grassDensity": 1,
+    "budget": {
+     "dprCap": 2,
+     "renderScale": 1,
+     "dynamic": false,
+     "minScale": 0.6,
+     "ao": "half",
+     "msaa": 0,
+     "fxaa": true,
+     "shadowSize": 2048,
+     "shadowEvery": 2,
+     "fps": 60
+    },
+    "renderScale": 1,
+    "pixelRatio": 1,
+    "fps": 60,
+    "dynamicScale": null,
+    "valve": {
+     "state": "idle",
+     "meanMs": 0
+    },
+    "saved": null,
+    "composerMs": 8.2,
+    "envBuilds": 2,
+    "shadowMap": true,
+    "envLayers": [
+     "ground",
+     "grass",
+     "leaves",
+     "sky",
+     "particles",
+     "bloom",
+     "grade"
+    ],
+    "envBuildMs": 724.9,
+    "envTimings": {
+     "textures": 135.4,
+     "field": 289.9,
+     "ground": 426,
+     "grass": 57,
+     "leaves": 237.4,
+     "sky": 1.3
+    },
+    "envCache": {
+     "hits": [],
+     "misses": [
+      "ground",
+      "field",
+      "leaf"
+     ]
+    },
+    "grass": {
+     "chunks": 52,
+     "drawn": 27,
+     "blades": 50819
+    },
+    "shadowUpdates": 34,
+    "shadowFrames": 67
+   }
+  },
+  "repeat": {
+   "firstFrameMs": 1905,
+   "envMs": 472,
+   "bytesBeforeFirst": 7939002,
+   "filesBeforeFirst": 94,
+   "bytesTotal": 8363210,
+   "look": {
+    "tier": "full",
+    "source": "url",
+    "reason": "url: look=full",
+    "real": true,
+    "ramp": false,
+    "env": [
+     "ground",
+     "grass",
+     "leaves",
+     "sky",
+     "bloom",
+     "grade",
+     "particles"
+    ],
+    "grassDensity": 1,
+    "budget": {
+     "dprCap": 2,
+     "renderScale": 1,
+     "dynamic": false,
+     "minScale": 0.6,
+     "ao": "half",
+     "msaa": 0,
+     "fxaa": true,
+     "shadowSize": 2048,
+     "shadowEvery": 2,
+     "fps": 60
+    },
+    "renderScale": 1,
+    "pixelRatio": 1,
+    "fps": 60,
+    "dynamicScale": null,
+    "valve": {
+     "state": "idle",
+     "meanMs": 0
+    },
+    "saved": null,
+    "composerMs": 10.27,
+    "envBuilds": 2,
+    "shadowMap": true,
+    "envLayers": [
+     "ground",
+     "grass",
+     "leaves",
+     "sky",
+     "particles",
+     "bloom",
+     "grade"
+    ],
+    "envBuildMs": 77.7,
+    "envTimings": {
+     "textures": 0.1,
+     "field": 0.1,
+     "ground": 1.1,
+     "grass": 36.6,
+     "leaves": 35.7,
+     "sky": 1.2
+    },
+    "envCache": {
+     "hits": [
+      "ground",
+      "field",
+      "leaf"
+     ],
+     "misses": []
+    },
+    "grass": {
+     "chunks": 52,
+     "drawn": 27,
+     "blades": 50819
+    },
+    "shadowUpdates": 8,
+    "shadowFrames": 16
+   }
+  },
+  "mem": {
+   "textures": 17,
+   "bytes": 8701767,
+   "targetBytes": 115116752,
+   "glTextures": 95,
+   "geometries": 185,
+   "programs": 68,
+   "pixelRatio": 1,
+   "drawingBuffer": [
+    1920,
+    1080
+   ],
+   "renderScale": 1
+  },
+  "look": {
+   "tier": "full",
+   "env": [
+    "ground",
+    "grass",
+    "leaves",
+    "sky",
+    "particles",
+    "bloom",
+    "grade"
+   ],
+   "grassDensity": 1,
+   "renderScale": 1,
+   "fps": 60
+  },
+  "errors": [],
+  "seconds": 10,
+  "drawn": 561,
+  "callbacks": 561,
+  "fps": 56,
+  "mean": 17.86,
+  "p95": 19.9,
+  "max": 38.5,
+  "over50": 0,
+  "causes": {},
+  "worst": [],
+  "cpuMean": 7.86,
+  "cpuP95": 11.2,
+  "gpuMean": 14.25,
+  "gpuP95": 15.99,
+  "passes": {
+   "seePoll": 0,
+   "seeThrough": 0,
+   "colour": 7.23,
+   "shadow": 1.18,
+   "ao": 3.22,
+   "aoNormal": 0.61,
+   "bloom": 0.58,
+   "output": 0.6,
+   "fxaa": 0.83
+  },
+  "cpuPasses": {
+   "frame": 1.3,
+   "seePoll": 0.02,
+   "seeThrough": 0.02,
+   "render": 0.05,
+   "env": 0.08,
+   "colour": 2.75,
+   "shadow": 1.16,
+   "ao": 0.49,
+   "aoNormal": 1.53,
+   "bloom": 0.26,
+   "output": 0.03,
+   "fxaa": 0.03
+  },
+  "calls": 221,
+  "triangles": 714221,
+  "syncReads": 0
+ },
+ {
+  "tier": "full",
+  "view": "desktop",
+  "scenario": "flyover",
+  "gpuTimer": true,
+  "load": {
+   "firstFrameMs": 3123,
+   "envMs": 1341,
+   "bytesBeforeFirst": 8016951,
+   "filesBeforeFirst": 94,
+   "bytesTotal": 9303491,
+   "look": {
+    "tier": "full",
+    "source": "url",
+    "reason": "url: look=full",
+    "real": true,
+    "ramp": false,
+    "env": [
+     "ground",
+     "grass",
+     "leaves",
+     "sky",
+     "bloom",
+     "grade",
+     "particles"
+    ],
+    "grassDensity": 1,
+    "budget": {
+     "dprCap": 2,
+     "renderScale": 1,
+     "dynamic": false,
+     "minScale": 0.6,
+     "ao": "half",
+     "msaa": 0,
+     "fxaa": true,
+     "shadowSize": 2048,
+     "shadowEvery": 2,
+     "fps": 60
+    },
+    "renderScale": 1,
+    "pixelRatio": 1,
+    "fps": 60,
+    "dynamicScale": null,
+    "valve": {
+     "state": "idle",
+     "meanMs": 0
+    },
+    "saved": null,
+    "composerMs": 7.97,
+    "envBuilds": 2,
+    "shadowMap": true,
+    "envLayers": [
+     "ground",
+     "grass",
+     "leaves",
+     "sky",
+     "particles",
+     "bloom",
+     "grade"
+    ],
+    "envBuildMs": 633.6,
+    "envTimings": {
+     "textures": 109.4,
+     "field": 256.6,
+     "ground": 366.7,
+     "grass": 45.4,
+     "leaves": 217.6,
+     "sky": 1.4
+    },
+    "envCache": {
+     "hits": [],
+     "misses": [
+      "ground",
+      "field",
+      "leaf"
+     ]
+    },
+    "grass": {
+     "chunks": 52,
+     "drawn": 27,
+     "blades": 50819
+    },
+    "shadowUpdates": 35,
+    "shadowFrames": 70
+   }
+  },
+  "repeat": null,
+  "mem": {
+   "textures": 17,
+   "bytes": 8701767,
+   "targetBytes": 115116752,
+   "glTextures": 95,
+   "geometries": 192,
+   "programs": 68,
+   "pixelRatio": 1,
+   "drawingBuffer": [
+    1920,
+    1080
+   ],
+   "renderScale": 1
+  },
+  "look": {
+   "tier": "full",
+   "env": [
+    "ground",
+    "grass",
+    "leaves",
+    "sky",
+    "particles",
+    "bloom",
+    "grade"
+   ],
+   "grassDensity": 1,
+   "renderScale": 1,
+   "fps": 60
+  },
+  "errors": [],
+  "seconds": 10,
+  "drawn": 580,
+  "callbacks": 580,
+  "fps": 57.8,
+  "mean": 17.34,
+  "p95": 20.7,
+  "max": 31.2,
+  "over50": 0,
+  "causes": {},
+  "worst": [],
+  "cpuMean": 8.97,
+  "cpuP95": 13.2,
+  "gpuMean": 13.79,
+  "gpuP95": 17.71,
+  "passes": {
+   "seePoll": 0,
+   "colour": 6.8,
+   "shadow": 1.32,
+   "ao": 2.82,
+   "aoNormal": 0.93,
+   "bloom": 0.65,
+   "output": 0.54,
+   "fxaa": 0.73
+  },
+  "cpuPasses": {
+   "frame": 0.94,
+   "seePoll": 0.02,
+   "render": 0.05,
+   "env": 0.1,
+   "colour": 3.72,
+   "shadow": 1.12,
+   "ao": 0.53,
+   "aoNormal": 1.96,
+   "bloom": 0.3,
+   "output": 0.04,
+   "fxaa": 0.04
+  },
+  "calls": 285,
+  "triangles": 797702,
+  "syncReads": 0
+ },
+ {
+  "tier": "full",
+  "view": "phone",
+  "scenario": "spot",
+  "gpuTimer": true,
+  "load": {
+   "firstFrameMs": 3390,
+   "envMs": 1495,
+   "bytesBeforeFirst": 8017110,
+   "filesBeforeFirst": 94,
+   "bytesTotal": 9303650,
+   "look": {
+    "tier": "full",
+    "source": "url",
+    "reason": "url: look=full",
+    "real": true,
+    "ramp": false,
+    "env": [
+     "ground",
+     "grass",
+     "leaves",
+     "sky",
+     "bloom",
+     "grade",
+     "particles"
+    ],
+    "grassDensity": 1,
+    "budget": {
+     "dprCap": 2,
+     "renderScale": 1,
+     "dynamic": false,
+     "minScale": 0.6,
+     "ao": "half",
+     "msaa": 0,
+     "fxaa": true,
+     "shadowSize": 2048,
+     "shadowEvery": 2,
+     "fps": 60
+    },
+    "renderScale": 1,
+    "pixelRatio": 2,
+    "fps": 60,
+    "dynamicScale": null,
+    "valve": {
+     "state": "idle",
+     "meanMs": 0
+    },
+    "saved": null,
+    "composerMs": 7.4,
+    "envBuilds": 2,
+    "shadowMap": true,
+    "envLayers": [
+     "ground",
+     "grass",
+     "leaves",
+     "sky",
+     "particles",
+     "bloom",
+     "grade"
+    ],
+    "envBuildMs": 657.9,
+    "envTimings": {
+     "textures": 124.5,
+     "field": 237.6,
+     "ground": 363,
+     "grass": 49.4,
+     "leaves": 240.4,
+     "sky": 1.5
+    },
+    "envCache": {
+     "hits": [],
+     "misses": [
+      "ground",
+      "field",
+      "leaf"
+     ]
+    },
+    "grass": {
+     "chunks": 52,
+     "drawn": 26,
+     "blades": 48327
+    },
+    "shadowUpdates": 38,
+    "shadowFrames": 76
+   }
+  },
+  "repeat": {
+   "firstFrameMs": 1994,
+   "envMs": 565,
+   "bytesBeforeFirst": 7939162,
+   "filesBeforeFirst": 94,
+   "bytesTotal": 8917898,
+   "look": {
+    "tier": "full",
+    "source": "url",
+    "reason": "url: look=full",
+    "real": true,
+    "ramp": false,
+    "env": [
+     "ground",
+     "grass",
+     "leaves",
+     "sky",
+     "bloom",
+     "grade",
+     "particles"
+    ],
+    "grassDensity": 1,
+    "budget": {
+     "dprCap": 2,
+     "renderScale": 1,
+     "dynamic": false,
+     "minScale": 0.6,
+     "ao": "half",
+     "msaa": 0,
+     "fxaa": true,
+     "shadowSize": 2048,
+     "shadowEvery": 2,
+     "fps": 60
+    },
+    "renderScale": 1,
+    "pixelRatio": 2,
+    "fps": 60,
+    "dynamicScale": null,
+    "valve": {
+     "state": "idle",
+     "meanMs": 0
+    },
+    "saved": null,
+    "composerMs": 7.89,
+    "envBuilds": 2,
+    "shadowMap": true,
+    "envLayers": [
+     "ground",
+     "grass",
+     "leaves",
+     "sky",
+     "particles",
+     "bloom",
+     "grade"
+    ],
+    "envBuildMs": 80.3,
+    "envTimings": {
+     "textures": 0.2,
+     "field": 0,
+     "ground": 1.2,
+     "grass": 40.7,
+     "leaves": 34.8,
+     "sky": 1.5
+    },
+    "envCache": {
+     "hits": [
+      "ground",
+      "field",
+      "leaf"
+     ],
+     "misses": []
+    },
+    "grass": {
+     "chunks": 52,
+     "drawn": 26,
+     "blades": 48327
+    },
+    "shadowUpdates": 11,
+    "shadowFrames": 21
+   }
+  },
+  "mem": {
+   "textures": 17,
+   "bytes": 8701767,
+   "targetBytes": 93822188,
+   "glTextures": 95,
+   "geometries": 185,
+   "programs": 68,
+   "pixelRatio": 2,
+   "drawingBuffer": [
+    830,
+    1846
+   ],
+   "renderScale": 1
+  },
+  "look": {
+   "tier": "full",
+   "env": [
+    "ground",
+    "grass",
+    "leaves",
+    "sky",
+    "particles",
+    "bloom",
+    "grade"
+   ],
+   "grassDensity": 1,
+   "renderScale": 1,
+   "fps": 60
+  },
+  "errors": [],
+  "seconds": 10,
+  "drawn": 600,
+  "callbacks": 600,
+  "fps": 60,
+  "mean": 16.7,
+  "p95": 16.9,
+  "max": 31.4,
+  "over50": 0,
+  "causes": {},
+  "worst": [],
+  "cpuMean": 6.95,
+  "cpuP95": 9.8,
+  "gpuMean": 13.72,
+  "gpuP95": 16.31,
+  "passes": {
+   "seePoll": 0,
+   "colour": 7.54,
+   "shadow": 1.29,
+   "ao": 2.56,
+   "aoNormal": 0.69,
+   "bloom": 0.5,
+   "output": 0.49,
+   "fxaa": 0.65,
+   "seeThrough": 0
+  },
+  "cpuPasses": {
+   "frame": 1.1,
+   "seePoll": 0.02,
+   "render": 0.05,
+   "env": 0.07,
+   "colour": 2.46,
+   "shadow": 0.88,
+   "ao": 0.48,
+   "aoNormal": 1.39,
+   "bloom": 0.27,
+   "output": 0.03,
+   "fxaa": 0.04,
+   "seeThrough": 0.01
+  },
+  "calls": 222,
+  "triangles": 711235,
+  "syncReads": 0
+ },
+ {
+  "tier": "full",
+  "view": "phone",
+  "scenario": "flyover",
+  "gpuTimer": true,
+  "load": {
+   "firstFrameMs": 2932,
+   "envMs": 1354,
+   "bytesBeforeFirst": 8017110,
+   "filesBeforeFirst": 94,
+   "bytesTotal": 9303650,
+   "look": {
+    "tier": "full",
+    "source": "url",
+    "reason": "url: look=full",
+    "real": true,
+    "ramp": false,
+    "env": [
+     "ground",
+     "grass",
+     "leaves",
+     "sky",
+     "bloom",
+     "grade",
+     "particles"
+    ],
+    "grassDensity": 1,
+    "budget": {
+     "dprCap": 2,
+     "renderScale": 1,
+     "dynamic": false,
+     "minScale": 0.6,
+     "ao": "half",
+     "msaa": 0,
+     "fxaa": true,
+     "shadowSize": 2048,
+     "shadowEvery": 2,
+     "fps": 60
+    },
+    "renderScale": 1,
+    "pixelRatio": 2,
+    "fps": 60,
+    "dynamicScale": null,
+    "valve": {
+     "state": "idle",
+     "meanMs": 0
+    },
+    "saved": null,
+    "composerMs": 6.87,
+    "envBuilds": 2,
+    "shadowMap": true,
+    "envLayers": [
+     "ground",
+     "grass",
+     "leaves",
+     "sky",
+     "particles",
+     "bloom",
+     "grade"
+    ],
+    "envBuildMs": 618.3,
+    "envTimings": {
+     "textures": 103.5,
+     "field": 257.2,
+     "ground": 361.3,
+     "grass": 45.8,
+     "leaves": 206.9,
+     "sky": 1.6
+    },
+    "envCache": {
+     "hits": [],
+     "misses": [
+      "ground",
+      "field",
+      "leaf"
+     ]
+    },
+    "grass": {
+     "chunks": 52,
+     "drawn": 26,
+     "blades": 48327
+    },
+    "shadowUpdates": 40,
+    "shadowFrames": 80
+   }
+  },
+  "repeat": null,
+  "mem": {
+   "textures": 17,
+   "bytes": 8701767,
+   "targetBytes": 93822188,
+   "glTextures": 95,
+   "geometries": 192,
+   "programs": 68,
+   "pixelRatio": 2,
+   "drawingBuffer": [
+    830,
+    1846
+   ],
+   "renderScale": 1
+  },
+  "look": {
+   "tier": "full",
+   "env": [
+    "ground",
+    "grass",
+    "leaves",
+    "sky",
+    "particles",
+    "bloom",
+    "grade"
+   ],
+   "grassDensity": 1,
+   "renderScale": 1,
+   "fps": 60
+  },
+  "errors": [],
+  "seconds": 10,
+  "drawn": 603,
+  "callbacks": 603,
+  "fps": 60.1,
+  "mean": 16.67,
+  "p95": 16.8,
+  "max": 16.9,
+  "over50": 0,
+  "causes": {},
+  "worst": [],
+  "cpuMean": 7.11,
+  "cpuP95": 9,
+  "gpuMean": 13.17,
+  "gpuP95": 15.25,
+  "passes": {
+   "seePoll": 0.01,
+   "colour": 6.49,
+   "shadow": 1.52,
+   "ao": 2.38,
+   "aoNormal": 1.16,
+   "bloom": 0.52,
+   "output": 0.47,
+   "fxaa": 0.61
+  },
+  "cpuPasses": {
+   "frame": 0.73,
+   "seePoll": 0.02,
+   "render": 0.06,
+   "env": 0.07,
+   "colour": 2.9,
+   "shadow": 0.95,
+   "ao": 0.47,
+   "aoNormal": 1.45,
+   "bloom": 0.27,
+   "output": 0.04,
+   "fxaa": 0.04
+  },
+  "calls": 251,
+  "triangles": 731832,
+  "syncReads": 0
+ },
+ {
+  "tier": "lite",
+  "view": "desktop",
+  "scenario": "spot",
+  "gpuTimer": true,
+  "load": {
+   "firstFrameMs": 2695,
+   "envMs": 943,
+   "bytesBeforeFirst": 8016950,
+   "filesBeforeFirst": 94,
+   "bytesTotal": 9303490,
+   "look": {
+    "tier": "lite",
+    "source": "url",
+    "reason": "url: look=lite",
+    "real": true,
+    "ramp": false,
+    "env": [
+     "ground",
+     "grass",
+     "sky",
+     "grade"
+    ],
+    "grassDensity": 0.5,
+    "budget": {
+     "dprCap": 1.5,
+     "renderScale": 0.75,
+     "dynamic": true,
+     "minScale": 0.5,
+     "ao": "off",
+     "msaa": 0,
+     "fxaa": true,
+     "shadowSize": 1024,
+     "shadowEvery": 3,
+     "fps": 60
+    },
+    "renderScale": 0.75,
+    "pixelRatio": 0.75,
+    "fps": 60,
+    "dynamicScale": {
+     "scale": 0.75,
+     "changes": 0
+    },
+    "valve": {
+     "state": "idle",
+     "meanMs": 0
+    },
+    "saved": null,
+    "composerMs": 5.22,
+    "envBuilds": 2,
+    "shadowMap": true,
+    "envLayers": [
+     "ground",
+     "grass",
+     "sky",
+     "grade"
+    ],
+    "envBuildMs": 393,
+    "envTimings": {
+     "textures": 101.9,
+     "field": 241,
+     "ground": 343.4,
+     "grass": 47.9,
+     "sky": 1.2
+    },
+    "envCache": {
+     "hits": [],
+     "misses": [
+      "ground",
+      "field"
+     ]
+    },
+    "grass": {
+     "chunks": 52,
+     "drawn": 27,
+     "blades": 25412
+    },
+    "shadowUpdates": 28,
+    "shadowFrames": 82
+   }
+  },
+  "repeat": {
+   "firstFrameMs": 1738,
+   "envMs": 363,
+   "bytesBeforeFirst": 7939002,
+   "filesBeforeFirst": 94,
+   "bytesTotal": 9179150,
+   "look": {
+    "tier": "lite",
+    "source": "url",
+    "reason": "url: look=lite",
+    "real": true,
+    "ramp": false,
+    "env": [
+     "ground",
+     "grass",
+     "sky",
+     "grade"
+    ],
+    "grassDensity": 0.5,
+    "budget": {
+     "dprCap": 1.5,
+     "renderScale": 0.75,
+     "dynamic": true,
+     "minScale": 0.5,
+     "ao": "off",
+     "msaa": 0,
+     "fxaa": true,
+     "shadowSize": 1024,
+     "shadowEvery": 3,
+     "fps": 60
+    },
+    "renderScale": 0.75,
+    "pixelRatio": 0.75,
+    "fps": 60,
+    "dynamicScale": {
+     "scale": 0.75,
+     "changes": 0
+    },
+    "valve": {
+     "state": "idle",
+     "meanMs": 0
+    },
+    "saved": null,
+    "composerMs": 5.45,
+    "envBuilds": 2,
+    "shadowMap": true,
+    "envLayers": [
+     "ground",
+     "grass",
+     "sky",
+     "grade"
+    ],
+    "envBuildMs": 39.8,
+    "envTimings": {
+     "textures": 0.2,
+     "field": 0.1,
+     "ground": 1.3,
+     "grass": 36.5,
+     "sky": 1.4
+    },
+    "envCache": {
+     "hits": [
+      "ground",
+      "field"
+     ],
+     "misses": []
+    },
+    "grass": {
+     "chunks": 52,
+     "drawn": 27,
+     "blades": 25412
+    },
+    "shadowUpdates": 7,
+    "shadowFrames": 20
+   }
+  },
+  "mem": {
+   "textures": 16,
+   "bytes": 8352241,
+   "targetBytes": 45713408,
+   "glTextures": 77,
+   "geometries": 181,
+   "programs": 46,
+   "pixelRatio": 0.75,
+   "drawingBuffer": [
+    1440,
+    810
+   ],
+   "renderScale": 0.75
+  },
+  "look": {
+   "tier": "lite",
+   "env": [
+    "ground",
+    "grass",
+    "sky",
+    "grade"
+   ],
+   "grassDensity": 0.5,
+   "renderScale": 0.75,
+   "fps": 60
+  },
+  "errors": [],
+  "seconds": 10,
+  "drawn": 601,
+  "callbacks": 601,
+  "fps": 60.1,
+  "mean": 16.67,
+  "p95": 16.9,
+  "max": 25,
+  "over50": 0,
+  "causes": {},
+  "worst": [],
+  "cpuMean": 6.57,
+  "cpuP95": 8.8,
+  "gpuMean": 11.3,
+  "gpuP95": 13.89,
+  "passes": {
+   "seePoll": 0.01,
+   "colour": 8.21,
+   "shadow": 0.85,
+   "ao": 0.74,
+   "output": 0.56,
+   "fxaa": 0.91,
+   "seeThrough": 0
+  },
+  "cpuPasses": {
+   "frame": 1.61,
+   "seePoll": 0.02,
+   "render": 0.06,
+   "env": 0.12,
+   "colour": 3.64,
+   "shadow": 0.78,
+   "ao": 0.11,
+   "output": 0.05,
+   "fxaa": 0.06,
+   "seeThrough": 0.03
+  },
+  "calls": 125,
+  "triangles": 435759,
+  "syncReads": 0
+ },
+ {
+  "tier": "lite",
+  "view": "desktop",
+  "scenario": "flyover",
+  "gpuTimer": true,
+  "load": {
+   "firstFrameMs": 2733,
+   "envMs": 886,
+   "bytesBeforeFirst": 8016950,
+   "filesBeforeFirst": 94,
+   "bytesTotal": 9303490,
+   "look": {
+    "tier": "lite",
+    "source": "url",
+    "reason": "url: look=lite",
+    "real": true,
+    "ramp": false,
+    "env": [
+     "ground",
+     "grass",
+     "sky",
+     "grade"
+    ],
+    "grassDensity": 0.5,
+    "budget": {
+     "dprCap": 1.5,
+     "renderScale": 0.75,
+     "dynamic": true,
+     "minScale": 0.5,
+     "ao": "off",
+     "msaa": 0,
+     "fxaa": true,
+     "shadowSize": 1024,
+     "shadowEvery": 3,
+     "fps": 60
+    },
+    "renderScale": 0.75,
+    "pixelRatio": 0.75,
+    "fps": 60,
+    "dynamicScale": {
+     "scale": 0.75,
+     "changes": 0
+    },
+    "valve": {
+     "state": "idle",
+     "meanMs": 0
+    },
+    "saved": null,
+    "composerMs": 5.27,
+    "envBuilds": 2,
+    "shadowMap": true,
+    "envLayers": [
+     "ground",
+     "grass",
+     "sky",
+     "grade"
+    ],
+    "envBuildMs": 381.1,
+    "envTimings": {
+     "textures": 127.5,
+     "field": 206,
+     "ground": 334.3,
+     "grass": 45.1,
+     "sky": 1.2
+    },
+    "envCache": {
+     "hits": [],
+     "misses": [
+      "ground",
+      "field"
+     ]
+    },
+    "grass": {
+     "chunks": 52,
+     "drawn": 27,
+     "blades": 25412
+    },
+    "shadowUpdates": 27,
+    "shadowFrames": 79
+   }
+  },
+  "repeat": null,
+  "mem": {
+   "textures": 16,
+   "bytes": 8352241,
+   "targetBytes": 45713408,
+   "glTextures": 77,
+   "geometries": 188,
+   "programs": 46,
+   "pixelRatio": 0.75,
+   "drawingBuffer": [
+    1440,
+    810
+   ],
+   "renderScale": 0.75
+  },
+  "look": {
+   "tier": "lite",
+   "env": [
+    "ground",
+    "grass",
+    "sky",
+    "grade"
+   ],
+   "grassDensity": 0.5,
+   "renderScale": 0.75,
+   "fps": 60
+  },
+  "errors": [],
+  "seconds": 10,
+  "drawn": 601,
+  "callbacks": 601,
+  "fps": 60.1,
+  "mean": 16.67,
+  "p95": 16.9,
+  "max": 18.6,
+  "over50": 0,
+  "causes": {},
+  "worst": [],
+  "cpuMean": 6.91,
+  "cpuP95": 9.7,
+  "gpuMean": 11.61,
+  "gpuP95": 14.64,
+  "passes": {
+   "seePoll": 0.05,
+   "colour": 8.83,
+   "shadow": 0.81,
+   "ao": 0.51,
+   "output": 0.62,
+   "fxaa": 0.8
+  },
+  "cpuPasses": {
+   "frame": 0.99,
+   "seePoll": 0.02,
+   "render": 0.07,
+   "env": 0.1,
+   "colour": 4.61,
+   "shadow": 0.81,
+   "ao": 0.11,
+   "output": 0.05,
+   "fxaa": 0.06
+  },
+  "calls": 171,
+  "triangles": 491094,
+  "syncReads": 0
+ },
+ {
+  "tier": "lite",
+  "view": "phone",
+  "scenario": "spot",
+  "gpuTimer": true,
+  "load": {
+   "firstFrameMs": 2962,
+   "envMs": 1162,
+   "bytesBeforeFirst": 8017110,
+   "filesBeforeFirst": 94,
+   "bytesTotal": 9303650,
+   "look": {
+    "tier": "lite",
+    "source": "url",
+    "reason": "url: look=lite",
+    "real": true,
+    "ramp": false,
+    "env": [
+     "ground",
+     "grass",
+     "sky",
+     "grade"
+    ],
+    "grassDensity": 0.5,
+    "budget": {
+     "dprCap": 1.5,
+     "renderScale": 0.75,
+     "dynamic": true,
+     "minScale": 0.5,
+     "ao": "off",
+     "msaa": 0,
+     "fxaa": true,
+     "shadowSize": 1024,
+     "shadowEvery": 3,
+     "fps": 60
+    },
+    "renderScale": 0.75,
+    "pixelRatio": 1.125,
+    "fps": 60,
+    "dynamicScale": {
+     "scale": 0.75,
+     "changes": 0
+    },
+    "valve": {
+     "state": "idle",
+     "meanMs": 0
+    },
+    "saved": null,
+    "composerMs": 4.39,
+    "envBuilds": 2,
+    "shadowMap": true,
+    "envLayers": [
+     "ground",
+     "grass",
+     "sky",
+     "grade"
+    ],
+    "envBuildMs": 489.8,
+    "envTimings": {
+     "textures": 126.8,
+     "field": 296.7,
+     "ground": 424.3,
+     "grass": 63.2,
+     "sky": 1.8
+    },
+    "envCache": {
+     "hits": [],
+     "misses": [
+      "ground",
+      "field"
+     ]
+    },
+    "grass": {
+     "chunks": 52,
+     "drawn": 26,
+     "blades": 24166
+    },
+    "shadowUpdates": 29,
+    "shadowFrames": 86
+   }
+  },
+  "repeat": {
+   "firstFrameMs": 2006,
+   "envMs": 424,
+   "bytesBeforeFirst": 7939162,
+   "filesBeforeFirst": 94,
+   "bytesTotal": 9213102,
+   "look": {
+    "tier": "lite",
+    "source": "url",
+    "reason": "url: look=lite",
+    "real": true,
+    "ramp": false,
+    "env": [
+     "ground",
+     "grass",
+     "sky",
+     "grade"
+    ],
+    "grassDensity": 0.5,
+    "budget": {
+     "dprCap": 1.5,
+     "renderScale": 0.75,
+     "dynamic": true,
+     "minScale": 0.5,
+     "ao": "off",
+     "msaa": 0,
+     "fxaa": true,
+     "shadowSize": 1024,
+     "shadowEvery": 3,
+     "fps": 60
+    },
+    "renderScale": 0.75,
+    "pixelRatio": 1.125,
+    "fps": 60,
+    "dynamicScale": {
+     "scale": 0.75,
+     "changes": 0
+    },
+    "valve": {
+     "state": "idle",
+     "meanMs": 0
+    },
+    "saved": null,
+    "composerMs": 4.37,
+    "envBuilds": 2,
+    "shadowMap": true,
+    "envLayers": [
+     "ground",
+     "grass",
+     "sky",
+     "grade"
+    ],
+    "envBuildMs": 45,
+    "envTimings": {
+     "textures": 0.1,
+     "field": 0.1,
+     "ground": 1.3,
+     "grass": 41.7,
+     "sky": 1.3
+    },
+    "envCache": {
+     "hits": [
+      "ground",
+      "field"
+     ],
+     "misses": []
+    },
+    "grass": {
+     "chunks": 52,
+     "drawn": 26,
+     "blades": 24166
+    },
+    "shadowUpdates": 9,
+    "shadowFrames": 27
+   }
+  },
+  "mem": {
+   "textures": 16,
+   "bytes": 8352241,
+   "targetBytes": 18575292,
+   "glTextures": 77,
+   "geometries": 181,
+   "programs": 46,
+   "pixelRatio": 0.9119999999999999,
+   "drawingBuffer": [
+    378,
+    841
+   ],
+   "renderScale": 0.608
+  },
+  "look": {
+   "tier": "lite",
+   "env": [
+    "ground",
+    "grass",
+    "sky",
+    "grade"
+   ],
+   "grassDensity": 0.5,
+   "renderScale": 0.608,
+   "fps": 60
+  },
+  "errors": [],
+  "seconds": 10,
+  "drawn": 600,
+  "callbacks": 600,
+  "fps": 60.1,
+  "mean": 16.67,
+  "p95": 16.8,
+  "max": 21.3,
+  "over50": 0,
+  "causes": {},
+  "worst": [],
+  "cpuMean": 6.25,
+  "cpuP95": 8,
+  "gpuMean": 14.02,
+  "gpuP95": 26.13,
+  "passes": {
+   "seePoll": 0,
+   "colour": 10.97,
+   "shadow": 0.99,
+   "ao": 0.71,
+   "output": 0.49,
+   "fxaa": 0.86,
+   "seeThrough": 0
+  },
+  "cpuPasses": {
+   "frame": 1.52,
+   "seePoll": 0.02,
+   "render": 0.06,
+   "env": 0.1,
+   "colour": 3.46,
+   "shadow": 0.74,
+   "ao": 0.11,
+   "output": 0.05,
+   "fxaa": 0.06,
+   "seeThrough": 0.02
+  },
+  "calls": 127,
+  "triangles": 436009,
+  "syncReads": 0
+ },
+ {
+  "tier": "lite",
+  "view": "phone",
+  "scenario": "flyover",
+  "gpuTimer": true,
+  "load": {
+   "firstFrameMs": 2516,
+   "envMs": 961,
+   "bytesBeforeFirst": 8017110,
+   "filesBeforeFirst": 94,
+   "bytesTotal": 9303650,
+   "look": {
+    "tier": "lite",
+    "source": "url",
+    "reason": "url: look=lite",
+    "real": true,
+    "ramp": false,
+    "env": [
+     "ground",
+     "grass",
+     "sky",
+     "grade"
+    ],
+    "grassDensity": 0.5,
+    "budget": {
+     "dprCap": 1.5,
+     "renderScale": 0.75,
+     "dynamic": true,
+     "minScale": 0.5,
+     "ao": "off",
+     "msaa": 0,
+     "fxaa": true,
+     "shadowSize": 1024,
+     "shadowEvery": 3,
+     "fps": 60
+    },
+    "renderScale": 0.75,
+    "pixelRatio": 1.125,
+    "fps": 60,
+    "dynamicScale": {
+     "scale": 0.75,
+     "changes": 0
+    },
+    "valve": {
+     "state": "idle",
+     "meanMs": 0
+    },
+    "saved": null,
+    "composerMs": 5.03,
+    "envBuilds": 2,
+    "shadowMap": true,
+    "envLayers": [
+     "ground",
+     "grass",
+     "sky",
+     "grade"
+    ],
+    "envBuildMs": 429.9,
+    "envTimings": {
+     "textures": 107.5,
+     "field": 266,
+     "ground": 374.2,
+     "grass": 53.4,
+     "sky": 1.7
+    },
+    "envCache": {
+     "hits": [],
+     "misses": [
+      "ground",
+      "field"
+     ]
+    },
+    "grass": {
+     "chunks": 52,
+     "drawn": 26,
+     "blades": 24166
+    },
+    "shadowUpdates": 29,
+    "shadowFrames": 85
+   }
+  },
+  "repeat": null,
+  "mem": {
+   "textures": 16,
+   "bytes": 8352241,
+   "targetBytes": 23888931,
+   "glTextures": 77,
+   "geometries": 188,
+   "programs": 46,
+   "pixelRatio": 1.125,
+   "drawingBuffer": [
+    466,
+    1038
+   ],
+   "renderScale": 0.75
+  },
+  "look": {
+   "tier": "lite",
+   "env": [
+    "ground",
+    "grass",
+    "sky",
+    "grade"
+   ],
+   "grassDensity": 0.5,
+   "renderScale": 0.75,
+   "fps": 60
+  },
+  "errors": [],
+  "seconds": 10,
+  "drawn": 601,
+  "callbacks": 601,
+  "fps": 60.1,
+  "mean": 16.67,
+  "p95": 16.8,
+  "max": 17.2,
+  "over50": 0,
+  "causes": {},
+  "worst": [],
+  "cpuMean": 6.31,
+  "cpuP95": 9.1,
+  "gpuMean": 11.98,
+  "gpuP95": 15.07,
+  "passes": {
+   "seePoll": 0.01,
+   "colour": 9.01,
+   "shadow": 1.28,
+   "ao": 0.39,
+   "output": 0.59,
+   "fxaa": 0.7
+  },
+  "cpuPasses": {
+   "frame": 1.01,
+   "seePoll": 0.02,
+   "render": 0.07,
+   "env": 0.11,
+   "colour": 4.03,
+   "shadow": 0.75,
+   "ao": 0.11,
+   "output": 0.06,
+   "fxaa": 0.06
+  },
+  "calls": 147,
+  "triangles": 452485,
+  "syncReads": 0
+ }
+]

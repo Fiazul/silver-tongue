@@ -74,3 +74,13 @@ Captured 2026-09-30 03:52 UTC with scripts/perf-capture.mjs on http://127.0.0.1:
 | lite | phone | 2863 | 1019 (build 422.4) | 7.6 MB | 94 | 2378 | 672 (build 385.5) | 1.1 MB | 8.0 | 213.2 | 70 | 49 |
 | classic | desktop | 1962 | null (build 0) | 7.5 MB | 88 | 1323 | null (build 0) | 7.4 MB | 7.7 | 0.0 | 28 | 15 |
 | classic | phone | 1423 | null (build 0) | 7.5 MB | 88 | 1227 | null (build 0) | 7.4 MB | 7.7 | 0.0 | 38 | 15 |
+
+## The top 5 costs (ranked from the tables above, Full at 1920x1080 unless named)
+
+1. **The see-through's synchronous read-back** (`seethrough.ts` sample(): after 3 async timeouts, or a decision older than 250 ms, it fell back to `readRenderTargetPixels`, which waits for the whole GPU queue). 15 of the 20 frames over 50 ms at the noodle shop, 21 sync reads in 10 s, 884 ms worst (Lite desktop 1346 ms); CPU `syncRead` ~10 ms a frame on average. The recurring "350 ms frames".
+2. **GTAO at full resolution**: 17.5 ms GPU at the spot, 16.9 on the fly-over: 54 % of the 32 ms frame (normal / depth pre-pass 0.8-1.3 ms more; the phone rows 11-14 ms). Lite paid it too (17.4 ms): Lite was not cheaper on the GPU (29.6 vs 32.1 ms).
+3. **The colour pass at 4x MSAA**: 8.3-9.5 ms GPU; measured by knob, 4x MSAA is ~4 ms of it (`msaa=0`: 5.5 ms) and the grass ~1.6 ms. Two 4x MSAA half-float composer targets plus resolves: 277 MB of render targets at 1080p.
+4. **No frame cap, GPU-bound**: uncapped, the GPU queue ran hundreds of ms deep and a random GL call stalled on it: the fly-over's 15 long frames (no sync read there) sit in `cpu: colour / shadow / bloom` at 390-460 ms. (On a vsync-capped browser this is bounded; the fix is to fit the budget and pace.)
+5. **The shadow map redrawn every frame**: 2.2 ms GPU at the spot, 3.6 ms on the fly-over, plus ~2.3 ms CPU (every caster traversed; the 14k leaf cards among them). Bloom is next (2.0-2.3 ms GPU at half resolution), then the DPR cap of 2 (a 2.6x phone draws 830x1846: 74 % of a 1080p desktop's pixels through every pass).
+
+Env build: 384-620 ms per visit (textures 110-150 ms, field 210 ms, leaves 200 ms), rebuilt on every visit. Bytes before the first frame: 7.6 MB (94 files).
