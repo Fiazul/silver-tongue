@@ -116,14 +116,16 @@ export interface InteractableSpec {
 /** Interior-only scenery. Dimensions are metres; the shell's open front is z=0. */
 export interface InteriorBackdropSpec {
   ground: string;
-  cut: string;
+  /** Build exterior scenery only for rooms with actual transparent/open apertures. */
+  exteriorVisible?: boolean;
+  ceiling?: string;
   sky: { day: string; horizon: string; night: string };
   lamp: Vec3;
   opening: Vec3;
 }
 export interface InteriorBackdropLayout extends InteriorBackdropSpec {
   size: Vec2;
-  cutSides: string[];
+  height: number;
   silhouettes: { kind: "facade" | "tree" | "lantern"; asset: string; size: Vec3 }[];
 }
 
@@ -328,6 +330,12 @@ export interface TownLook {
 }
 
 /** One scene space, normalised: the town and every interior go through this shape. */
+export interface InteriorView {
+  bounds: Box2;
+  floor: number;
+  ceiling: number;
+}
+
 export interface SpaceLayout {
   id: string;
   /** the place you are at anywhere in the space outside its triggers */
@@ -349,6 +357,7 @@ export interface SpaceLayout {
   camera: { distance?: number };
   background?: string;
   backdrop?: InteriorBackdropLayout;
+  view?: InteriorView;
   interior: boolean;
 }
 
@@ -772,14 +781,20 @@ export class LayoutIndex {
       camera: i.camera ?? {},
       background: i.background,
       backdrop: i.outdoor ? undefined : this.interiorBackdrop(id, i, [W, D]),
+      view: i.outdoor ? undefined : {
+        bounds: { min: [-W / 2, -D], max: [W / 2, 0] }, floor: floorY,
+        ceiling: this.interiorHeight(i),
+      },
       interior: !i.outdoor,
     };
   }
 
+  private interiorHeight(i: InteriorLayout): number {
+    return i.shell ? this.asset(i.shell.asset).size_m[1] : Math.max(2.6, ...i.ground.map((g) => g.max[1]));
+  }
+
   private interiorBackdrop(id: string, i: InteriorLayout, size: Vec2): InteriorBackdropLayout {
-    // The shells intentionally omit their separate hideable wall GLBs in interiorPieces().
-    // Record those same cuts here; box-built rooms use the same open front / right convention.
-    const cutSides = ["+z", ...(i.shell ? (this.asset(i.shell.asset).hideable_walls ?? []).map((w) => w.side) : ["+x"])];
+    // Separate near-wall GLBs remain omitted, including their mounted props.
     let outer = this.outerSpace(id);
     while (outer && outer !== STREET && !this.interior(outer).outdoor) outer = this.outerSpace(outer);
     const source = outer === STREET || !outer
@@ -795,10 +810,10 @@ export class LayoutIndex {
       return item ? [{ kind, asset: item.asset, size: this.asset(item.asset).size_m }] : [];
     });
     return {
-      ground: "#B8AD98", cut: "#E5D6BA",
+      ground: "#B8AD98", ceiling: "#E8DFC9",
       sky: { day: i.background ?? "#9CBBD0", horizon: "#E3D5BB", night: "#152942" },
       lamp: [0, 2.3, -size[1] / 2], opening: [0, 2.1, 0],
-      ...i.backdrop, size, cutSides, silhouettes,
+      ...i.backdrop, size, height: this.interiorHeight(i), silhouettes,
     };
   }
 

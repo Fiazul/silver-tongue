@@ -3,6 +3,7 @@
 // one anchor helper, with blockers, picking, street life and the time-of-day light. The town adds
 // its landscape (at the origin), the sky dome, the sun from town.json and a far haze.
 import * as THREE from "three";
+import { buildInteriorEnclosure, interiorFaces } from "./interior-enclosure";
 import { buildInteriorBackdrop } from "./interior-backdrop";
 import type { GLTF, GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { mergeGeometries, mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
@@ -747,6 +748,7 @@ export class SceneSpace {
       scene.add(floor);
       statics.push(floor);
     }
+    buildInteriorEnclosure(scene, layout, (colour) => this.assets.toon.flat(colour));
     this.backdrop = buildInteriorBackdrop(scene, layout, LOOK.real, (colour) => this.assets.toon.flat(colour));
     for (const g of layout.ground) {
       const size = [0, 1, 2].map((i) => g.max[i] - g.min[i]);
@@ -771,6 +773,7 @@ export class SceneSpace {
       const o = await this.assets.instance(b.asset);
       this.place(o, b);
       o.name = b.id;
+      if (layout.interior && L.asset(b.asset).origin === "shell") interiorFaces(o);
       this.backdrop?.dressWindows(o);
       o.userData.see = this.seeSpec(o, b.id, b.asset);
       scene.add(o);

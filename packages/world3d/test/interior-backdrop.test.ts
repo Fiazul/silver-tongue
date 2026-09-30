@@ -59,26 +59,26 @@ describe("shared interior backdrop", () => {
     expect(panes[0].uniforms.top.value.getHexString()).toBe("152942");
   });
   for (const id of ids) {
-    it(`${id}: the actual scene builds ground and caps for every omitted wall`, async () => {
+    it(`${id}: the actual scene encloses the room, omits exterior scenery and has no caps`, async () => {
       const space = await SceneSpace.create(L, new AssetCache(ASSETS, L, { read: readGlb }), id);
-      const root = space.scene.getObjectByName("interior_backdrop")!;
-      expect(root).toBeDefined();
-      const ground = root.getObjectByName("interior_ground") as THREE.Mesh<THREE.PlaneGeometry>;
-      expect(ground.geometry.parameters.width).toBeGreaterThanOrEqual(40);
-      expect(ground.position.y).toBeLessThan(0);
-      expect((space.scene.fog as THREE.Fog).far).toBeLessThan(ground.geometry.parameters.width / 2);
-      for (const side of L.space(id).backdrop!.cutSides) expect(root.getObjectByName(`interior_cut_${side}`)).toBeDefined();
-      expect(root.children.filter((o) => o.name.startsWith("interior_silhouette_"))).toHaveLength(3);
-      expect(root.getObjectByName("interior_lamp")).toBeUndefined();
-      expect(root.getObjectByName("interior_light_shaft")).toBeUndefined();
+      const enclosure = space.scene.getObjectByName("interior_enclosure")!;
+      expect(enclosure).toBeDefined();
+      expect(enclosure.getObjectByName("interior_ceiling")).toBeDefined();
+      for (const name of ["interior_ground", "interior_sky", "interior_prop_stool", "interior_prop_planter"])
+        expect(space.scene.getObjectByName(name)).toBeUndefined();
+      space.scene.traverse((o) => expect(o.name.startsWith("interior_cut_")).toBe(false));
+      enclosure.traverse((o) => {
+        if (o instanceof THREE.Mesh) expect((o.material as THREE.Material).side).toBe(THREE.FrontSide);
+      });
+      expect(space.scene.getObjectByName("interior_lamp")).toBeUndefined();
+      expect(space.scene.getObjectByName("interior_light_shaft")).toBeUndefined();
       expect(space.scene.userData.lookSky).toBeUndefined();
-      root.traverse((o) => expect(o.castShadow || o.receiveShadow).toBe(false));
-      const budget = cost(root);
-      expect(budget.calls).toBeLessThanOrEqual(30);
-      expect(budget.triangles).toBeLessThanOrEqual(30000);
+      enclosure.traverse((o) => expect(o.castShadow || o.receiveShadow).toBe(false));
     });
     it(`${id}: every silhouette is beyond the shell and camera target; props stay outside the slab`, () => {
-      const layout = L.space(id), [w, d] = layout.backdrop!.size;
+      const original = L.space(id);
+      const layout = { ...original, backdrop: { ...original.backdrop!, exteriorVisible: true } };
+      const [w, d] = layout.backdrop.size;
       const scene = new THREE.Scene(); scene.background = new THREE.Color();
       const { root } = buildInteriorBackdrop(scene, layout, false, flat)!;
       root.updateMatrixWorld(true);
@@ -126,7 +126,7 @@ describe("shared interior backdrop", () => {
         expect(budget.triangles).toBeLessThanOrEqual(30000);
         if (tier !== "classic") {
           const normal = cost(backdrop.root, true);
-          expect(normal.calls).toBe(13);
+          expect(normal.calls).toBe(0);
           expect(budget.calls + normal.calls).toBeLessThanOrEqual(30);
           expect(budget.triangles + normal.triangles).toBeLessThanOrEqual(30000);
         }
@@ -142,10 +142,8 @@ describe("shared interior backdrop", () => {
           expect(lamp!.castShadow).toBe(false);
           const shaft = backdrop.root.getObjectByName("interior_light_shaft") as THREE.Mesh<THREE.PlaneGeometry, THREE.ShaderMaterial>;
           expect(shaft.material.uniforms.strength.value).toBe(0);
-          const top = new THREE.Vector3(0, shaft.geometry.parameters.height / 2, 0);
-          shaft.localToWorld(top);
-          expect(top.y).toBeCloseTo(L.space(id).backdrop!.opening[1]);
-          expect(top.z).toBeCloseTo(L.space(id).backdrop!.opening[2]);
+          expect(shaft.visible).toBe(false); // no open-front/closed-door light shaft
+          expect(lamp!.position.y).toBeCloseTo(L.space(id).view!.ceiling - 0.22);
         } else expect(lamp).toBeUndefined();
       });
     }

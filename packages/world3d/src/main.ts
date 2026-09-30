@@ -649,7 +649,7 @@ async function main() {
     player.area = space.area;
     player.place(stand.pos[0], stand.pos[2], new THREE.Vector3(...stand.facing));
     lastFoot.set(stand.pos[0], stand.pos[2]);
-    rig.setDistance(space.layout.camera.distance);
+    rig.setSpace(space.layout);
     rig.snap(player.position);
     marker.visible = false;
     pendingTalk = null;

@@ -273,22 +273,15 @@ if (SET === "tiers") {
   }
   report.timing = runs;
 }
-// SET=interiors: fixed dollhouse views, one fresh page per shot so held cameras never leak.
-// These are capture poses only: gameplay cameras and spawn positions are unchanged.
+// SET=interiors uses the actual gameplay camera after arrival: no dolly or alternate pose.
+// PORTRAIT=1 captures the same camera/clamp at 390x844, with phone touch/compact UI detection.
 if (SET === "interiors") {
   const layout = JSON.parse(readFileSync(new URL("../src/layout.json", import.meta.url), "utf8"));
-  const cameras = {
-    noodle_shop: { from: [9, 7, 10], lookAt: [0, 0.8, -2] },
-    room: { from: [6, 5, 7], lookAt: [0, 0.8, -1.5] },
-    shop: { from: [9, 7, 10], lookAt: [0, 0.8, -2] },
-    stairs: { from: [6, 5, 7], lookAt: [0, 0.8, -1.5] },
-    tea_house: { from: [9, 7, 10], lookAt: [0, 0.8, -2] },
-  };
+  const portrait = process.env.PORTRAIT === "1";
   report.interiors = [];
   for (const [id, interior] of Object.entries(layout.interiors).filter(([, i]) => !i.outdoor)) {
-    if (!cameras[id]) throw new Error(`Missing interior capture camera: ${id}`);
     for (const [tier, time, day] of [["classic", "midday", 1 / 3], ["full", "midday", 1 / 3], ["full", "evening", 1]]) {
-      const page = await browser.newPage({ viewport: { width: W, height: H } });
+      const page = await browser.newPage({ viewport: portrait ? { width: 390, height: 844 } : { width: W, height: H }, ...(portrait ? { isMobile: true, hasTouch: true, deviceScaleFactor: 1 } : {}) });
       const errors = errorsOf(page);
       await page.goto(`${URL_}?promo=1&look=${tier}`);
       await page.waitForFunction(() => window.world3d?.model?.() && document.querySelector("#loading")?.hidden, null, { timeout: 120000 });
@@ -296,12 +289,11 @@ if (SET === "interiors") {
       await page.waitForFunction((space) => window.world3d.info().space === space && !window.world3d.info().transitioning && document.querySelector("#loading")?.hidden, id, { timeout: 120000 });
       await page.waitForTimeout(4000); // asset load / fade-through and streamed characters
       await page.evaluate((d) => { window.world3d.promo("hud", false); window.world3d.setDaylight(d); }, day);
-      await page.evaluate((c) => { void window.world3d.promo("dolly", { ...c, to: c.from, seconds: 600 }); }, cameras[id]);
       await page.waitForTimeout(1500);
       const file = `${id}-${tier}-${time}.png`;
       await page.screenshot({ path: join(out, file) });
       const info = await page.evaluate(() => window.world3d.info());
-      report.interiors.push({ file, calls: info.calls, triangles: info.triangles, errors });
+      report.interiors.push({ file, portrait, camera: "gameplay", calls: info.calls, triangles: info.triangles, errors });
       console.log(`${file}: ${info.calls} calls, ${info.triangles} triangles, ${errors.length} errors`);
       await page.close();
     }

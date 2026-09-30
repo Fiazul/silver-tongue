@@ -4,6 +4,8 @@
 // "orbit" (the one-line switch) to let the player drag the view round.
 import * as THREE from "three";
 import type { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { applyInteriorCamera } from "./interior-camera";
+import type { SpaceLayout, InteriorView } from "./layout";
 import { LOOK } from "./look";
 
 export const CAMERA = {
@@ -36,6 +38,7 @@ if (LOOK.real) {
 export class CameraRig {
   readonly camera: THREE.PerspectiveCamera;
   private aim = new THREE.Vector3();
+  private room?: InteriorView;
   private dist = CAMERA.distance;
   /** this space's follow distance (interiors frame the room closer) */
   private base = CAMERA.distance;
@@ -84,6 +87,7 @@ export class CameraRig {
     this.fov = this.portrait ? CAMERA.fovDeg / Math.max(0.55, this.camera.aspect) : CAMERA.fovDeg;
     this.camera.fov = this.fov;
     this.camera.updateProjectionMatrix();
+    if (this.room) this.applyRoom();
   }
 
   /** The follow distance for the current space (layout `camera.distance`), or the street's. */
@@ -91,8 +95,22 @@ export class CameraRig {
     this.base = d ?? CAMERA.distance;
   }
 
+  /** Scene swap happens under the existing fade-through; never interpolate through exterior space. */
+  setSpace(layout: SpaceLayout) {
+    this.room = layout.interior ? layout.view : undefined;
+    this.setDistance(layout.camera.distance);
+    this.camera.near = this.room ? 0.04 : CAMERA.near;
+    this.resize(this.size.w, this.size.h, this.compact);
+  }
+
+  private applyRoom() {
+    applyInteriorCamera(this.camera, this.room!, this.aim);
+    this.fov = this.camera.fov;
+  }
+
   snap(focus: THREE.Vector3) {
     this.dist = this.base;
+    if (this.room) { this.aim.copy(focus); this.applyRoom(); return; }
     if (this.camera.fov !== this.fov) {
       this.camera.fov = this.fov; // back from the fly-over's
       this.camera.updateProjectionMatrix();
@@ -109,6 +127,11 @@ export class CameraRig {
   /** `focus`: the player, or the midpoint of player and NPC during a scene. */
   update(dt: number, focus: THREE.Vector3, inScene: boolean) {
     const k = 1 - Math.exp(-CAMERA.follow * dt);
+    if (this.room) {
+      this.aim.lerp(focus, 1 - Math.exp(-10 * dt));
+      this.applyRoom();
+      return;
+    }
     this.aim.lerp(new THREE.Vector3(focus.x, focus.y + CAMERA.aimHeight, focus.z), k);
     // Interiors (a short base distance) on a portrait phone: pull back a little so the room's width fits.
     const fit = this.portrait && this.base < CAMERA.distance ? 1.25 : 1;

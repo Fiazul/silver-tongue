@@ -740,74 +740,77 @@ gated on `LOOK.real` (`src/look.ts`), and the composer lives in its own chunk (`
 that is never fetched at Classic. The shared interior backdrop below also appears in Classic;
 its street rendering is unchanged.
 
-### Interior backdrop
+### Interior view
 
-Every indoor `SpaceLayout` uses `src/interior-backdrop.ts`, in Classic, Full and Lite.
-The street and outdoor side streets do not build it. A 160 m ground plane sits just
-below the floor slab; fog starts at 18 m and finishes at 58 m, before the ground edge.
-A shared, deterministic 128² canvas paving texture repeats at human scale, with subtle
-mortar and dirt variation. Contact darkening fades out over roughly half a metre from
-the slab edge in the same ground shader: no extra draw or shadow pass. A 0.82 m planter
-and 0.45 m stool sit outside the open sides, clear of the floor and exit. Each prop's
-coloured parts are merged into one mesh (two additional colour-pass draws total).
-A low cut sill follows the open front (with an entrance gap) and the shell's omitted
-`hideable_walls` footprints. This preserves the existing omission of the separate wall
-GLBs. `shop` and `stairs` use ground boxes, not shell assets; their front/right cuts use
-the same code. Nothing in the backdrop participates in walking, picking or wall fading.
+All five rooms use the same enclosed view in Classic, Full and Lite. `LayoutIndex`
+derives the camera volume from shell width/depth/height, or the box room's `size` and
+highest wall. Walking bounds and the exit trigger do not enlarge that camera volume.
+`src/interior-camera.ts` places the eye inside it, below the ceiling, pitched down 38°.
+The two far walls and floor frame the room; the camera never looks back toward the
+near walls. FOV adapts to aspect ratio (portrait expands vertically, not out through
+the walls). The bottom corner rays define a safe eye region; follow motion is clamped
+inside it, with a small room naturally allowing less motion. Dialogue focus and
+viewport resizing use the same clamp, without the street's zoom or UI view offset.
 
-A vertical sky gradient and three coarse silhouettes provide the exterior: facade,
-tree and lantern. The silhouettes use names and dimensions from the outer street's
-assets, with simple geometry rather than additional GLB downloads. Every silhouette's
-complete bounds sit at least 6 m beyond both the back and left shell edges, away from
-the south-east camera. The tree uses the street's smaller willow at authored scale
-(about 4 m tall), not the landmark tree. Bounds tests cover all five rooms, both gameplay
-camera elevations and capture poses, including exclusion from the frame's bottom third.
-Nested rooms find
-the enclosing street through their way out. Full/Lite add a soft, additive opening
-shaft and one warm point light without shadows; Classic uses the existing sun and
-hemisphere lights. The exterior becomes dark blue toward evening while the room stays
-warm. The real-look environment map receives the interior sky palette too.
-Doors remain closed. Opaque `pi_glass` panes on indoor shells and window grille panels
-receive a daylight sky-gradient material, so the steep camera sees blue sky in the room
-window rather than beige ground. This is a stylized sky view on the existing glazing,
-not a portal or a change to wall geometry; frames and grille bars are preserved.
-Street glass materials are unchanged.
+`src/interior-enclosure.ts` adds inward-facing, single-sided wall planes behind the
+authored walls, a warm ceiling, and a floor safety plane just below the original slab.
+The original wall finishes, furniture, window frames and closed doors stay in place.
+Shell material instances use front faces only; shell outline hulls are hidden. The
+separate near-wall GLBs (and their omitted dressing) remain omitted. Near enclosure
+faces stay behind the camera. There are **no cut caps, ghost walls or added sills**.
 
-Each `interiors.<id>.backdrop` in `src/layout.json` can override:
+Room entry/exit reuses the existing 700 ms fade-through: the space and camera pose
+change at its dark midpoint (220 ms), so there is no visible trip through wall edges
+or exterior scenery. Interior follow settles over roughly 0.4 s. Leaving restores
+the street camera's FOV, near plane, distance and scene zoom.
 
-- `ground`: paving/dirt colour (corridor floor colour for stairs).
-- `cut`: lighter sill colour.
-- `sky`: `day`, `horizon`, `night` colours. Without a `sky` override, `background`
-  supplies the daytime upper sky, rather than a flat background behind the floor.
-- `lamp`: local `[x,y,z]` point-light position.
-- `opening`: local `[x,y,z]` top of the light shaft.
+Daylight still drives the room's existing hemisphere/sun colours, its window sky
+palette and real-look environment map. Full/Lite keep a warm, shadowless lamp 22 cm
+below the ceiling. A soft shaft is attached to the first actual window pane; a closed
+door or the former open-front cut never emits a shaft. The opaque `pi_glass` panes
+(including the room's grille panel) retain their stylized daylight sky view; they are
+not portals. No sky or outside ground can appear around the floor or over wall tops.
 
-Shell dimensions and omitted wall sides come from the asset index; box rooms use
-`size`. Tests build all five real scenes and check ground, cuts, Classic guards,
-lighting and the geometry budget. The current unculled colour-pass estimate is
-**14 calls / 662 triangles in Classic**, **15 calls / 664 triangles in Full and Lite**
-per room, below the 30-call / 30k-triangle ceiling. No new shadow casters or shadow
-maps are added. Full/Lite's existing AO adds up to 13 calls / 438 triangles (28 / 1102 total);
-the sky and shaft are excluded from AO. Existing postprocessing still applies;
-these counts are not a GPU-time measurement. The Vega 11 targets (Classic ≤0.5 ms,
-Full ≤1.5 ms at 1080p) still require browser measurement.
+Round-2 exterior scenery remains available in `src/interior-backdrop.ts`: the 128²
+repeating paving texture/contact gradient, street-sized facade/willow/lantern and
+small planter/stool. **All current layouts set `backdrop.exteriorVisible: false`**:
+their closed doors and opaque sky panes cannot reveal physical exterior scenery, so
+ground, sky dome, neighbours and props are not built. The window sky colours and
+interior lighting still build. The street renderer is unchanged.
 
-Capture 15 fixed-camera shots (Classic midday, Full midday, Full evening per room):
+Layout fields under `interiors.<id>.backdrop`:
+
+- `ceiling`: warm ceiling colour; height comes from the shell/wall geometry.
+- `sky`: `day`, `horizon`, `night`; the fallback daytime sky uses `background`.
+- `lamp`: local lamp x/z position (y is constrained just under the ceiling).
+- `ground`, `exteriorVisible`: retained exterior material/build controls.
+- `opening`: retained fallback shaft dimensions; visible shafts attach to window geometry.
+
+Unit tests check all five rooms at 1920×1080, 390×845 (9:19.5), and 390×844, including
+focus at every edge, dialogue updates and resizing. Every frustum corner's first
+structural hit belongs to the room; both bottom corners hit floor within its footprint.
+They also verify inward-only walls, a ceiling, no caps and no exterior geometry in
+current rooms. The enclosure adds six planes (six calls / 12 triangles); Classic builds
+no real-look light/shaft objects. Full/Lite add at most one visible two-triangle shaft
+and no new shadow maps. These are geometry estimates, not GPU timing measurements.
+
+Captures use the **gameplay camera after arrival**, never a debug dolly. There are
+15 shots: Classic midday, Full midday and Full evening for each room. To capture:
 
 ```sh
 cd packages/world3d
-# In a worktree without dist/courses, reuse an existing course build:
 WORLD3D_COURSES=/path/to/existing/dist/courses npm run build
 python3 -m http.server 8190 -d dist
-# In another terminal, from packages/world3d:
+# Another terminal, same directory:
 SET=interiors CHROME=/usr/bin/google-chrome URL=http://127.0.0.1:8190/ W=1920 H=1080 REPORT=shots/interiors/report.json node scripts/look-capture.mjs shots/interiors
+# Phone gameplay framing, separate output so landscape shots are preserved:
+PORTRAIT=1 SET=interiors CHROME=/usr/bin/google-chrome URL=http://127.0.0.1:8190/ REPORT=shots/interiors/portrait/report.json node scripts/look-capture.mjs shots/interiors/portrait
 ```
 
-Files are `<interior>-<tier>-<time>.png`. The script waits for the actual rendered
-space and transition to settle, logs scene draw counts, collects console/page errors
-and exits nonzero if errors occurred. Browser validation is separate from the unit
-geometry estimate. `WORLD3D_COURSES` is optional; the default remains the repository's
-`dist/courses`. Build stamping uses asynchronous Git calls without a shell.
+Files are `<interior>-<tier>-<time>.png`. The script waits for the rendered space and
+transition, collects console/page errors and exits nonzero on errors. `PORTRAIT=1`
+uses 390×844 with touch/compact detection. `WORLD3D_COURSES` is optional; the default
+is the repository's `dist/courses`. Build stamping uses asynchronous Git calls.
 
 ### Graphics tiers
 

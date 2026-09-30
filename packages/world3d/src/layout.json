@@ -220,7 +220,6 @@
       "background": "#9CBBD0",
       "backdrop": {
         "ground": "#B8AD98",
-        "cut": "#E5D6BA",
         "sky": {
           "day": "#9CBBD0",
           "horizon": "#E3D5BB",
@@ -235,7 +234,9 @@
           0,
           2.1,
           0
-        ]
+        ],
+        "ceiling": "#E8DFC9",
+        "exteriorVisible": false
       }
     },
     "room": {
@@ -298,7 +299,6 @@
       "background": "#9CBBD0",
       "backdrop": {
         "ground": "#B8AD98",
-        "cut": "#E5D6BA",
         "sky": {
           "day": "#9CBBD0",
           "horizon": "#E3D5BB",
@@ -313,7 +313,9 @@
           0,
           2.1,
           0
-        ]
+        ],
+        "ceiling": "#E8DFC9",
+        "exteriorVisible": false
       }
     },
     "tea_house": {
@@ -349,7 +351,6 @@
       "background": "#9CBBD0",
       "backdrop": {
         "ground": "#B8AD98",
-        "cut": "#E5D6BA",
         "sky": {
           "day": "#9CBBD0",
           "horizon": "#E3D5BB",
@@ -364,7 +365,9 @@
           0,
           2.1,
           0
-        ]
+        ],
+        "ceiling": "#E8DFC9",
+        "exteriorVisible": false
       }
     },
     "shop": {
@@ -656,7 +659,6 @@
       "background": "#9CBBD0",
       "backdrop": {
         "ground": "#B8AD98",
-        "cut": "#E5D6BA",
         "sky": {
           "day": "#9CBBD0",
           "horizon": "#E3D5BB",
@@ -671,7 +673,9 @@
           0,
           2.1,
           0
-        ]
+        ],
+        "ceiling": "#E8DFC9",
+        "exteriorVisible": false
       }
     },
     "stairs": {
@@ -903,7 +907,6 @@
       "background": "#9CBBD0",
       "backdrop": {
         "ground": "#A89E8C",
-        "cut": "#E5D6BA",
         "sky": {
           "day": "#9CBBD0",
           "horizon": "#E3D5BB",
@@ -918,7 +921,9 @@
           0,
           2.1,
           0
-        ]
+        ],
+        "ceiling": "#E8DFC9",
+        "exteriorVisible": false
       }
     }
   }
