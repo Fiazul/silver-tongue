@@ -106,7 +106,7 @@ describe("textured assets", () => {
     const normalMap = tex();
     const orm = tex();
     orm.channel = 0;
-    const src = new THREE.MeshStandardMaterial({ map, normalMap, aoMap: orm, roughnessMap: orm, metalnessMap: orm, roughness: 1, metalness: 1, side: THREE.DoubleSide, name: "lantern_PBR" });
+    const src = new THREE.MeshStandardMaterial({ map, normalMap, aoMap: orm, roughnessMap: orm, metalnessMap: orm, roughness: 1, metalness: 1, side: THREE.DoubleSide, name: "lantern_red" });
     const m = toon.material(src);
     expect(m).toBeInstanceOf(THREE.MeshToonMaterial);
     expect(m.map).toBe(map);

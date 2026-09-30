@@ -732,7 +732,7 @@ describe.skipIf(!assetIndex)("bug 2: daylight is clearly perceptible at each qua
       };
       const crown = material(/^(canopy_green|leaf_green|leaf_dark|leaf_pale|town_willow)$/);
       const crownColour = crown.color.clone();
-      const lantern = material(/^(lantern_red|lantern_PBR|glass)$/);
+      const lantern = material(/^(lantern_red|glass)$/);
       const e = env.buildEnv(scene, new Set(["ground", "grass", "leaves", "sky", "bloom", "grade", "particles"]), { seeThrough: see.patchSeeThrough, seeAttr: see.SEE_ATTR, aoHidden });
       expect([...e.layers].sort()).toEqual(["bloom", "grade", "grass", "ground", "leaves", "particles", "sky"]);
       for (const n of ["env_grass_near", "env_grass_far", "env_leaves", "env_sky", "env_dust", "env_steam", "env_falling_leaves"]) expect(scene.getObjectByName(n), n).toBeTruthy();

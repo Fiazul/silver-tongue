@@ -13,6 +13,7 @@ import { turnToward } from "./anim";
 import { buildCountryside, flyoverViews, hazeColour, HORIZON, moveClouds, type Part } from "./horizon";
 import { CANOPIES, markSeeThrough, patchSeeThrough, seeAttribute, SEE_ATTR, SEE_FRAG, SEE_FRAG_PARS, SEE_ID0, SEE_NEVER, SEE_OCCLUDER, SEE_VERT, SEE_VERT_PARS, SEE_THROUGH, seeSpecFor, seeUniforms, type Occluder, type SeeSpec } from "./seethrough";
 import { ModuleLoadError } from "./boot";
+import { applyDetail, detailFor } from "./detail";
 import { figureId } from "./barks";
 import { CHARACTER_KINDS, type LoadEvent } from "./loading";
 import { anchorToWorld, heldProp, yawFor, type Blocker, type Box2, type HeldPropSpec, type LayoutIndex, type Placement, type SpaceLayout, type Vec3 } from "./layout";
@@ -145,6 +146,12 @@ function surfaceMaps(m: THREE.MeshStandardMaterial) {
   };
 }
 
+/** Where a source material comes from (its asset and the asset's set): the detail family's overrides (detail.ts familyOf). */
+export interface MaterialSource {
+  set?: string;
+  asset?: string;
+}
+
 class Toon {
   private gradient = gradientMap();
   private materials = new Map<string, THREE.MeshToonMaterial>();
@@ -153,12 +160,14 @@ class Toon {
    * One toon material per source colour (palette colours: few materials, shared everywhere); the
    * world's are patched for the see-through (seethrough.ts), `character`'s kept apart and never.
    */
-  material(src: THREE.Material, character = false): THREE.MeshToonMaterial {
+  material(src: THREE.Material, character = false, from?: MaterialSource): THREE.MeshToonMaterial {
     const m = src as THREE.MeshStandardMaterial;
     const color = m.color ?? new THREE.Color(1, 1, 1);
     const emissive = m.emissive ?? new THREE.Color(0, 0, 0);
     const maps = surfaceMaps(m);
-    const key = `${color.getHexString()}|${emissive.getHexString()}|${m.opacity}|${m.side}|${m.vertexColors ? "vc" : ""}${character ? "|character" : ""}${maps ? `|${maps.key}` : ""}`;
+    // real look: a textured (base colour mapped) world material takes its family's tiling detail (detail.ts); Classic / ramp never
+    const detail = LOOK.real && !LOOK.ramp && maps?.standard.map && !character ? detailFor(m.name, from?.set, from?.asset) : null;
+    const key = `${color.getHexString()}|${emissive.getHexString()}|${m.opacity}|${m.side}|${m.vertexColors ? "vc" : ""}${character ? "|character" : ""}${maps ? `|${maps.key}` : ""}${detail ? `|${m.name}|${detail.family}` : ""}`;
     let toon = this.materials.get(key);
     if (!toon && LOOK.real && !LOOK.ramp) {
       // real look (look.ts): a plain PBR surface in place of the toon ramp (typed as toon: the callers only read color / name);
@@ -176,6 +185,8 @@ class Toon {
         ...maps?.standard,
       }) as unknown as THREE.MeshToonMaterial;
       if (!character) patchSeeThrough(toon);
+      if (maps && from?.asset) toon.userData.asset = from.asset; // textured: one material per asset's atlas (envlook.ts's lantern glow reads it)
+      if (detail) applyDetail(toon as unknown as THREE.MeshStandardMaterial, detail);
       this.materials.set(key, toon);
     }
     if (!toon) {
@@ -210,13 +221,13 @@ class Toon {
   }
 
   /** Toon materials on every mesh of a template, plus outline hulls unless `outline` is false; `character`: never cut by the see-through. */
-  apply(root: THREE.Object3D, outline: boolean, character = false) {
+  apply(root: THREE.Object3D, outline: boolean, character = false, from?: MaterialSource) {
     const meshes: THREE.Mesh[] = [];
     root.traverse((o) => {
       if ((o as THREE.Mesh).isMesh) meshes.push(o as THREE.Mesh);
     });
     for (const mesh of meshes) {
-      mesh.material = Array.isArray(mesh.material) ? mesh.material.map((m) => this.material(m, character)) : this.material(mesh.material, character);
+      mesh.material = Array.isArray(mesh.material) ? mesh.material.map((m) => this.material(m, character, from)) : this.material(mesh.material, character, from);
       if (LOOK.real) mesh.castShadow = mesh.receiveShadow = true; // real look: sun shadows (hulls below never cast)
       const hullMaterial = character ? characterOutline : outlineMaterial;
       if (!outline) continue;
@@ -386,7 +397,7 @@ export class AssetCache {
           root.animations = gltf.animations; // kept through clone(): the actor's clips
           // Characters and what they hold move, so they can't be batched: one mesh each instead.
           if (entry.set === "characters") mergePrimitives(root);
-          this.toon.apply(root, !NO_OUTLINE_SETS.has(entry.set) && !isFlat(name), entry.set === "characters");
+          this.toon.apply(root, !NO_OUTLINE_SETS.has(entry.set) && !isFlat(name), entry.set === "characters", { set: entry.set, asset: name });
           this.loaded.add(name);
           this.onLoad?.({ type: "done", name });
           return root;

@@ -1,0 +1,277 @@
+{
+ "toon": {
+  "gl": "ANGLE (AMD, Vulkan 1.3.255 (AMD Radeon Vega 11 Graphics (RADV RAVEN) (0x000015D8)), radv)",
+  "ready": 5718,
+  "logs": [
+   "+4201ms warning: THREE.Clock: This module has been deprecated. Please use THREE.Timer instead."
+  ],
+  "frames": {
+   "0": {
+    "n": 315,
+    "meanMs": 9.62,
+    "medMs": 8.6,
+    "p95Ms": 20
+   }
+  },
+  "look": {
+   "tier": "classic",
+   "source": "url",
+   "reason": "url: look=toon",
+   "real": false,
+   "ramp": false,
+   "env": [],
+   "grassDensity": 1,
+   "budget": {
+    "dprCap": 2,
+    "renderScale": 1,
+    "dynamic": false,
+    "minScale": 0.6,
+    "ao": "half",
+    "msaa": 0,
+    "fxaa": true,
+    "shadowSize": 2048,
+    "shadowEvery": 2,
+    "fps": 60
+   },
+   "renderScale": 1,
+   "pixelRatio": 1,
+   "fps": 0,
+   "dynamicScale": null,
+   "valve": {
+    "state": "idle",
+    "meanMs": 0
+   },
+   "saved": null,
+   "composerMs": null,
+   "envBuilds": 0,
+   "shadowMap": false,
+   "envLayers": [],
+   "envBuildMs": 0,
+   "envTimings": null,
+   "envCache": null,
+   "grass": null,
+   "shadowUpdates": 0,
+   "shadowFrames": 0
+  },
+  "info": {
+   "calls": 101,
+   "triangles": 288820
+  },
+  "seeThrough": {
+   "on": true,
+   "faded": [
+    {
+     "id": 4,
+     "asset": "noodle_shop",
+     "vis": 0.13,
+     "coverage": 0.63
+    }
+   ]
+  }
+ },
+ "real": {
+  "gl": "ANGLE (AMD, Vulkan 1.3.255 (AMD Radeon Vega 11 Graphics (RADV RAVEN) (0x000015D8)), radv)",
+  "ready": 6485,
+  "logs": [
+   "+5385ms warning: THREE.WebGLRenderer: KHR_parallel_shader_compile extension not supported.",
+   "+6207ms warning: THREE.Clock: This module has been deprecated. Please use THREE.Timer instead."
+  ],
+  "frames": {
+   "0": {
+    "n": 241,
+    "meanMs": 12.46,
+    "medMs": 11.5,
+    "p95Ms": 17.7
+   },
+   "1": {
+    "n": 239,
+    "meanMs": 12.6,
+    "medMs": 12.1,
+    "p95Ms": 17.7
+   }
+  },
+  "look": {
+   "tier": "full",
+   "source": "url",
+   "reason": "url: look=real",
+   "real": true,
+   "ramp": false,
+   "env": [
+    "ground",
+    "grass",
+    "leaves",
+    "sky",
+    "bloom",
+    "grade",
+    "particles"
+   ],
+   "grassDensity": 1,
+   "budget": {
+    "dprCap": 2,
+    "renderScale": 1,
+    "dynamic": false,
+    "minScale": 0.6,
+    "ao": "half",
+    "msaa": 0,
+    "fxaa": true,
+    "shadowSize": 2048,
+    "shadowEvery": 2,
+    "fps": 60
+   },
+   "renderScale": 1,
+   "pixelRatio": 1,
+   "fps": 60,
+   "dynamicScale": null,
+   "valve": {
+    "state": "idle",
+    "meanMs": 0
+   },
+   "saved": null,
+   "composerMs": 7.91,
+   "envBuilds": 5,
+   "shadowMap": true,
+   "envLayers": [
+    "ground",
+    "grass",
+    "leaves",
+    "sky",
+    "particles",
+    "bloom",
+    "grade"
+   ],
+   "envBuildMs": 1142.5,
+   "envTimings": {
+    "textures": 146.7,
+    "field": 438.6,
+    "ground": 586.3,
+    "grass": 77.4,
+    "leaves": 472.1,
+    "sky": 1.6
+   },
+   "envCache": {
+    "hits": [],
+    "misses": [
+     "ground",
+     "field",
+     "leaf"
+    ]
+   },
+   "grass": {
+    "chunks": 52,
+    "drawn": 27,
+    "blades": 52207
+   },
+   "shadowUpdates": 479,
+   "shadowFrames": 956
+  },
+  "info": {
+   "calls": 1,
+   "triangles": 1
+  },
+  "seeThrough": {
+   "on": true,
+   "faded": [
+    {
+     "id": 4,
+     "asset": "noodle_shop",
+     "vis": 0.13,
+     "coverage": 0.625
+    }
+   ]
+  }
+ },
+ "real-close": {
+  "gl": "ANGLE (AMD, Vulkan 1.3.255 (AMD Radeon Vega 11 Graphics (RADV RAVEN) (0x000015D8)), radv)",
+  "ready": 4269,
+  "logs": [
+   "+3667ms warning: THREE.WebGLRenderer: KHR_parallel_shader_compile extension not supported.",
+   "+4072ms warning: THREE.Clock: This module has been deprecated. Please use THREE.Timer instead."
+  ],
+  "frames": {
+   "0": {
+    "n": 220,
+    "meanMs": 13.67,
+    "medMs": 12.7,
+    "p95Ms": 20.5
+   }
+  },
+  "look": {
+   "tier": "full",
+   "source": "url",
+   "reason": "url: look=real",
+   "real": true,
+   "ramp": false,
+   "env": [
+    "ground",
+    "grass",
+    "leaves",
+    "sky",
+    "bloom",
+    "grade",
+    "particles"
+   ],
+   "grassDensity": 1,
+   "budget": {
+    "dprCap": 2,
+    "renderScale": 1,
+    "dynamic": false,
+    "minScale": 0.6,
+    "ao": "half",
+    "msaa": 0,
+    "fxaa": true,
+    "shadowSize": 2048,
+    "shadowEvery": 2,
+    "fps": 60
+   },
+   "renderScale": 1,
+   "pixelRatio": 1,
+   "fps": 60,
+   "dynamicScale": null,
+   "valve": {
+    "state": "idle",
+    "meanMs": 0
+   },
+   "saved": null,
+   "composerMs": 10.1,
+   "envBuilds": 4,
+   "shadowMap": true,
+   "envLayers": [
+    "ground",
+    "grass",
+    "leaves",
+    "sky",
+    "particles",
+    "bloom",
+    "grade"
+   ],
+   "envBuildMs": 714.7,
+   "envTimings": {
+    "textures": 137.3,
+    "field": 285.7,
+    "ground": 423.8,
+    "grass": 45.8,
+    "leaves": 237.5,
+    "sky": 2.5
+   },
+   "envCache": {
+    "hits": [],
+    "misses": [
+     "ground",
+     "field",
+     "leaf"
+    ]
+   },
+   "grass": {
+    "chunks": 52,
+    "drawn": 22,
+    "blades": 39721
+   },
+   "shadowUpdates": 251,
+   "shadowFrames": 499
+  },
+  "info": {
+   "calls": 1,
+   "triangles": 1
+  }
+ }
+}

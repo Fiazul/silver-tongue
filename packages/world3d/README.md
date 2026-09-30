@@ -84,11 +84,16 @@ landscape set are flat. Synced 2026-09-30 (branch textured-library).
   (GLTFLoader's colour space, sampler and `channel`: three 0.186 reads the aoMap from its texture's
   channel, no uv2). The maps' uuids are in the material key, so textured sources never collapse
   into one white material; flat palette materials key and convert exactly as before.
-- Evening glow: the lantern is `lantern_red` (textured) + `metal` + `st_brass`, so `envlook.ts`
-  `emissives` gives it the flat `lantern_red` glow (colour (1, 0.16, 0.04) x 2.2, no emissive map);
-  at evening it glows, but the textured lanterns read cream-white under the bloom / tone mapping
-  where the old `lantern_PBR` branch (emissiveMap = map, gain 1.8) kept them red. The
-  `lantern_PBR` branch no longer matches anything.
+- Evening glow (`envlook.ts` `emissives`, `lanternGlow`): the lantern is `lantern_red` (textured) +
+  `metal` + `st_brass`. A textured `lantern_red` glows only on a lantern asset (`world.ts` stamps
+  `userData.asset` on each textured real-look material: one per asset's atlas), with emissiveMap =
+  its map x (1, 0.07, 0.02) x 0.9 (`LANTERN_GLOW`); the buildings' `lantern_red` trim (noodle_shop's
+  sign frame, tea_house's and red_door's door frames) no longer glows. A flat `lantern_red` (no
+  asset) keeps the old flat glow (1, 0.16, 0.04) x 2.2. The old 2.2 on the textured lanterns read
+  cream-white: OutputPass's ACES runs at exposure / 0.6 (1.5x), which saturated every channel.
+  Evening shot 08 (look-capture SET=textured), the lantern's centre: sRGB (248, 184, 127) before,
+  (232, 90, 58) now: red-orange. The dead `lantern_PBR` branch is gone.
+- Detail maps: see "Real look" → "Detail maps".
 - Tests: node can't decode the PNGs, so `test/helpers.ts readGlb` drops images from the GLBs it
   loads; `test/textures.test.ts` checks every vendored textured GLB's atlases against the index's
   `texture.px` / `orm_px` and the library, and the conversion.
@@ -936,6 +941,30 @@ is the repository's `dist/courses`. Build stamping uses asynchronous Git calls.
   when Playwright's own browser isn't downloaded. Frame time with the textured noodle shop, lanterns,
   stools and table (2026-09-30, Vega 11): real 15.6-17.8 ms mean vs 16.5-17.1 ms untextured, the
   same within noise.
+- Detail maps (`src/detail.ts`; Full and Lite; Classic and `ramp=1` never): the atlases are unique
+  and small (buildings 28 px/m), so at game distance brick read as smooth paint. Five tiling detail
+  textures, generated at startup (no files; 256² RGBA each, built once per page on the first
+  textured material): brick (4 x 10 courses of 0.32 x 0.128 m per 1.28 m tile, mortar, per-brick
+  tone), plaster (grain + blotch, 2 m), wood (grain lines, 1 m), metal (brushed + scratches, 0.6 m),
+  stone (irregular Voronoi flags, 2.4 m). R = albedo multiplier (grey, mean 1, p5-p95 within
+  +-15 %), GB = normal slopes. The patch (onBeforeCompile, chained after the see-through's, one
+  program key `detail-v1`: the kind is a uniform) is fragment-only: world position from
+  vViewPosition, triplanar in world space (weights from the world normal, a projection under 2 %
+  skipped), `textureGrad` with the derivatives taken before the branch, `diffuse *= albedo`, the
+  normal bent along the projection's world axes (no tangents). Fade (`DETAIL_FADE`): albedo full to
+  21 m, gone at 28 m (no texture reads past it); normal full to 8 m, gone at 24 m (the default
+  camera is 19 m from the player: 25 m left the noodle shop's pillars in shot 07 almost plain). Family table
+  (`familyOf` / `detailFor`): the palette name -> the library's family (make-it-in-china
+  `tools/blender/lib/textures.py` NAME_FAMILY with its set / asset overrides: a props / interiors
+  `brick` is a teapot or pot) -> brick / plaster (plaster, concrete; faint on tile, roof, paint,
+  cloth, plastic, paper, asphalt) / wood / metal / stone (stone, paving); ceramic and organic
+  (glaze, food) none; game-owned names (grass, ground, water, canopies, glass, `sky_blue`) none;
+  unknown names plaster grain at 0.3. Every textured material in the vendored GLBs maps to a known
+  family (`test/detail.test.ts`). No new pass; the GTAO normal pass and the shadow maps don't see it.
+  Shots `shots/look/detail-maps/` (SET=textured + SET=tiers, 1920x1080, 0 console errors): 09
+  close, the pillars read as brick courses with light mortar; 07 street, still brick. Frame time
+  (SET=textured, 2026-09-30, Vega 11, the machine under other load), rAF mean real day / evening:
+  a074ad0 15.1 / 15.6 ms, this 12.5-13.6 / 12.6-15.4 ms: within noise.
 - Outline hulls are hidden from GTAO's normal / depth pass (`reallook.ts`: their materials,
   `world.ts OUTLINE_MATERIALS`, invisible for that pass only). Under its override material a hull
   is its mesh again, un-pushed, at the same depth: the two z-fought into a diagonal hatch on any
@@ -983,7 +1012,7 @@ Layers (`look.ts ENV_LAYERS`):
 - `sky`: a gradient sky with sun disc, glow and cloud wisps replaces `sky_dome` (from the day's
   sky colours, so fog still matches); the environment map takes the sun's glow.
 - `bloom`: UnrealBloomPass (threshold 2.4 linear, at half its own resolution), stronger at
-  evening; lanterns (`lantern_PBR`, `lantern_red`), `glass` and the filler shops' `sky_blue` panes
+  evening; the lanterns (`lantern_red` on a lantern asset, its map as the emissive map), `glass` and the filler shops' `sky_blue` panes
   take an evening emissive.
 - `grade`: lift / gamma / gain, saturation, vignette, grain folded into OutputPass's shader;
   midday warm-clean, evening amber over cooler shadows; still grain under prefers-reduced-motion.
@@ -1328,6 +1357,12 @@ that role said last).
 
 - `test/game.test.ts`: the game model against the real course; layout checks (every NPC in its
   place's space, no overlapping triggers, interiors' entries / exits / furniture / reach, held props).
+- `test/detail.test.ts`: the detail maps' family table covers every textured material in the
+  vendored GLBs (no default), game-owned / ceramic / organic names get none; each texture is 256²,
+  deterministic, albedo mean 1 and p5-p95 within +-15 %, and tiles (the wrap step no bigger than
+  the worst inside); the patch is fragment-only, real-look only (none at Classic or `ramp=1`, none
+  on characters), one program key; the lantern glow (emissiveMap = map on the lantern, never on the
+  buildings' `lantern_red` trim).
 - `test/world.test.ts`: the goTo thrash (a position jittering across a zone boundary 100 times
   sends at most 2 goTo; big swings are rate-limited; `enterPlace` not re-entrant; a door inside a
   zone doesn't flip; a travel-only spot holds only its own place), every space's enter → inside →

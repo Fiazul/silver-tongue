@@ -1573,8 +1573,34 @@ void main() {
   }
 }
 
+/**
+ * A textured lantern's evening emissive: its own map (the atlas's shading, ~0.83 linear) times this
+ * red-orange, x the gain. Kept low: OutputPass's ACES runs at exposure / 0.6 (1.5x), and the old flat
+ * 2.2 saturated every channel toward cream-white; this lands red-orange (shot 08: sRGB ~232 / 90 / 58).
+ */
+export const LANTERN_GLOW = { colour: new THREE.Color(1, 0.07, 0.02), gain: 0.9 };
+/** an untextured (flat) lantern_red: as before */
+export const LANTERN_FLAT = { colour: new THREE.Color(1, 0.16, 0.04), gain: 2.2 };
+
+/**
+ * `lantern_red`'s glow. The textured assets carry the palette name on their red trim too (the noodle
+ * shop's sign frame, the tea house's and red_door's door frames): a textured material (world.ts
+ * stamps `userData.asset`, one material per asset) glows only on a lantern asset, with
+ * emissiveMap = its map; a flat one (no asset: shared palette material) glows flat as before.
+ */
+function lanternGlow(m: THREE.MeshStandardMaterial): { colour: THREE.Color; gain: number } | null {
+  const asset = m.userData.asset as string | undefined;
+  if (asset !== undefined && !/^lantern/.test(asset)) return null;
+  if (!m.map) return { colour: LANTERN_FLAT.colour.clone(), gain: LANTERN_FLAT.gain };
+  if (m.emissiveMap !== m.map) {
+    m.emissiveMap = m.map;
+    m.needsUpdate = true;
+  }
+  return { colour: LANTERN_GLOW.colour.clone(), gain: LANTERN_GLOW.gain };
+}
+
 /** Evening glow: lanterns, lamp glass, windows take an emissive that rises toward evening (the bloom picks them up). */
-function emissives(scene: THREE.Scene): (evening: number) => void {
+export function emissives(scene: THREE.Scene): (evening: number) => void {
   const found = new Map<THREE.MeshStandardMaterial, { base: THREE.Color; colour: THREE.Color; gain: number }>();
   scene.traverse((o) => {
     const mesh = o as THREE.Mesh;
@@ -1584,15 +1610,10 @@ function emissives(scene: THREE.Scene): (evening: number) => void {
       if (!m.isMeshStandardMaterial || found.has(m)) continue;
       const name = m.name;
       let spec: { colour: THREE.Color; gain: number } | null = null;
-      if (/^lantern_PBR$/.test(name)) {
-        // the textured lantern glows its own colours
-        if (m.map && !m.emissiveMap) {
-          m.emissiveMap = m.map;
-          m.needsUpdate = true;
-        }
-        spec = { colour: new THREE.Color(1, 0.35, 0.12), gain: 1.8 };
-      } else if (/^lantern_red$/.test(name)) spec = { colour: new THREE.Color(1, 0.16, 0.04), gain: 2.2 };
-      else if (/^glass$/.test(name)) spec = { colour: new THREE.Color(1, 0.6, 0.28), gain: 2.2 };
+      if (/^lantern_red$/.test(name)) {
+        const lantern = lanternGlow(m);
+        if (lantern) spec = lantern;
+      } else if (/^glass$/.test(name)) spec = { colour: new THREE.Color(1, 0.6, 0.28), gain: 2.2 };
       // the filler shops' window panes
       else if (/^sky_blue$/.test(name)) spec = { colour: new THREE.Color(1, 0.55, 0.22), gain: 1.0 };
       if (spec) found.set(m, { base: m.emissive.clone(), ...spec });
