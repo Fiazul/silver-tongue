@@ -100,6 +100,11 @@ landscape set are flat. Synced 2026-09-30 (branch textured-library).
     (`remapUV`: texel centre for texel centre). Flat members drop their UVs. The see-through tag is
     baked from the source mesh as before, the outline hulls keep their own shared batch, and each
     batch lists its parts (`userData.parts`). Anything else batches by its own material, as before.
+  - With the other 0.14 layers: in the real look a textured member's tiling detail (`detail.ts`,
+    `userData.detail`) is part of its family's key and applied to the family material too (one draw
+    per page and detail kind). A prefetched build (`prefetch.ts`, its gate) packs one step per gate
+    turn instead of `sliced`; an evicted prefetched space (`SceneSpace.dispose`) drops its own pages
+    and family materials (`AssetCache.dropAtlas`), every other space's stay cached.
   - Measured 2026-09-30 (look-capture 1920x1080, `shots/look/atlas-batching/`, 0 console errors):
     toon street (SET=textured 06) 101 -> 41 calls; interiors (SET=interiors, classic) noodle shop
     62 -> 18, room 44 -> 18, tea house 44 -> 18, shop 66 -> 22, stairs 34 -> 19. Frame mean

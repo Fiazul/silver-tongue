@@ -350,3 +350,39 @@ describe("static families in the real look: the tiling detail rides along", () =
     }
   });
 });
+
+describe("an evicted space's atlas (prefetch.ts evict -> SceneSpace.dispose -> AssetCache.dropAtlas)", () => {
+  it("drops that space's pages and family materials only; the space packs again when rebuilt", async () => {
+    const cache = new AssetCache("", {} as LayoutIndex);
+    const space = async (seed: number) => {
+      const t = new THREE.DataTexture(image(16, 16, seed), 16, 16);
+      const root = new THREE.Group();
+      for (const hex of [0x112233, 0x445566]) root.add(new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshStandardMaterial({ color: hex, map: t })));
+      cache.toon.apply(root, false);
+      root.userData.see = { tag: SEE_ID0 };
+      const read = (x: THREE.Texture, w: number, h: number) => resample((x.image as { data: Uint8Array }).data, 16, 16, w, h);
+      const atlas = (await packSpaceAtlas([root], read))!;
+      const scene = new THREE.Scene();
+      scene.add(root);
+      mergeStatic(scene, [root], new StaticFamilies(cache.toon, atlas));
+      const mat = (scene.children.find((c) => c.name.startsWith("batch:atlas")) as THREE.Mesh).material as THREE.Material;
+      return { atlas, mat };
+    };
+    const a = await space(1);
+    const b = await space(2);
+    const atlases = (cache as unknown as { atlases: Map<string, Promise<unknown>> }).atlases;
+    atlases.set("a", Promise.resolve(a.atlas));
+    atlases.set("b", Promise.resolve(b.atlas));
+    const disposed = new Set<object>();
+    for (const x of [a.atlas.pages[0].base, a.atlas.pages[0].orm, b.atlas.pages[0].base, b.atlas.pages[0].orm, a.mat, b.mat]) x.addEventListener("dispose", () => disposed.add(x));
+    await cache.dropAtlas("a");
+    expect(disposed).toEqual(new Set([a.atlas.pages[0].base, a.atlas.pages[0].orm, a.mat]));
+    expect(atlases.has("a")).toBe(false);
+    expect(atlases.has("b")).toBe(true);
+    // b's family material is still the one handed out for its page
+    const fam = cache.toon.family({ key: `family|${b.atlas.pages[0].base.uuid}|0|0.8|0|1|`, name: "x", side: THREE.FrontSide, roughness: 0.8, metalness: 0, aoMapIntensity: 1, page: null });
+    expect(fam).toBe(b.mat);
+    // asked again, the space packs anew (node: nothing to read, so null) instead of reusing the dropped pages
+    expect(await cache.spaceAtlas("a", [])).toBeNull();
+  });
+});
