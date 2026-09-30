@@ -54,12 +54,12 @@ resolution = occlusion R / roughness G / metalness B; no normal map, the polishe
 the bevels). Game-owned surfaces stay flat: glass / `pi_glass` / `sky_blue` panes, and the ground,
 grass, water and canopy names `envlook.ts` re-shades. The game ships 60 textured GLBs (every
 used building, street piece, prop and interior, plus `canal_banks`); characters and the town /
-landscape set are flat. Synced 2026-09-30 (branch textured-library).
-- Characters are not taken from the library: its characters are the pre-polish builds (e.g. `cook`
-  1,767 verts, `charcoal` / `cloth_white`; the vendored polished one 2,051, `npc_charcoal` /
-  `npc_ivory`). The vendored characters come from the polish pass (make-it-in-china
-  `.polish/recovered/integrate/assets`, st-rebase `49d6754`); re-syncing them from `../assets` would
-  undo it. Refresh with `--only` and leave the character names out until the library carries them.
+landscape set are flat. Synced 2026-09-30 (branches textured-library, then textured-library-2:
+the library's wear x2 rebuild).
+- Characters: since the textured-library-2 sync the library carries the polished characters (the
+  polish pass's, make-it-in-china `.polish/recovered/integrate/assets`, st-rebase `49d6754`); a sync
+  that includes them leaves all 26 vendored GLBs byte-identical (md5 checked). Check again before
+  trusting a future library rebuild with them.
 - Sync: `npm run assets:sync -w @silver-tongue/world3d -- --only noodle_shop,lantern,...` refreshes
   just those GLBs and their `index.json` entries (added when new) and nothing else. Every copy
   (sync and build, `scripts/used-assets.mjs copyGlb`) first re-encodes base colour and ORM PNGs as
@@ -68,11 +68,13 @@ landscape set are flat. Synced 2026-09-30 (branch textured-library).
   reads it), then meshopt, then `scripts/meshopt.mjs checkSurfaces`: same texture and image counts,
   TEXCOORD_0 on the same primitives, every PNG byte-identical, every JPEG the source's size and
   well-formed.
-- Size (dist/assets GLBs, KB, before -> after): buildings 1,155 -> 1,546, interiors 326 -> 638,
-  props 198 -> 373, street 278 -> 461, landscape 352 -> 360, characters 3,558 and town 493
-  unchanged; 6,361 -> 7,430 (gzipped 2,303 -> 3,161). The build total went 14,646 -> 15,728 KB,
-  over `build.mjs` BUDGET (15 MB, which only decides MUSIC_OGG_ONLY: already on). First frame: 3,087
-  of 7,430 KB (41.5 %, `test/loading.test.ts` budget now 43 %; 39.7 % before).
+- Size (dist/assets GLBs, KB): flat 25aefb1 -> textured-library -> textured-library-2 (wear x2, plus
+  the shop's 5 new props): buildings 1,155 -> 1,546 -> 1,713, interiors 326 -> 638 -> 682, props
+  198 -> 373 -> 518 (17 files), street 278 -> 461 -> 478, landscape 352 -> 360 -> 362, characters
+  3,558 and town 493 unchanged; GLBs 6,361 -> 7,430 -> 7,804 (gzipped 2,303 -> 3,161 -> 3,485). Build
+  total 14,646 -> 15,728 -> 16,198 KB, over `build.mjs` BUDGET (15 MB, which only decides
+  MUSIC_OGG_ONLY: already on). First frame: 3,270 of 7,804 KB (41.9 %; `test/loading.test.ts`
+  budget 43 %).
 - Draw calls: a textured material keys on its asset's atlas (below) and textured geometry carries
   UVs, so textured pieces stopped merging with each other and with flat pieces of the same palette
   colour (toon street shot, look-capture SET=textured: 70 -> 101 calls; interiors, classic
