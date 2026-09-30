@@ -14,7 +14,7 @@ import { buildCountryside, flyoverViews, hazeColour, HORIZON, moveClouds, type P
 import { canReadImages, packSources, readImage, sliced, type AtlasSource, type PackedAtlas, type PackRect } from "./atlas";
 import { CANOPIES, isSeeThrough, markSeeThrough, patchSeeThrough, seeAttribute, SEE_ATTR, SEE_FRAG, SEE_FRAG_PARS, SEE_ID0, SEE_NEVER, SEE_OCCLUDER, SEE_VERT, SEE_VERT_PARS, SEE_THROUGH, seeSpecFor, seeUniforms, type Occluder, type SeeSpec } from "./seethrough";
 import { ModuleLoadError } from "./boot";
-import { applyDetail, detailFor } from "./detail";
+import { applyDetail, detailFor, type DetailSpec } from "./detail";
 import { figureId } from "./barks";
 import { CHARACTER_KINDS, type LoadEvent } from "./loading";
 import { anchorToWorld, heldProp, yawFor, type Blocker, type Box2, type HeldPropSpec, type LayoutIndex, type Placement, type SpaceLayout, type Vec3 } from "./layout";
@@ -212,9 +212,9 @@ class Toon {
    * The material of a static family batch (StaticFamilies): white, its colours per vertex; with a
    * packed atlas page, that page's base colour as `map` and its ORM as `aoMap` (+ roughness /
    * metalness maps in the real look), exactly as Toon.material hands a textured source's maps on.
-   * Plain toon / standard materials (the see-through patch only), one per key.
+   * Plain toon / standard materials (the see-through patch, and in the real look the members' tiling detail: detail.ts applyDetail), one per key.
    */
-  family(f: { key: string; name: string; side: THREE.Side; roughness: number; metalness: number; aoMapIntensity: number; page: { base: THREE.Texture; orm: THREE.Texture } | null }): THREE.MeshToonMaterial {
+  family(f: { key: string; name: string; side: THREE.Side; roughness: number; metalness: number; aoMapIntensity: number; page: { base: THREE.Texture; orm: THREE.Texture } | null; detail?: DetailSpec }): THREE.MeshToonMaterial {
     let m = this.materials.get(f.key);
     if (m) return m;
     const maps = f.page ? { map: f.page.base, aoMap: f.page.orm, aoMapIntensity: f.aoMapIntensity } : {};
@@ -231,6 +231,8 @@ class Toon {
       }) as unknown as THREE.MeshToonMaterial;
     else m = new THREE.MeshToonMaterial({ color: 0xffffff, vertexColors: true, gradientMap: this.gradient, side: f.side, name: f.name, ...maps });
     patchSeeThrough(m);
+    // the same tiling detail its textured members had (real look only: Toon.material sets none elsewhere)
+    if (f.detail && (m as unknown as THREE.MeshStandardMaterial).isMeshStandardMaterial) applyDetail(m as unknown as THREE.MeshStandardMaterial, f.detail);
     this.materials.set(f.key, m);
     return m;
   }
@@ -616,7 +618,8 @@ function familySurface(mesh: THREE.Mesh): SurfaceMaterial | null {
   if (!(m.isMeshToonMaterial || m.isMeshStandardMaterial) || !m.visible || !m.color) return null;
   if (m.transparent || m.opacity !== 1 || m.alphaTest > 0 || m.vertexColors || m.wireframe || !m.depthWrite || !m.depthTest || m.polygonOffset || !m.colorWrite) return null;
   if (m.emissive?.getHex() || m.emissiveMap || m.normalMap || m.lightMap || m.bumpMap || m.alphaMap || m.displacementMap || m.envMap) return null;
-  if (KEEP_APART.test(m.name) || Object.keys(m.userData).length || !isSeeThrough(m)) return null;
+  // userData: only what Toon.material itself records (the textured source's asset, its detail: detail.ts applyDetail)
+  if (KEEP_APART.test(m.name) || Object.keys(m.userData).some((k) => k !== "asset" && k !== "detail") || !isSeeThrough(m)) return null;
   const g = mesh.geometry;
   if (Object.keys(g.morphAttributes).length || !g.getAttribute("position") || !g.getAttribute("normal") || g.getAttribute("color")) return null;
   if (m.map) {
@@ -726,9 +729,11 @@ export class StaticFamilies {
     const metalness = m.isMeshStandardMaterial ? m.metalness : 0;
     const ao = page ? m.aoMapIntensity : 1;
     const shadows = LOOK.real ? `${mesh.castShadow ? "c" : ""}${mesh.receiveShadow ? "r" : ""}` : "";
-    const name = page ? `atlas_${pageIndex}` : "flat";
-    const key = `family|${page ? `${page.base.uuid}` : "flat"}|${m.side}|${roughness}|${metalness}|${ao}|${shadows}`;
-    const material = this.toon.family({ key, name: `${name}${m.side === THREE.FrontSide ? "_front" : ""}`, side: m.side, roughness, metalness, aoMapIntensity: ao, page: page && { base: page.base, orm: page.orm } });
+    // the real look's tiling detail (detail.ts, set by Toon.material on textured sources): one family per detail spec
+    const detail = page ? (m.userData.detail as DetailSpec | undefined) : undefined;
+    const name = `${page ? `atlas_${pageIndex}` : "flat"}${detail ? `_${detail.kind}` : ""}`;
+    const key = `family|${page ? `${page.base.uuid}` : "flat"}|${m.side}|${roughness}|${metalness}|${ao}|${shadows}${detail ? `|${detail.kind},${detail.albedo},${detail.normal}` : ""}`;
+    const material = this.toon.family({ key, name: `${name}${m.side === THREE.FrontSide ? "_front" : ""}`, side: m.side, roughness, metalness, aoMapIntensity: ao, page: page && { base: page.base, orm: page.orm }, detail });
     return { key, material, rect, page };
   }
 

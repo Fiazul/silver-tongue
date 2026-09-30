@@ -5,7 +5,7 @@
 // surfaces merge into one draw per family with their colours per vertex, the see-through ids
 // and the outline hulls carried through.
 import * as THREE from "three";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ATLAS_PAD, blit, ORM_SCALE, packAtlas, packSources, remapUV, scaleRect, texelAt, type AtlasPageData, type PackItem, type PackRect } from "../src/atlas";
 import { AssetCache, drawCalls, mergeStatic, packSpaceAtlas, StaticFamilies } from "../src/world";
 import type { LayoutIndex } from "../src/layout";
@@ -297,5 +297,56 @@ describe("static families: one draw per atlas page and family", () => {
     scene2.add(...plain);
     mergeStatic(scene2, plain);
     expect(drawCalls(scene2)).toBe(3);
+  });
+});
+
+describe("static families in the real look: the tiling detail rides along", () => {
+  it("textured members keep their detail kind: one family per (page, detail), each patched like Toon.material's", async () => {
+    vi.resetModules();
+    vi.doMock("../src/look", async (orig) => ({ ...(await orig<typeof import("../src/look")>()), LOOK: { real: true, ramp: false } }));
+    try {
+      const world = await import("../src/world");
+      const { DETAIL_KEY } = await import("../src/detail");
+      const cache = new world.AssetCache("", {} as LayoutIndex);
+      const mk = (w: number, h: number, seed: number, cs: THREE.ColorSpace) => {
+        const t = new THREE.DataTexture(image(w, h, seed), w, h);
+        t.colorSpace = cs;
+        return t;
+      };
+      const base = mk(32, 32, 1, THREE.SRGBColorSpace);
+      const orm = mk(16, 16, 2, THREE.NoColorSpace);
+      const src = (name: string, hex: number) => new THREE.MeshStandardMaterial({ name, color: hex, map: base, aoMap: orm, roughnessMap: orm, metalnessMap: orm, roughness: 1, metalness: 1 });
+      const root = new THREE.Group();
+      for (const [n, c] of [["brick", 0xaa3322], ["brick", 0xaa3322], ["wood", 0x664422], ["wood_dark", 0x332211]] as const) root.add(new THREE.Mesh(new THREE.PlaneGeometry(1, 1), src(n, c)));
+      cache.toon.apply(root, false, false, { set: "buildings", asset: "noodle_shop" });
+      root.userData.see = { tag: SEE_ID0 };
+      const scene = new THREE.Scene();
+      scene.add(root);
+      const read = (t: THREE.Texture, w: number, h: number) => {
+        const img = t.image as { data: Uint8Array; width: number; height: number };
+        return resample(img.data, img.width, img.height, w, h);
+      };
+      const atlas = await world.packSpaceAtlas([root], read);
+      expect(atlas).not.toBeNull();
+      world.mergeStatic(scene, [root], new world.StaticFamilies(cache.toon, atlas));
+      const batches = scene.children.filter((c) => c.name.startsWith("batch:")) as THREE.Mesh[];
+      // brick and wood (wood + wood_dark share the wood detail): two draws
+      expect(batches.map((b) => b.name).sort()).toEqual(["batch:atlas_0_brick_front", "batch:atlas_0_wood_front"]);
+      for (const b of batches) {
+        const m = b.material as THREE.MeshStandardMaterial;
+        expect(m.isMeshStandardMaterial).toBe(true);
+        expect(m.map).toBe(atlas!.pages[0].base);
+        expect(m.roughnessMap).toBe(atlas!.pages[0].orm);
+        expect(m.userData.detail.kind).toBe(b.name.includes("brick") ? "brick" : "wood");
+        expect(m.customProgramCacheKey()).toBe(`see-through-objects|${DETAIL_KEY}`);
+        const sh = { vertexShader: THREE.ShaderLib.standard.vertexShader, fragmentShader: THREE.ShaderLib.physical.fragmentShader, uniforms: {} as Record<string, THREE.IUniform> };
+        m.onBeforeCompile(sh as unknown as THREE.WebGLProgramParametersWithUniforms, {} as THREE.WebGLRenderer);
+        expect(sh.fragmentShader).toContain("stSeeThrough();");
+        expect(sh.fragmentShader).toContain("dtMul");
+      }
+    } finally {
+      vi.doUnmock("../src/look");
+      vi.resetModules();
+    }
   });
 });
