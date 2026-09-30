@@ -10,7 +10,7 @@
 import type { Course, RenderedLine, WordId } from "@silver-tongue/core";
 import type { DayCard, FeedItem, Game, Gloss, UiModel } from "../game";
 import type { GuideStep } from "../guide";
-import { TIERS, type Tier } from "../look";
+import { FPS_CHOICES, TIERS, type Tier } from "../look";
 import { versionLine } from "../version";
 import { BubbleView } from "./bubble";
 import { el } from "./dom";
@@ -67,6 +67,8 @@ export interface SettingsView {
   ambienceFull: boolean;
   /** the graphics tier running now (look.ts LOOK.tier) */
   graphics: Tier;
+  /** the real look's frame rate choice (look.ts FPS_CHOICES); null: no row (classic has no pacing) */
+  fps: number | null;
 }
 
 export interface SettingsHooks {
@@ -82,6 +84,8 @@ export interface SettingsHooks {
   setAmbienceFull(on: boolean): void;
   /** Settings → Graphics: saved; true when it differs from the running tier (it applies at the next page load) */
   setGraphics(tier: Tier): boolean;
+  /** Settings → Frame rate: saved and applied at once */
+  setFps(fps: number): void;
   replayIntro(): void;
 }
 
@@ -766,6 +770,24 @@ export class Overlay {
         return b;
       }),
     );
+    // Frame rate (the real look only): 60 / 30, saved, at once
+    const fpsRow =
+      cur.fps === null
+        ? null
+        : el(
+            "div",
+            { className: "set-options set-fps" },
+            ...FPS_CHOICES.map((f) => {
+              const b = el("button", { textContent: s(`settings-fps-${f}`) });
+              b.dataset.fps = String(f);
+              b.setAttribute("aria-pressed", String(f === cur.fps));
+              b.addEventListener("click", () => {
+                hooks.setFps(f);
+                for (const x of fpsRow!.querySelectorAll("button")) x.setAttribute("aria-pressed", String(x.dataset.fps === String(f)));
+              });
+              return b;
+            }),
+          );
     const intro = el("button", { textContent: s("settings-intro") });
     intro.addEventListener("click", () => {
       this.menu.close();
@@ -787,6 +809,7 @@ export class Overlay {
         row(s("settings-sfx"), el("div", { className: "set-options" }, sfxBtn)),
         row(s("settings-ambience"), el("div", { className: "set-options" }, ambienceOn, ambienceBtn)),
         row(s("settings-graphics"), graphicsRow),
+        ...(fpsRow ? [row(s("settings-fps"), fpsRow)] : []),
         el("div", { className: "set-options" }, intro),
         msg,
         versionLine(s),

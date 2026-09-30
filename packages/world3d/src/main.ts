@@ -63,8 +63,9 @@ import type { Insets } from "./ui/viewport";
 import { BUILD } from "./version";
 import { AssetCache, drawCalls, OUTLINE_MATERIALS, SceneSpace, setOutlineScale } from "./world";
 import { patchSeeThrough, SEE_ATTR, SEE_THROUGH, SeeThroughControl, SeeThroughDetector } from "./seethrough";
-import { LITE_GRASS, LITE_LAYERS, LOOK, LookValve, lookFor, setLook, type Tier } from "./look";
+import { DynamicScale, FramePacer, IDLE_FPS, IDLE_S, LITE_GRASS, LITE_LAYERS, LOOK, LookValve, lookFor, renderPixelRatio, setLook, type Tier } from "./look";
 import { GuideMarker } from "./marker";
+import { FrameGpuTimer, Perf, textureBytes } from "./perf";
 import { daySteps, edgeArrow, findPath, LostTimer, nextSteps, resolveTarget, type PathGrid, type WayTarget } from "./wayfind";
 import { EdgeArrowView, PathTrail, spaceGrid } from "./wayview";
 import type { WebSessions } from "@silver-tongue/web-common";
@@ -155,6 +156,9 @@ function askRetry(e: unknown, action: RetryAction): Promise<void> {
  * always. Never reachable without the flag: normal play is untouched.
  */
 const promoMode = new URLSearchParams(location.search).get("promo") === "1";
+/** `?perf=1` (perf.ts): the per-frame profile, read through world3d.perf() */
+const perfMode = new URLSearchParams(location.search).get("perf") === "1";
+let perf: Perf | null = null;
 const prefs = loadPrefs(kv);
 
 // Phones: no pinch / double-tap zoom (iOS ignores user-scalable=no), no pull-to-refresh (page.css
@@ -166,15 +170,26 @@ function fetchJson<T>(path: string): Promise<T> {
   return json.get<T>(path);
 }
 
+/**
+ * The real look's render scale now (look.ts RenderBudget: the tier's, then DynamicScale's); the
+ * renderer draws min(dpr, dprCap) x this (renderPixelRatio). Classic: the DPR capped at 2, as always.
+ */
+let renderScale = LOOK.budget.renderScale;
+function pixelRatioNow(): number {
+  const dpr = window.devicePixelRatio || 1;
+  return LOOK.real ? renderPixelRatio(LOOK.budget, dpr, renderScale) : Math.min(dpr, 2); // classic's cap: phones at 3x fill 2.25x the pixels for little gain
+}
+
 /** The renderer, on the stage; no WebGL: a WebGLError (the loading screen says so). */
 function makeRenderer(): THREE.WebGLRenderer {
   let r: THREE.WebGLRenderer;
   try {
-    r = new THREE.WebGLRenderer({ antialias: window.devicePixelRatio < 2, powerPreference: "high-performance" });
+    // the real look draws into its own targets (reallook.ts, MSAA there): the canvas's own antialiasing would be memory and bandwidth for nothing
+    r = new THREE.WebGLRenderer({ antialias: LOOK.real ? false : window.devicePixelRatio < 2, powerPreference: "high-performance" });
   } catch (e) {
     throw new WebGLError(`WebGL: ${(e as Error)?.message ?? String(e)}`);
   }
-  r.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  r.setPixelRatio(pixelRatioNow());
   document.querySelector("#stage")!.append(r.domElement);
   return r;
 }
@@ -203,10 +218,12 @@ async function main() {
   let madeReal: ReturnType<(typeof import("./reallook"))["createRealLook"]> | null = null;
   const loadWorld = async () => {
     const renderer = (madeRenderer ??= makeRenderer()); // first: no WebGL says so at once
+    if (perfMode) perf ??= new Perf(renderer);
     const L = (madeLayout ??= new LayoutIndex(LAYOUT, await fetchJson<AssetIndex>(`${ASSETS}/index.json`)));
     if (!madeAssets) {
       const a = new AssetCache(ASSETS, L);
       a.onLoad = (e) => {
+        if (e.type === "done") perf?.flag("asset");
         load = reduceLoad(load, e);
         startWatch.poke();
         if (loading.visible) loading.render(loadSummary(load));
@@ -227,7 +244,7 @@ async function main() {
     // The real look (look.ts: the full / lite tier, or `?look=real`): its chunk, the composer and
     // the town's environment layers, built here behind the loading screen (a load item of their
     // own): the first frame on screen has them, with no build or shader hitch. null (never loaded) in classic.
-    const real = LOOK.real ? (madeReal ??= (await import("./reallook")).createRealLook(renderer, patchSeeThrough, OUTLINE_MATERIALS, { env: LOOK.env, seeAttr: SEE_ATTR, grassDensity: LOOK.grassDensity })) : null;
+    const real = LOOK.real ? (madeReal ??= (await import("./reallook")).createRealLook(renderer, patchSeeThrough, OUTLINE_MATERIALS, { env: LOOK.env, seeAttr: SEE_ATTR, grassDensity: LOOK.grassDensity, lite: LOOK.tier === "lite", perf, budget: LOOK.budget, cacheStamp: BUILD, warm: new URLSearchParams(location.search).get("warm") !== "0" })) : null;
     if (real) await prepareLook(real, spaces.get(STREET)!.scene, player.position);
     return { L, renderer, assets, plan, spaces, player, carry, real };
   };
@@ -448,6 +465,8 @@ async function main() {
   /** full on the device's default only: slow first seconds drop the session to lite, once (look.ts LookValve) */
   const valve = new LookValve(LOOK);
   let valveLast = 0;
+  /** the real look's dynamic resolution (look.ts DynamicScale), when its budget has it */
+  let dynScale: DynamicScale | null = LOOK.real && LOOK.budget.dynamic ? new DynamicScale(renderScale, LOOK.budget.minScale, 1000 / (LOOK.budget.fps || 60)) : null;
 
   // Where a tap sent the player: a small ring on the ground.
   const marker = new THREE.Mesh(new THREE.RingGeometry(0.18, 0.26, 24), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8 }));
@@ -532,6 +551,10 @@ async function main() {
   /** the see-through (seethrough.ts): the player and whoever they talk to, never hidden */
   const see = new SeeThroughControl();
   const seeDetector = new SeeThroughDetector(renderer);
+  if (perf) {
+    perf.wrap(seeDetector, "sample", "seeThrough");
+    perf.wrap(seeDetector, "poll", "seePoll");
+  }
   let seeFrame = 0;
   let seeSpace: THREE.Scene | null = null;
   const lastSeePlayer = player.position.clone();
@@ -752,6 +775,7 @@ async function main() {
         music: prefs.music,
         ambienceFull: prefs.ambienceFull,
         graphics: LOOK.tier,
+        fps: LOOK.real ? (LOOK.budget.fps === 30 ? 30 : 60) : null,
       }),
       // As tui-web's switchTo: another reading language goes on with the game as played (its
       // save is the course's, whatever the reading language); another course plays its last game.
@@ -780,6 +804,12 @@ async function main() {
       },
       // Graphics: saved, applied at the next page load (the toon and the real look build different
       // materials); the one running now is kept as a choice (the safety valve never overrides it)
+      // Frame rate: saved, and the pacer's target at once (look.ts FramePacer; the URL's `fps=` is only for this load)
+      setFps: (fps: number) => {
+        prefs.fps = fps === 30 ? 30 : 60;
+        savePrefs(kv, prefs);
+        LOOK.budget.fps = prefs.fps;
+      },
       setGraphics: (tier: Tier) => {
         prefs.graphics = tier;
         savePrefs(kv, prefs);
@@ -1095,7 +1125,7 @@ async function main() {
     const w = window.innerWidth;
     const h = window.innerHeight;
     const dpr = window.devicePixelRatio || 1;
-    renderer.setPixelRatio(Math.min(dpr, 2)); // cap: phones at 3x fill 2.25x the pixels for little gain
+    renderer.setPixelRatio(pixelRatioNow());
     renderer.setSize(w, h);
     real?.setSize(w, h, renderer.getPixelRatio());
     overlay.layout(w, h, safeInsets());
@@ -1120,7 +1150,13 @@ async function main() {
     }
     if (valveLast && valve.frame(now - valveLast)) {
       real.restrict(LITE_LAYERS, LITE_GRASS);
-      setLook(lookFor("lite", "valve", `valve: ${valve.meanMs} ms a frame over the first ${valve.windowMs / 1000} s at full`));
+      setLook(lookFor("lite", "valve", `valve: ${valve.meanMs} ms a frame over the first ${valve.windowMs / 1000} s at full`, { search: location.search, fps: prefs.fps }));
+      // lite's budget, live: its AO, render scale (and dynamic resolution), frame rate
+      real.setAo(LOOK.budget.ao);
+      renderScale = LOOK.budget.renderScale;
+      dynScale = LOOK.budget.dynamic ? new DynamicScale(renderScale, LOOK.budget.minScale, 1000 / (LOOK.budget.fps || 60)) : null;
+      pacer.fps = LOOK.budget.fps;
+      resize();
       overlay.notify(game!.s("graphics-lite-toast"), "note");
     }
     valveLast = now;
@@ -1287,7 +1323,18 @@ async function main() {
   }
 
   let firstFrame = false;
-  renderer.setAnimationLoop(() => {
+  /** the frame's draw: the composer (real look) or the plain render */
+  const drawFrame = () => {
+    perf?.cpuBegin("render");
+    try {
+      if (real) real.render(space.scene, rig.camera, player.position);
+      else if (perf) perf.time("colour", () => renderer.render(space.scene, rig.camera));
+      else renderer.render(space.scene, rig.camera);
+    } finally {
+      perf?.cpuEnd();
+    }
+  };
+  const frame = () => {
     const dt = Math.min(0.05, clock.getDelta());
     updateSound();
     if (!game) return;
@@ -1307,8 +1354,7 @@ async function main() {
       if (done) endFlyover();
       else {
         see.update(dt, [], space.occluders, [], false); // everything opaque on the fly-over
-        if (real) return real.render(space.scene, rig.camera, player.position);
-        return renderer.render(space.scene, rig.camera);
+        return drawFrame();
       }
     }
     // A place change into another space: fade, swap, fade back.
@@ -1417,8 +1463,52 @@ async function main() {
       const p = found ? project(head) : { x: 0, y: 0, visible: false };
       overlay.bubble.position(p.x, p.y, p.visible, overlay.bubbleArea());
     }
-    if (real) real.render(space.scene, rig.camera, player.position);
-    else renderer.render(space.scene, rig.camera);
+    drawFrame();
+  };
+  // Frame pacing (look.ts FramePacer, the real look only: classic draws every animation frame, as
+  // always): at most LOOK.budget.fps a second (Settings → Frame rate, `?fps=`), IDLE_FPS after
+  // IDLE_S s without input outside a cutscene. dt comes from the clock at each drawn frame, so the
+  // game runs at the same speed whatever the rate.
+  const pacer = new FramePacer(LOOK.real ? LOOK.budget.fps : 0);
+  let lastInput = performance.now();
+  for (const ev of ["pointerdown", "pointermove", "keydown", "touchstart", "wheel"]) window.addEventListener(ev, () => void (lastInput = performance.now()), { passive: true, capture: true });
+  const pacedFps = (now: number) => {
+    const want = LOOK.budget.fps;
+    const idle = now - lastInput > IDLE_S * 1000 && !flyover && !promoCam && !transitioning;
+    return idle ? (want > 0 ? Math.min(want, IDLE_FPS) : IDLE_FPS) : want;
+  };
+  // Dynamic resolution (look.ts DynamicScale, RenderBudget.dynamic): the frame's GPU ms (the timer
+  // query, where the browser has it) or the interval between drawn frames
+  const gpuTimer = LOOK.real && !perf ? FrameGpuTimer.create(renderer) : null;
+  let lastDrawn = 0;
+  const feedScale = (now: number) => {
+    if (!dynScale) return;
+    // a timer: its results as they land (none this frame: nothing to judge); no timer: the interval
+    const gpu = perf?.gpuTimer ? perf.takeGpuMs() : gpuTimer ? gpuTimer.poll() : undefined;
+    if (gpu === null) return;
+    const ms = gpu ?? (lastDrawn ? now - lastDrawn : 0);
+    dynScale.budgetMs = 1000 / (pacer.fps || 60);
+    if (dynScale.frame(ms)) {
+      renderScale = dynScale.scale;
+      resize();
+    }
+  };
+  renderer.setAnimationLoop(() => {
+    const now = performance.now();
+    if (LOOK.real) {
+      pacer.fps = pacedFps(now);
+      if (!pacer.tick(now)) return;
+    }
+    perf?.frameStart();
+    if (dynScale) gpuTimer?.begin();
+    try {
+      frame();
+    } finally {
+      if (dynScale) gpuTimer?.end();
+      perf?.frameEnd();
+    }
+    feedScale(now);
+    lastDrawn = now;
   });
 
   // For scripted browser checks: read the model, drive the game without pixel-hunting.
@@ -1496,7 +1586,18 @@ async function main() {
       /** debug: preview any time of day (0 morning .. 1 evening) regardless of the real slot; the next real game event calls applyDaylight() again and overrides it. */
       setDaylight: (t: number) => space.setDaylight(t),
       /** the render look (look.ts): the graphics tier, who chose it and why, the valve, the saved choice, and the composer's CPU ms per frame when real */
-      look: () => ({ ...LOOK, valve: { state: valve.state, meanMs: valve.meanMs }, saved: prefs.graphics ?? null, composerMs: real ? +real.stats.frameMs.toFixed(2) : null, envBuilds: real?.stats.envBuilds ?? 0, shadowMap: renderer.shadowMap.enabled, envLayers: real?.stats.envLayers ?? [], envBuildMs: real?.stats.envBuildMs ?? 0 }),
+      /**
+       * `?perf=1` only (perf.ts; null without it): ("start") clears and records every frame,
+       * ("stop") stops and returns them, ("mem") the texture / target memory estimate and the canvas.
+       */
+      perf: (cmd: "start" | "stop" | "mem") => {
+        if (!perf) return null;
+        if (cmd === "start") return void perf.start();
+        if (cmd === "stop") return { gpuTimer: perf.gpuTimer, frames: perf.stop() };
+        const buf = renderer.getDrawingBufferSize(new THREE.Vector2());
+        return { ...textureBytes(space.scene, real?.targets() ?? []), glTextures: renderer.info.memory.textures, geometries: renderer.info.memory.geometries, programs: renderer.info.programs?.length ?? 0, pixelRatio: renderer.getPixelRatio(), drawingBuffer: [buf.x, buf.y], renderScale: LOOK.real ? renderScale : 1 };
+      },
+      look: () => ({ ...LOOK, renderScale: LOOK.real ? renderScale : 1, pixelRatio: renderer.getPixelRatio(), fps: LOOK.real ? pacer.fps : 0, dynamicScale: dynScale ? { scale: dynScale.scale, changes: dynScale.changes } : null, valve: { state: valve.state, meanMs: valve.meanMs }, saved: prefs.graphics ?? null, composerMs: real ? +real.stats.frameMs.toFixed(2) : null, envBuilds: real?.stats.envBuilds ?? 0, shadowMap: renderer.shadowMap.enabled, envLayers: real?.stats.envLayers ?? [], envBuildMs: real?.stats.envBuildMs ?? 0, envTimings: real?.stats.envTimings ?? null, envCache: real?.stats.envCache ?? null, grass: real?.stats.grass ?? null, shadowUpdates: space.shadowPlan.updates, shadowFrames: space.shadowPlan.frames }),
       dayCard: () => game?.model.dayCard,
       /** the parcel: where core says it goes, and whether the player has it in hand */
       errand: () => ({ to: game?.core.state.errand?.to ?? null, carrying: carry.holding, clip: player.actor.state }),
@@ -1528,8 +1629,9 @@ async function main() {
        * The see-through: seeThrough("off") / ("on") switches whole-object fades for screenshot
        * comparisons and returns the roots currently easing below opaque (each with `coverage`, its
        * largest fraction of a focus's silhouette), plus the detector's per-focus async state
-       * (slots: pending, timeouts, syncReads, syncFallback, lastSampleAgeMs, passes,
-       * skipped { pending, unmoved, cadence }, silhouettePixels).
+       * (slots: pending, timeouts, asyncPaused, lastSampleAgeMs, passes,
+       * skipped { pending, unmoved, cadence, unavailable }, silhouettePixels). The read is always
+       * asynchronous (seethrough.ts): never a synchronous read-back in the frame loop.
        */
       seeThrough: (cmd?: "on" | "off" | boolean) => {
         if (cmd !== undefined) see.on = cmd === true || cmd === "on";

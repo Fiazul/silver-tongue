@@ -256,15 +256,18 @@ interface PendingRead {
  * Wall-clock budget for a fence (animation frames are no time base: a slow or throttled frame
  * rate stretched a frame-count budget into seconds). Past it the read is dropped, the pass re-runs.
  */
-export const FENCE_TIMEOUT_MS = 120;
+export const FENCE_TIMEOUT_MS = 400;
 /**
- * The decision is never older than this: when a pass would be skipped because a read is still in
- * flight and the slot has gone this long without a valid result, the read is dropped and the pass
- * re-runs with a synchronous read right away.
+ * The freshness the async read keeps on a GPU that signals its fences a frame or two later: a
+ * fresh sample at least this often while walking (a test holds it). Nothing enforces it by
+ * blocking: the read is never synchronous (a sync read waits for the whole GPU queue, 100-1400 ms
+ * frames on the Vega 11); a slot without a result has no evidence and its fades run out their hold.
  */
 export const MAX_SAMPLE_AGE_MS = 250;
-/** Consecutive async-read failures (timeouts, throws) that switch a context to the sync read for good. */
+/** Consecutive async-read failures (timeouts, throws) that pause the pass for ASYNC_RETRY_MS. */
 export const ASYNC_MAX_FAILURES = 3;
+/** ms the pass rests after ASYNC_MAX_FAILURES failures (or a failed wait) before it tries again */
+export const ASYNC_RETRY_MS = 2000;
 
 /** Per-slot bookkeeping: freshness of `latest[slot]` and the async read's health. */
 interface SlotState {
@@ -277,25 +280,23 @@ interface SlotState {
   /** performance.now() since which the slot has had no valid result (it went stale then) */
   staleSince: number;
   timeouts: number;
-  /** sync reads for this slot: fallback, failed queue, or forced by MAX_SAMPLE_AGE_MS */
-  syncReads: number;
-  /** passes rendered for this slot (queued or read synchronously) */
+  /** passes rendered for this slot (each read back asynchronously) */
   passes: number;
-  /** why sample() ran no pass: a read in flight, nothing moved, or not a sampled frame (skip()) */
-  skipped: { pending: number; unmoved: number; cadence: number };
+  /** why sample() ran no pass: a read in flight, nothing moved, not a sampled frame (skip()), or no async read here (no WebGL2 fences, or resting after failures) */
+  skipped: { pending: number; unmoved: number; cadence: number; unavailable: number };
 }
 
 export interface SeeSlotDebug {
   slot: number;
   pending: boolean;
   timeouts: number;
-  syncReads: number;
-  syncFallback: boolean;
+  /** the async read is resting after failures (or the context has none): no passes until it retries */
+  asyncPaused: boolean;
   lastSampleAgeMs: number | null;
   /** passes rendered for this slot since the detector was made */
   passes: number;
   /** calls that ran no pass, by reason (cumulative): all frozen while walking means sample() is not reached */
-  skipped: { pending: number; unmoved: number; cadence: number };
+  skipped: { pending: number; unmoved: number; cadence: number; unavailable: number };
   /** the silhouette pixel count of the slot's last result (null: none since the last invalidate) */
   silhouettePixels: number | null;
 }
@@ -310,10 +311,12 @@ export class SeeThroughDetector {
   private generation = 0;
   lastSampleMs = 0;
   lastReadMs = 0;
-  private pboFailed = false;
+  /** performance.now() until which the async read rests (failures); 0: not resting */
+  private pausedUntil = 0;
   /** consecutive async-read failures on this context; reset by any applied async read */
   private asyncFailures = 0;
   private warned = false;
+  private warnedPause = false;
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.PerspectiveCamera();
   private readonly proxy = new THREE.Mesh(new THREE.CapsuleGeometry(0.45, 1.1, 4, 8), proxyMaterial);
@@ -321,7 +324,7 @@ export class SeeThroughDetector {
   private readonly size = new THREE.Vector2();
 
   constructor(private readonly renderer: THREE.WebGLRenderer) {
-    // WebGL2 only: a WebGL1 context has no fences or pixel-pack buffers, so it keeps the sync read.
+    // WebGL2 only (three 0.186 needs it anyway): a context without fences or pixel-pack buffers runs no pass at all (no fades), never a sync read.
     const gl = renderer.getContext?.() as Partial<WebGL2RenderingContext> | undefined;
     if (typeof gl?.fenceSync === "function" && typeof gl.clientWaitSync === "function" && typeof gl.getBufferSubData === "function") this.gl = gl as WebGL2RenderingContext;
     this.target.viewport.set(0, 0, SEE_THROUGH.sampleSize, SEE_THROUGH.sampleSize);
@@ -354,7 +357,7 @@ export class SeeThroughDetector {
 
   private slot(slot: number): SlotState {
     let s = this.slots.get(slot);
-    if (!s) this.slots.set(slot, (s = { stale: true, unconsumed: false, freshAt: null, staleSince: performance.now(), timeouts: 0, syncReads: 0, passes: 0, skipped: { pending: 0, unmoved: 0, cadence: 0 } }));
+    if (!s) this.slots.set(slot, (s = { stale: true, unconsumed: false, freshAt: null, staleSince: performance.now(), timeouts: 0, passes: 0, skipped: { pending: 0, unmoved: 0, cadence: 0, unavailable: 0 } }));
     return s;
   }
 
@@ -374,16 +377,30 @@ export class SeeThroughDetector {
     this.slot(slot).stale = true;
   }
 
-  /** Counts toward the sync fallback; three in a row switch this context to the sync read for good. */
+  /** Three in a row rest the pass for ASYNC_RETRY_MS (never a sync read), then it tries again. */
   private asyncFailed(why: string) {
     if (!this.warned) {
       this.warned = true;
       console.warn(`see-through: async read ${why}; the pass re-runs`);
     }
-    if (++this.asyncFailures >= ASYNC_MAX_FAILURES && !this.pboFailed) {
-      this.pboFailed = true;
-      console.warn(`see-through: ${ASYNC_MAX_FAILURES} async reads failed in a row; using the sync read from now on`);
+    if (++this.asyncFailures >= ASYNC_MAX_FAILURES) this.pause(`${ASYNC_MAX_FAILURES} async reads failed in a row`);
+  }
+
+  private pause(why: string) {
+    if (!this.warnedPause) {
+      this.warnedPause = true;
+      console.warn(`see-through: ${why}; resting ${ASYNC_RETRY_MS} ms at a time (no sync read)`);
     }
+    this.pausedUntil = performance.now() + ASYNC_RETRY_MS;
+    this.asyncFailures = 0;
+  }
+
+  /** the async read can run now (a WebGL2 context, not resting) */
+  private asyncReady(): boolean {
+    if (!this.gl) return false;
+    if (this.pausedUntil && performance.now() < this.pausedUntil) return false;
+    this.pausedUntil = 0;
+    return true;
   }
 
   /** Drop decisions from the previous space or a teleport, including in-flight GPU reads. */
@@ -447,7 +464,7 @@ export class SeeThroughDetector {
       }
       if (state === gl.WAIT_FAILED) {
         this.drop(slot);
-        this.pboFailed = true;
+        this.pause("a fence wait failed");
         return;
       }
       if (read.generation !== this.generation) {
@@ -501,8 +518,7 @@ export class SeeThroughDetector {
       slot,
       pending: this.pending.has(slot),
       timeouts: s.timeouts,
-      syncReads: s.syncReads,
-      syncFallback: !this.gl || this.pboFailed,
+      asyncPaused: !this.gl || (this.pausedUntil > 0 && now < this.pausedUntil),
       lastSampleAgeMs: s.freshAt === null ? null : Math.round(now - s.freshAt),
       passes: s.passes,
       skipped: { ...s.skipped },
@@ -560,19 +576,24 @@ export class SeeThroughDetector {
     this.bind(source);
     const s = this.slot(slot);
     this.pollSlot(slot);
-    // Waiting on the async read is fine while the decision is young. Once the slot has gone
-    // MAX_SAMPLE_AGE_MS without a valid result (a slow fence, a timed-out one, a re-queue that is
-    // slow again), any in-flight read is abandoned and this pass reads back synchronously.
-    const forceSync = s.stale && performance.now() - s.staleSince > MAX_SAMPLE_AGE_MS;
-    const inFlight = this.pending.get(slot);
-    if (inFlight) {
-      if (!forceSync) {
-        s.skipped.pending++;
-        return this.latest[slot] ?? EMPTY_SAMPLE;
+    // A read in flight is waited for (poll drops it past FENCE_TIMEOUT_MS); never abandoned for a
+    // synchronous read, which would stall the frame on the whole GPU queue.
+    if (this.pending.has(slot)) {
+      s.skipped.pending++;
+      return this.latest[slot] ?? EMPTY_SAMPLE;
+    }
+    const gl = this.asyncReady() ? this.gl : undefined;
+    if (!gl) {
+      s.skipped.unavailable++;
+      // moved meanwhile: the last result no longer vouches for this pose (current() hands out nothing)
+      if (!s.stale && this.moved(slot, camera, focus)) {
+        s.stale = true;
+        s.staleSince = performance.now();
+        this.poses.delete(slot);
       }
-      this.pending.delete(slot);
-      this.release(inFlight);
-    } else if (!s.stale && !this.moved(slot, camera, focus)) {
+      return this.latest[slot] ?? EMPTY_SAMPLE;
+    }
+    if (!s.stale && !this.moved(slot, camera, focus)) {
       s.skipped.unmoved++;
       return this.latest[slot] ?? EMPTY_SAMPLE;
     }
@@ -606,14 +627,8 @@ export class SeeThroughDetector {
       this.renderer.clear(true, true, true);
       this.renderer.render(this.scene, this.camera);
       const pixels = new Uint8Array(SEE_THROUGH.sampleSize ** 2 * 4);
-      const gl = this.pboFailed || forceSync ? undefined : this.gl;
-      if (!(gl && this.queue(gl, slot, pixels))) {
-        s.syncReads++;
-        this.renderer.readRenderTargetPixels(this.target, 0, 0, SEE_THROUGH.sampleSize, SEE_THROUGH.sampleSize, pixels);
-        this.apply(slot, pixels);
-        this.lastReadMs = performance.now() - started;
-      }
-      this.remember(slot, camera, focus);
+      // queued: its pose is remembered for the result; not queued (a throw, counted by queue()): the slot stays stale, the next sample re-runs it
+      if (this.queue(gl, slot, pixels)) this.remember(slot, camera, focus);
     } finally {
       this.renderer.state?.buffers.color.setMask(true);
       this.renderer.setRenderTarget(null);

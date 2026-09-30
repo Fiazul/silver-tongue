@@ -6,13 +6,14 @@
 //   grass     instanced blade cards (2 tris each) on the grass cells round the player, coloured from
 //             the ground under them, swaying in the wind, fading out with distance;
 //   leaves    alpha-cut leaf-cluster cards over every tree canopy (the solid canopy stays, darker, as
-//             the crown's core; the cards cast the shadows, a speckle on the ground);
+//             the crown's core, and the one that casts: the cards never do, nor do grass or particles);
 //   sky       a gradient sky with a sun disc, glow and drifting cloud wisps in place of the dome,
 //             from the day's sky colours (the environment map takes the sun's glow too: reallook.ts);
 //   particles dust motes round the player, steam off the noodle shop's counter, leaves falling.
 // Renderer layers (reallook.ts): bloom (evening emissives here: lanterns, lamp glass, windows) and
 // the colour grade. Imports nothing of the main bundle but three (a shared module would split it).
 import * as THREE from "three";
+import type { EnvArrays, EnvCache } from "./envcache";
 import type { LookGround, LookSky } from "./look";
 
 export interface EnvDeps {
@@ -24,15 +25,65 @@ export interface EnvDeps {
   aoHidden: THREE.Material[];
   /** the grass layer's share of its blades (look.ts LITE_GRASS in lite; 1 if absent) */
   grassDensity?: number;
+  /** the lite tier: its grass bands (grassBands) */
+  lite?: boolean;
+  /** envcache.ts: the generated textures and the town's field from a previous visit (absent: always built) */
+  cache?: EnvCache;
 }
 
 /** The terrain field: a top-down raster of the town's ground, [-70, 70]^2 (terrain_town's extent). */
 export const FIELD = { min: -70, size: 140, n: 512 };
-/** Grass: two toroidal tiles of blades round the player (near: dense, far: sparser, wider blades). */
-const GRASS = {
-  near: { tile: 26, n: 200, fade: [9, 12.5], size: [0.065, 0.27] },
-  far: { tile: 72, n: 200, fade: [27, 35], size: [0.12, 0.34] },
+/**
+ * Grass: two toroidal tiles of blades round the player, the LOD bands (near: dense, to 12.5 m;
+ * far: an eighth of its density, wider blades, to 30 m, none beyond). Each tile is cut into
+ * `chunks` x `chunks` meshes, drawn only when in the camera's frustum and inside the band's fade
+ * (grassChunkVisible); lite's far blades take no shadow (a cheaper fragment).
+ */
+export const GRASS = {
+  near: { tile: 26, n: 200, fade: [9, 12.5], size: [0.065, 0.27], chunks: 4 },
+  far: { tile: 72, n: 200, fade: [24, 30], size: [0.12, 0.34], chunks: 6 },
 };
+/** lite's far band fade (m): as full's (18-24 m thinned the lawn visibly at the phone's top edge, for little: the far blades are cheap) */
+export const LITE_FAR_FADE = [24, 30];
+
+/** The grass bands a tier draws (lite: the far band nearer). */
+export function grassBands(lite: boolean): { key: "near" | "far"; tile: number; n: number; fade: number[]; size: number[]; chunks: number; shadow: boolean }[] {
+  return [
+    { key: "near", ...GRASS.near, shadow: true },
+    { key: "far", ...GRASS.far, ...(lite ? { fade: LITE_FAR_FADE } : {}), shadow: !lite },
+  ];
+}
+
+/**
+ * Along one axis, where a chunk's blades [b0, b1) of a tile `T` wide land in the world when the tile
+ * wraps round `c` (the shader: each blade's copy nearest c, inside [c - T/2, c + T/2)): one interval,
+ * or two when the wrap line cuts the chunk.
+ */
+export function wrapIntervals(b0: number, b1: number, c: number, T: number): [number, number][] {
+  const lo = c - T / 2;
+  const hi = c + T / 2;
+  const out: [number, number][] = [];
+  for (let k = Math.floor((lo - b1) / T); k <= Math.ceil((hi - b0) / T); k++) {
+    const a = Math.max(b0 + k * T, lo);
+    const b = Math.min(b1 + k * T, hi);
+    if (a < b) out.push([a, b]);
+  }
+  return out;
+}
+
+/** A chunk [x0, x1) x [z0, z1) of a tile is drawn: some part of it in `frustum` (y over [ymin, ymax]) and nearer `center` than `reach` m. */
+export function grassChunkVisible(frustum: THREE.Frustum | null, center: { x: number; y: number }, chunk: { x0: number; x1: number; z0: number; z1: number }, tile: number, reach: number, ymin: number, ymax: number, box = new THREE.Box3()): boolean {
+  for (const [ax, bx] of wrapIntervals(chunk.x0, chunk.x1, center.x, tile))
+    for (const [az, bz] of wrapIntervals(chunk.z0, chunk.z1, center.y, tile)) {
+      const dx = Math.max(ax - center.x, 0, center.x - bx);
+      const dz = Math.max(az - center.y, 0, center.y - bz);
+      if (dx * dx + dz * dz > reach * reach) continue;
+      box.min.set(ax, ymin, az);
+      box.max.set(bx, ymax, bz);
+      if (!frustum || frustum.intersectsBox(box)) return true;
+    }
+  return false;
+}
 const LEAVES = { max: 14000, perM2: 1.1, size: [0.9, 1.5], minY: 1.6 };
 const GRASS_RE = /^grass_/;
 const GROUND_RE = /^land_(path|dirt|plaza|plaza_ring|stone_edge|bank_stone|coping)$/;
@@ -116,7 +167,12 @@ interface GroundTextures {
   macro: THREE.DataTexture;
 }
 
-function groundTextures(): GroundTextures {
+/** The ground textures from their arrays (groundTextureData, or the env cache's copy). */
+function groundTextures(d: EnvArrays): GroundTextures {
+  return { grass: dataTexture(d.grass as Uint8Array, 256), dirt: dataTexture(d.dirt as Uint8Array, 256), normal: dataTexture(d.normal as Uint8Array, 256), macro: dataTexture(d.macro as Uint8Array, 128) };
+}
+
+function groundTextureData(): EnvArrays {
   const N = 256;
   const rnd = makeRng(7);
   const gh = new Float32Array(N * N); // grass height
@@ -210,11 +266,19 @@ function groundTextures(): GroundTextures {
       macro[o + 2] = Math.round(fbm(u, v, 4, 13, 3) * 255);
       macro[o + 3] = 255;
     }
-  return { grass: dataTexture(grass, N), dirt: dataTexture(dirt, N), normal: dataTexture(normal, N), macro: dataTexture(macro, M) };
+  return { grass, dirt, normal, macro };
 }
 
 /** A leaf-cluster card: ~40 small leaves in a rough round clump, alpha-cut. */
-function leafTexture(): THREE.DataTexture {
+function leafTexture(cache?: EnvCache): THREE.DataTexture {
+  const data = (cache ? cache.memo("leaf", leafTextureData) : leafTextureData()).data as Uint8Array;
+  const t = dataTexture(data, 256, { repeat: false, srgb: true });
+  // DataTexture rows: row 0 is v = 0 (the card's bottom): the twig at the bottom
+  t.flipY = false;
+  return t;
+}
+
+function leafTextureData(): EnvArrays {
   const N = 256;
   const rnd = makeRng(21);
   const data = new Uint8Array(N * N * 4);
@@ -257,10 +321,7 @@ function leafTexture(): THREE.DataTexture {
       data[o + 2] = Math.round(Math.min(1, col[2]) * 255);
       data[o + 3] = Math.round(best * 255);
     }
-  const t = dataTexture(data, N, { repeat: false, srgb: true });
-  // DataTexture rows: row 0 is v = 0 (the card's bottom): the twig at the bottom
-  t.flipY = false;
-  return t;
+  return { data };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -281,7 +342,28 @@ function meshName(m: THREE.Mesh): string {
   return Array.isArray(m.material) ? "" : (m.material as THREE.Material).name;
 }
 
-export function buildField(scene: THREE.Scene, ground: LookGround): Field {
+/** The field's textures from its arrays (fieldData, or the env cache's copy). */
+function fieldFrom(d: EnvArrays): Field {
+  const n = FIELD.n;
+  const tex = new THREE.DataTexture(d.half as Uint16Array, n, n, THREE.RGBAFormat, THREE.HalfFloatType);
+  tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearFilter;
+  tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.colorSpace = THREE.NoColorSpace;
+  tex.needsUpdate = true;
+  const at = new THREE.DataTexture(d.albedo as Uint8Array, n, n, THREE.RGBAFormat, THREE.UnsignedByteType);
+  at.magFilter = THREE.LinearFilter;
+  at.minFilter = THREE.LinearFilter;
+  at.colorSpace = THREE.NoColorSpace;
+  at.needsUpdate = true;
+  return { tex, albedo: at, grass: d.grass as Uint8Array, height: d.height as Float32Array };
+}
+
+export function buildField(scene: THREE.Scene, ground: LookGround, cache?: EnvCache): Field {
+  return fieldFrom(cache ? cache.memo("field", () => fieldData(scene, ground)) : fieldData(scene, ground));
+}
+
+function fieldData(scene: THREE.Scene, ground: LookGround): EnvArrays {
   const { min, size, n } = FIELD;
   const cell = size / n;
   const kind = new Uint8Array(n * n); // 0 nothing, 1 grass, 2 ground, 3 water
@@ -458,18 +540,7 @@ export function buildField(scene: THREE.Scene, ground: LookGround): Field {
     for (let ch = 0; ch < 3; ch++) albedo[q * 4 + ch] = Math.round(Math.min(1, alb[q * 3 + ch]) * 255);
     albedo[q * 4 + 3] = 255;
   }
-  const tex = new THREE.DataTexture(half, n, n, THREE.RGBAFormat, THREE.HalfFloatType);
-  tex.magFilter = THREE.LinearFilter;
-  tex.minFilter = THREE.LinearFilter;
-  tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
-  tex.colorSpace = THREE.NoColorSpace;
-  tex.needsUpdate = true;
-  const at = new THREE.DataTexture(albedo, n, n, THREE.RGBAFormat, THREE.UnsignedByteType);
-  at.magFilter = THREE.LinearFilter;
-  at.minFilter = THREE.LinearFilter;
-  at.colorSpace = THREE.NoColorSpace;
-  at.needsUpdate = true;
-  return { tex, albedo: at, grass, height };
+  return { half, albedo, grass, height };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -510,6 +581,10 @@ export interface EnvScene {
   readonly layers: readonly string[];
   /** 0 by day .. 1 in the evening (for the bloom and the grade) */
   readonly evening: number;
+  /** ms per part of the build (textures, field, ground, grass, leaves, sky: the ground / grass parts include the textures / field they built first) */
+  readonly timings: Readonly<Record<string, number>>;
+  /** the grass chunks: built, drawn last frame, and the blades they drew */
+  readonly grass: { chunks: number; drawn: number; blades: number };
   update(camera: THREE.Camera, focus: THREE.Vector3 | undefined, time: number): void;
   /**
    * Down to `want` (a subset of what was built: the safety valve's full -> lite, look.ts) and the
@@ -532,17 +607,30 @@ export function buildEnv(scene: THREE.Scene, want: ReadonlySet<string>, deps: En
     envFieldSize: { value: FIELD.size },
     envWind: { value: new THREE.Vector2(0.8, 0.6).normalize() },
   };
+  /** ms per part of the build (EnvScene.timings) */
+  const timings: Record<string, number> = {};
+  const timed = <T>(name: string, fn: () => T): T => {
+    const t0 = performance.now();
+    try {
+      return fn();
+    } finally {
+      timings[name] = +((timings[name] ?? 0) + performance.now() - t0).toFixed(1);
+    }
+  };
   let tex: GroundTextures | undefined;
-  const textures = () => (tex ??= groundTextures());
+  const textures = () => (tex ??= timed("textures", () => groundTextures(deps.cache ? deps.cache.memo("ground", groundTextureData) : groundTextureData())));
   let field: Field | undefined;
-  const getField = () => (field ??= buildField(scene, ground!));
+  const getField = () => (field ??= timed("field", () => buildField(scene, ground!, deps.cache)));
   /** what restrict() can take back: the grass meshes (their full blade counts), the leaf cards, the particles, the evening glow */
   const grassMeshes: THREE.Mesh<THREE.InstancedBufferGeometry>[] = [];
   const hideable: Record<string, THREE.Object3D[]> = { leaves: [], particles: [] };
   let glowOn = false;
   let glow: ((e: number) => void) | null = null;
   const bladeCount = (full: number, density: number) => Math.round(full * Math.max(0, Math.min(1, density)));
+  let grassOn = true;
+  let grassDrawn = 0;
 
+  const tGround = performance.now();
   if (town && want.has("ground")) {
     const t = textures();
     const f = getField();
@@ -631,18 +719,29 @@ uniform vec3 envDirtColor;
     });
     built.push("ground");
   }
+  timings.ground = +(performance.now() - tGround).toFixed(1);
+  const tGrass = performance.now();
 
   if (town && want.has("grass")) {
     const t = textures();
     const f = getField();
     const grassUniforms = { ...U, envField: { value: f.tex }, envAlbedo: { value: f.albedo }, envGrassTex: { value: t.grass }, envMacro: { value: t.macro } };
     const rnd = makeRng(99);
-    for (const [key, spec] of Object.entries(GRASS)) {
-      const geo = new THREE.InstancedBufferGeometry();
-      // a tapered blade: 4 vertices, 2 triangles; y = the height fraction
-      geo.setAttribute("position", new THREE.Float32BufferAttribute([-0.5, 0, 0, 0.5, 0, 0, 0.12, 1, 0, -0.12, 1, 0], 3));
-      geo.setAttribute("normal", new THREE.Float32BufferAttribute([0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0], 3));
-      geo.setIndex([0, 1, 2, 0, 2, 3]);
+    // the blade shape, shared by every chunk: a tapered card, 4 vertices, 2 triangles; y = the height fraction
+    const bladePos = new THREE.Float32BufferAttribute([-0.5, 0, 0, 0.5, 0, 0, 0.12, 1, 0, -0.12, 1, 0], 3);
+    const bladeNormal = new THREE.Float32BufferAttribute([0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0], 3);
+    const bladeIndex = new THREE.Uint16BufferAttribute([0, 1, 2, 0, 2, 3], 1);
+    // the grass cells' height range: the chunks' boxes (+ the tallest blade)
+    let ymin = Infinity;
+    let ymax = -Infinity;
+    f.height.forEach((h, q) => {
+      if (!f.grass[q]) return;
+      ymin = Math.min(ymin, h);
+      ymax = Math.max(ymax, h);
+    });
+    if (!(ymin <= ymax)) ymin = ymax = 0;
+    for (const spec of grassBands(!!deps.lite)) {
+      const key = spec.key;
       const count = spec.n * spec.n;
       const blades = new Float32Array(count * 4);
       const step = spec.tile / spec.n;
@@ -653,15 +752,6 @@ uniform vec3 envDirtColor;
           blades[k * 4 + 2] = rnd() * Math.PI * 2;
           blades[k * 4 + 3] = rnd();
         }
-      // shuffled (the blades are opaque and depth-tested: the order draws the same picture), so any
-      // prefix is an even random share of the tile: grassDensity keeps the first so many
-      for (let k = count - 1; k > 0; k--) {
-        const o = Math.floor(rnd() * (k + 1));
-        for (let c = 0; c < 4; c++) [blades[k * 4 + c], blades[o * 4 + c]] = [blades[o * 4 + c], blades[k * 4 + c]];
-      }
-      geo.setAttribute("aBlade", new THREE.InstancedBufferAttribute(blades, 4));
-      geo.userData.blades = count;
-      geo.instanceCount = bladeCount(count, deps.grassDensity ?? 1);
       const m = new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide, name: `env_grass_${key}` });
       m.onBeforeCompile = (s) => {
         Object.assign(s.uniforms, grassUniforms, {
@@ -717,21 +807,69 @@ varying vec3 vBlade;
         s.fragmentShader = inject(s.fragmentShader, "#include <normal_fragment_begin>", "\n#ifdef DOUBLE_SIDED\n  normal *= faceDirection;\n#endif");
       };
       m.customProgramCacheKey = () => `env-grass-${key}`;
-      const mesh = new THREE.Mesh(geo, m);
-      mesh.name = `env_grass_${key}`;
-      mesh.frustumCulled = false;
-      mesh.receiveShadow = true;
-      mesh.castShadow = false;
-      mesh.matrixAutoUpdate = false;
-      scene.add(mesh);
+      if (!spec.shadow) m.name += "_unshadowed";
+      // the tile in chunks x chunks squares, each its own mesh (its blades shuffled: the blades are
+      // opaque and depth-tested, the order draws the same picture, so any prefix is an even random
+      // share of the chunk: grassDensity keeps the first so many)
+      const cs = spec.tile / spec.chunks;
+      const per: number[][] = Array.from({ length: spec.chunks * spec.chunks }, () => []);
+      for (let k = 0; k < count; k++) {
+        const ci = Math.min(spec.chunks - 1, Math.floor(blades[k * 4] / cs));
+        const cj = Math.min(spec.chunks - 1, Math.floor(blades[k * 4 + 1] / cs));
+        per[cj * spec.chunks + ci].push(k);
+      }
+      per.forEach((ks, c) => {
+        for (let k = ks.length - 1; k > 0; k--) {
+          const o = Math.floor(rnd() * (k + 1));
+          [ks[k], ks[o]] = [ks[o], ks[k]];
+        }
+        const data = new Float32Array(ks.length * 4);
+        ks.forEach((k, i) => data.set(blades.subarray(k * 4, k * 4 + 4), i * 4));
+        const geo = new THREE.InstancedBufferGeometry();
+        geo.setAttribute("position", bladePos);
+        geo.setAttribute("normal", bladeNormal);
+        geo.setIndex(bladeIndex);
+        geo.setAttribute("aBlade", new THREE.InstancedBufferAttribute(data, 4));
+        geo.userData.blades = ks.length;
+        geo.instanceCount = bladeCount(ks.length, deps.grassDensity ?? 1);
+        const mesh = new THREE.Mesh(geo, m);
+        mesh.name = `env_grass_${key}`;
+        mesh.frustumCulled = false; // grassChunkVisible culls it (its blades are placed in the shader)
+        mesh.receiveShadow = spec.shadow;
+        mesh.castShadow = false;
+        mesh.matrixAutoUpdate = false;
+        const ci = c % spec.chunks;
+        const cj = Math.floor(c / spec.chunks);
+        mesh.userData.chunk = { x0: ci * cs, x1: (ci + 1) * cs, z0: cj * cs, z1: (cj + 1) * cs, tile: spec.tile, reach: spec.fade[1] + 1.5 };
+        scene.add(mesh);
+        grassMeshes.push(mesh);
+      });
       deps.aoHidden.push(m);
-      grassMeshes.push(mesh);
     }
+    // each frame: the chunks in view and in reach of the player, the rest not drawn
+    const frustum = new THREE.Frustum();
+    const pv = new THREE.Matrix4();
+    const box = new THREE.Box3();
+    const centre = { x: 0, y: 0 };
+    updates.push((camera, focus) => {
+      camera.updateMatrixWorld();
+      pv.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+      frustum.setFromProjectionMatrix(pv);
+      centre.x = focus.x;
+      centre.y = focus.z;
+      grassDrawn = 0;
+      for (const mesh of grassMeshes) {
+        const c = mesh.userData.chunk as { x0: number; x1: number; z0: number; z1: number; tile: number; reach: number };
+        mesh.visible = grassOn && grassChunkVisible(frustum, centre, c, c.tile, c.reach, ymin, ymax + 0.6, box);
+        if (mesh.visible) grassDrawn += mesh.geometry.instanceCount;
+      }
+    });
     built.push("grass");
   }
+  timings.grass = +(performance.now() - tGrass).toFixed(1);
 
   if (town && want.has("leaves")) {
-    const leaves = buildLeaves(scene, deps, U);
+    const leaves = timed("leaves", () => buildLeaves(scene, deps, U));
     if (leaves) {
       built.push("leaves");
       hideable.leaves.push(leaves);
@@ -739,7 +877,7 @@ varying vec3 vBlade;
   }
 
   if (town && want.has("sky")) {
-    buildSky(scene, ground!, sky, U, deps, updates, textures);
+    timed("sky", () => buildSky(scene, ground!, sky, U, deps, updates, textures));
     built.push("sky");
   }
 
@@ -764,6 +902,10 @@ varying vec3 vBlade;
   const focus0 = new THREE.Vector3();
   const env: EnvScene = {
     layers: built,
+    timings,
+    get grass() {
+      return { chunks: grassMeshes.length, drawn: grassMeshes.filter((m) => m.visible).length, blades: grassDrawn };
+    },
     get evening() {
       return evening;
     },
@@ -784,8 +926,9 @@ varying vec3 vBlade;
           o.visible = false;
           (o.userData.restore as (() => void) | undefined)?.();
         }
+      grassOn = want.has("grass");
       for (const m of grassMeshes) {
-        m.visible = want.has("grass");
+        m.visible = grassOn && m.visible;
         m.geometry.instanceCount = bladeCount(m.geometry.userData.blades as number, grassDensity);
       }
       if (glow && glowOn && !want.has("bloom")) {
@@ -811,7 +954,6 @@ function buildLeaves(scene: THREE.Scene, deps: EnvDeps, U: { envTime: { value: n
   interface Tri { a: THREE.Vector3; b: THREE.Vector3; c: THREE.Vector3; n: THREE.Vector3; area: number; see: number; colour: THREE.Color }
   const tris: Tri[] = [];
   let total = 0;
-  const casts = sources.map((m) => m.castShadow);
   for (const mesh of sources) {
     const g = mesh.geometry;
     const pos = g.getAttribute("position");
@@ -830,8 +972,8 @@ function buildLeaves(scene: THREE.Scene, deps: EnvDeps, U: { envTime: { value: n
       tris.push({ a, b, c, n, area, see: see ? see.getX(ids[0]) : 0, colour });
       total += area;
     }
-    // the solid crown stays as the core (darker: the shade inside), the cards cast the shadow
-    mesh.castShadow = false;
+    // the solid crown stays as the core (darker: the shade inside) and casts the shadow (the cards
+    // never do: 14000 alpha-tested cards in the shadow map every redraw, for a dapple at the edge)
   }
   const crowns = new Set(sources.map((s) => s.material as THREE.MeshStandardMaterial));
   for (const m of crowns) m.color.multiplyScalar(0.62);
@@ -846,7 +988,7 @@ function buildLeaves(scene: THREE.Scene, deps: EnvDeps, U: { envTime: { value: n
   const leafN = new Float32Array(count * 3);
   const seeIds = new Float32Array(count);
   const phase = new Float32Array(count);
-  const material = new THREE.MeshStandardMaterial({ map: leafTexture(), alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.75, metalness: 0, alphaToCoverage: true, name: "env_leaves" });
+  const material = new THREE.MeshStandardMaterial({ map: leafTexture(deps.cache), alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.75, metalness: 0, alphaToCoverage: true, name: "env_leaves" });
   deps.seeThrough(material);
   const mesh = new THREE.InstancedMesh(geo, material, count);
   const m4 = new THREE.Matrix4();
@@ -925,15 +1067,14 @@ function buildLeaves(scene: THREE.Scene, deps: EnvDeps, U: { envTime: { value: n
   mesh.instanceMatrix.needsUpdate = true;
   if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
   mesh.name = "env_leaves";
-  mesh.castShadow = true;
+  mesh.castShadow = false;
   mesh.receiveShadow = true;
   mesh.frustumCulled = false;
   mesh.computeBoundingSphere();
   scene.add(mesh);
   deps.aoHidden.push(material);
-  // EnvScene.restrict without leaves: the crowns as they were (their own colour, casting again)
+  // EnvScene.restrict without leaves: the crowns as they were (their own colour)
   mesh.userData.restore = () => {
-    sources.forEach((s, i) => (s.castShadow = casts[i]));
     for (const m of crowns) m.color.multiplyScalar(1 / 0.62);
   };
   return mesh;

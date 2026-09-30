@@ -5,7 +5,8 @@
 // its full set of beds or just the quiet default (ambienceFull), whether the first-steps guide
 // (and wayfinding's "lost?" reminder) is hidden (and whether its note after the first bark was
 // shown), whether the ground path hint is off, and the graphics tier the player chose in Settings
-// (look.ts: absent until they choose; look.ts reads it itself, before this loads). Unreadable or
+// (look.ts: absent until they choose; look.ts reads it itself, before this loads), and the frame rate
+// (Settings → Frame rate: the real look's pacing, look.ts FramePacer). Unreadable or
 // blocked storage: the defaults.
 import type { KeyValue } from "@silver-tongue/web-common";
 // type only: look.ts imports PREFS_KEY from here at its own import time (a value import back would be a cycle)
@@ -38,6 +39,8 @@ export interface Prefs {
   barkHint?: boolean;
   /** Settings → Graphics (look.ts): absent is the device's default; applies from the next page load */
   graphics?: Tier;
+  /** Settings → Frame rate (look.ts FPS_CHOICES, the real look's pacing): absent is 60; applies at once */
+  fps?: 30 | 60;
 }
 
 /** look.ts TIERS (a test holds the two lists equal) */
@@ -81,6 +84,7 @@ export function loadPrefs(kv: KeyValue): Prefs {
       pathHidden: typeof d.pathHidden === "boolean" ? d.pathHidden : DEFAULT_PREFS.pathHidden,
       ...(d.barkHint === true ? { barkHint: true } : {}),
       ...(GRAPHICS_TIERS.includes(d.graphics as Tier) ? { graphics: d.graphics } : {}),
+      ...(d.fps === 30 || d.fps === 60 ? { fps: d.fps } : {}),
     };
   } catch {
     return { ...DEFAULT_PREFS };

@@ -119,6 +119,10 @@ const FALLBACK: Record<string, string> = {
   "settings-graphics-classic": "Classic",
   "settings-graphics-reload": "Saved. Reload the page to switch graphics.",
   "graphics-lite-toast": "Graphics set to Lite for smoother play. Change in Settings.",
+  // Settings → Frame rate (the real look's pacing, look.ts FramePacer): applies at once
+  "settings-fps": "Frame rate",
+  "settings-fps-60": "60",
+  "settings-fps-30": "30 (cooler)",
   "settings-intro": "Replay the six words",
   "settings-guide": "First-steps guide",
   "settings-switch-failed": "That course didn't load; this one goes on.",

@@ -751,11 +751,11 @@ that is never fetched at Classic.
    test that turns the touch UI on), `navigator.deviceMemory <= 4` or `hardwareConcurrency <= 4`;
    Full otherwise.
 
-| tier | look | environment layers |
-| --- | --- | --- |
-| Full | real | all: ground, grass, leaves, sky, bloom, grade, particles |
-| Lite | real | ground, grass at half the blades (`LITE_GRASS`), sky, grade; no bloom, leaf cards or particles |
-| Classic | toon | none; nothing of `reallook.ts` / `envlook.ts` loads |
+| tier | look | environment layers | render budget (`look.ts BUDGETS`, "Performance" below) |
+| --- | --- | --- | --- |
+| Full | real | all: ground, grass, leaves, sky, bloom, grade, particles | DPR cap 2, scale 1, AO at half resolution, FXAA (no MSAA), 2048 shadow map redrawn every 2nd frame, 60 fps cap |
+| Lite | real | ground, grass at half the blades (`LITE_GRASS`, far band unshadowed), sky, grade; no bloom, leaf cards or particles | DPR cap 1.5 x scale 0.75 (dynamic 0.5-0.75), no AO, FXAA, 1024 shadow map every 3rd frame, 60 fps cap (30 in Settings) |
+| Classic | toon | none; nothing of `reallook.ts` / `envlook.ts` loads | none: DPR cap 2, canvas antialias below DPR 2, every animation frame, as always |
 
 - Settings → Graphics: Full / Lite / Classic. The choice is saved and applies at the next page load
   (the toon and the real look build different materials, so it is never switched live); a toast
@@ -772,7 +772,12 @@ that is never fetched at Classic.
   toast "Graphics set to Lite for smoother play. Change in Settings." Once; never below Lite; never
   after a URL tier, a saved tier or a pick in Settings. The saved choice is untouched.
 - `world3d.look()`: `tier`, `source` (`url` / `pref` / `auto` / `valve`), `reason`, `env`,
-  `grassDensity`, `valve { state, meanMs }`, `saved`, plus the composer's ms and the env build ms.
+  `grassDensity`, `valve { state, meanMs }`, `saved`, plus the composer's ms and the env build ms,
+  and the budget: `budget`, `renderScale`, `pixelRatio`, `fps` (the pacer's target now),
+  `dynamicScale { scale, changes }`, `envTimings` (ms per part of the env build), `envCache`
+  (`{ hits, misses }`), `grass { chunks, drawn, blades }`, `shadowUpdates` / `shadowFrames`.
+- The valve's drop to Lite also takes Lite's budget live: AO off, the render scale (and dynamic
+  resolution), the frame rate; the shadow map keeps its size until the next load.
 - Force a tier: the URL (`?look=lite`), or `localStorage` `silver-tongue:world3d:prefs` `graphics`.
 - Shots: `SET=tiers` in `scripts/look-capture.mjs` (20 default desktop, 21 default phone at
   390x844 with touch, 22 Settings → Graphics, 23 after picking Classic; a promo game seeded first
@@ -785,17 +790,23 @@ that is never fetched at Classic.
   2.40-2.61 s; Classic 1.65-1.69 s, as the old default. Frame time at the noodle shop (rAF mean /
   median): Full 18.1-18.3 / 6.6 ms, Lite 15.1-16.3 / 6.5-6.9 ms, Classic 4.4-4.7 / 4.5 ms.
 
-- `?look=real`: sun shadows (PCF, 2048 map, a 44 m ortho box that follows the player snapped to
-  shadow texels; three 0.186 dropped PCFSoftShadowMap, `shadow.radius` softens instead), a PMREM
+- `?look=real`: sun shadows (PCF, the tier's map size, a 44 m ortho box that follows the player in
+  2 m steps snapped to shadow texels, redrawn only when due: "Performance"; three 0.186 dropped
+  PCFSoftShadowMap, `shadow.radius` softens instead), a PMREM
   environment from a gradient of the space's sky (dome zenith, horizon, the hemisphere's ground;
-  rebuilt on `setDaylight`), the hemisphere at 0.35x, the sun at 1.3x, an EffectComposer (4x MSAA
-  half-float target, GTAOPass, OutputPass with ACES filmic, exposure 0.9), MeshStandardMaterial
+  rebuilt on `setDaylight`), the hemisphere at 0.35x, the sun at 1.3x, an EffectComposer (the scene
+  into its own half-float target with a depth texture, MSAA per the budget; GTAO at the budget's
+  resolution folded into one composite pass; OutputPass with ACES filmic, exposure 0.9; FXAA), MeshStandardMaterial
   (roughness 0.8, metalness 0) in place of MeshToonMaterial, camera 10 degrees lower and fov 27.
   Fog keeps the horizon colour it already had. Outline hulls stay on.
 - `?look=real&ramp=1`: all of the above with the toon materials kept.
-- See-through: works (GTAO's normal pass carries the same dither cutout). With the heavier frames
-  the async id read-back can miss its 120 ms fence during loading and after daylight changes; three
-  misses in a row switch it to the sync read (its designed fallback) for the rest of the session.
+- See-through: works (GTAO's normal pass carries the same dither cutout). The id read-back is
+  always asynchronous (a pixel-pack buffer and a fence, polled with a zero timeout): a read still in
+  flight is waited for, a fence unsignalled after 400 ms (`FENCE_TIMEOUT_MS`) is dropped and the
+  pass re-runs, three failures in a row rest the pass for 2 s (`ASYNC_RETRY_MS`) and it tries again.
+  There is no synchronous fallback any more: it waited for the whole GPU queue (the 100-1400 ms
+  frames in `shots/perf/before.md`). While a slot has no fresh result it has no evidence, and its
+  fades run out their hold.
 - Shots: `scripts/look-capture.mjs` (headless Chromium on the GPU through ANGLE Vulkan, Playwright
   from an absolute path as in `scripts/cache-repro`) against a served `dist/`: the toon / real /
   real + ramp views of Market Street by the noodle shop, an evening pair, a see-through check each,
@@ -820,13 +831,19 @@ Layers (`look.ts ENV_LAYERS`):
   (grass, packed dirt, a detail normal; tileable value noise at load, no binary assets), dirt worn in
   along path edges (a distance field from a 512^2 top-down raster of the terrain's own triangles,
   footprints and anything standing within 0.9 m of the ground) and in noise patches.
-- `grass`: two toroidal tiles of 2-triangle blades round the player (near 26 m / 40k, far 72 m /
-  40k, fade 12.5 / 35 m), positioned, coloured (ground colour x grass texture) and swayed in the
-  vertex shader from the same field; none on path, pavement, footprints, benches, roots.
-- `leaves`: alpha-cut leaf-cluster cards (up to 14k, instanced, alpha-to-coverage) over every
-  canopy material (great_tree, willows, bamboo; there is no `tree_street` in the town). The solid
-  crown stays as a darker core and stops casting; the cards cast (the speckle). Each card carries
-  its crown's see-through id, so it fades with its tree.
+- `grass`: two toroidal tiles of 2-triangle blades round the player, the LOD bands (`GRASS`,
+  `grassBands`): near 26 m / 40k (dense, fade 9-12.5 m), far 72 m / 40k (an eighth of the density,
+  fade 24-30 m, none beyond; unshadowed on Lite), positioned, coloured (ground colour x
+  grass texture) and swayed in the vertex shader from the same field; none on path, pavement,
+  footprints, benches, roots. Each tile is cut into chunks (near 4x4, far 6x6, 52 meshes), each
+  drawn only when it is in the camera's frustum and within its band's reach of the player
+  (`grassChunkVisible`, `wrapIntervals`: where a chunk lands as the tile wraps round the player);
+  at the noodle shop ~27 of 52 chunks draw, ~51k of 80k blades. Grass never casts.
+- `leaves`: alpha-cut leaf-cluster cards (up to 14k, instanced, alpha-to-coverage where there is
+  MSAA) over every canopy material (great_tree, willows, bamboo; there is no `tree_street` in the
+  town). The solid crown stays as a darker core and casts the tree's shadow; the cards never cast
+  (the performance pass: 14k alpha-tested cards in every shadow redraw, for a speckle at the
+  shadow's edge). Each card carries its crown's see-through id, so it fades with its tree.
 - `sky`: a gradient sky with sun disc, glow and cloud wisps replaces `sky_dome` (from the day's
   sky colours, so fog still matches); the environment map takes the sun's glow.
 - `bloom`: UnrealBloomPass (threshold 2.4 linear, at half its own resolution), stronger at
@@ -839,7 +856,10 @@ Layers (`look.ts ENV_LAYERS`):
 
 The AO pass never sees the grass, leaves, sky or particles (hidden by material, as the hulls).
 The town's layers build under the loading screen (Graphics tiers above): ~0.4-0.7 s (field raster,
-textures, leaf sampling); an interior's (bloom / grade only) on its first render. Shots: `SET=env` in `scripts/look-capture.mjs` (10-14, `see-env-env.png`; per-layer
+textures, leaf sampling; `world3d.look().envTimings`) on a first visit; a repeat visit of the same
+build takes the generated textures, the leaf card and the town's field from IndexedDB
+(`src/envcache.ts`, keyed by the build stamp, other builds' entries dropped; never under `dev`):
+~40-100 ms. An interior's (bloom / grade only) builds on its first render. Shots: `SET=env` in `scripts/look-capture.mjs` (10-14, `see-env-env.png`; per-layer
 spot checks and frame times via `LAYERS_OUT` / `REPORT`). Frame time (2026-09-30, Vega 11,
 1280x720, rAF mean over 3 s at the noodle shop, midday): none 17.5 ms, all 21.8 ms (20.5 morning,
 19.8 evening); alone: ground 17.9, grass 18.1, leaves 17.1, sky 17.4, bloom 18.3, grade 17.1,
@@ -897,8 +917,9 @@ last volume above 0, else 0.6), Voice On / Off (the word clips and barks: core's
 explicit tap on ▶, say it again, a word or the sentence still plays), Sound effects On / Off (UI
 taps, the bubble, doors, coins, the bell…: the sfx bus), Ambience On / Off (the ambient bus; no bed
 starts or downloads while off) with Light / Full under it (`ambienceFull`, below; only while on);
-Graphics Full / Lite / Classic (applies at the next page load: "Graphics tiers"), replay the six
-words. They and the guide's Hide / Show are kept in `silver-tongue:world3d:prefs`
+Graphics Full / Lite / Classic (applies at the next page load: "Graphics tiers"), Frame rate
+60 / 30 (cooler) at Full and Lite only (`prefs.ts` `fps`, applied at once: "Performance"), replay
+the six words. They and the guide's Hide / Show are kept in `silver-tongue:world3d:prefs`
 (`src/prefs.ts`). An old single `sound: false` migrates to effects, ambience and music off (the
 music's volume one ♪ tap away) with the voices back on: the player who reported it muted to stop
 the music and lost the voices with it, so voices back with the music still off is what they wanted.

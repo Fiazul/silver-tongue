@@ -16,7 +16,7 @@ import { placeBubble, screenLayout } from "../src/ui/viewport";
 import { AssetCache, drawCalls, mergeStatic, SceneSpace } from "../src/world";
 import { CameraRig } from "../src/camera";
 import { LOOK, lookFor, resolveLook } from "../src/look";
-import { FENCE_TIMEOUT_MS, MAX_SAMPLE_AGE_MS, SEE_SILHOUETTE_CODE, fadeTexture, idHistogram, isSeeThrough, SEE_ATTR, SEE_ID0, SEE_NEVER, SEE_THROUGH, seeThroughCompile, SeeThroughControl, SeeThroughDetector, seeUniforms, silhouetteProjection, type Occluder, type SeeSample } from "../src/seethrough";
+import { ASYNC_RETRY_MS, FENCE_TIMEOUT_MS, MAX_SAMPLE_AGE_MS, SEE_SILHOUETTE_CODE, fadeTexture, idHistogram, isSeeThrough, SEE_ATTR, SEE_ID0, SEE_NEVER, SEE_THROUGH, seeThroughCompile, SeeThroughControl, SeeThroughDetector, seeUniforms, silhouetteProjection, type Occluder, type SeeSample } from "../src/seethrough";
 import { ASSETS, assetIndex, readGlb, countingCore, course, makeGame, playScene, rightOption, rightTiles } from "./helpers";
 import { createCore } from "@silver-tongue/core";
 
@@ -662,7 +662,9 @@ describe.skipIf(!assetIndex)("bug 2: daylight is clearly perceptible at each qua
     expect(mainSrc).not.toMatch(/from "\.\/reallook"/);
     const envSrc = src("envlook.ts");
     const realSrc = src("reallook.ts");
-    for (const s of [envSrc, realSrc]) for (const m of s.matchAll(/^import (?!type )[^;]*from "(\.[^"]+)"/gm)) expect(m[1], m[0]).toBe("./envlook");
+    // the chunk's own modules only: envlook.ts, envcache.ts (the env build's IndexedDB cache), neither imported by the main bundle
+    for (const s of [envSrc, realSrc]) for (const m of s.matchAll(/^import (?!type )[^;]*from "(\.[^"]+)"/gm)) expect(["./envlook", "./envcache"], m[0]).toContain(m[1]);
+    expect(["main.ts", "world.ts", "game.ts", "camera.ts", "seethrough.ts", "look.ts", "layout.ts"].filter((f) => /from "\.\/envcache"/.test(src(f)))).toEqual([]);
     for (const layer of ["ground", "grass", "leaves", "sky", "particles"]) expect(envSrc, layer).toMatch(new RegExp(`if \\(town && want\\.has\\("${layer}"\\)\\)`));
     for (const layer of ["bloom", "grade"]) {
       expect(envSrc, layer).toMatch(new RegExp(`if \\(want\\.has\\("${layer}"\\)\\)`));
@@ -725,12 +727,24 @@ describe.skipIf(!assetIndex)("bug 2: daylight is clearly perceptible at each qua
       expect(e.evening).toBe(1);
       expect(lantern.emissiveIntensity).toBeGreaterThan(1); // the evening glow (bloom's emissives)
       // the safety valve's full -> lite (look.ts LITE_LAYERS, LITE_GRASS), live: nothing built, the rest hidden or thinned
-      const near = scene.getObjectByName("env_grass_near") as THREE.Mesh<THREE.InstancedBufferGeometry>;
-      expect(near.geometry.instanceCount).toBe(200 * 200);
+      // the grass in chunks (envlook.ts GRASS: LOD bands, each tile cut into chunks, culled per frame)
+      const chunks = (sc: THREE.Scene, name: string) => sc.children.filter((o) => o.name === name) as THREE.Mesh<THREE.InstancedBufferGeometry>[];
+      const blades = (sc: THREE.Scene, name: string) => chunks(sc, name).reduce((n, m) => n + m.geometry.instanceCount, 0);
+      expect(chunks(scene, "env_grass_near")).toHaveLength(env.GRASS.near.chunks ** 2);
+      expect(blades(scene, "env_grass_near")).toBe(200 * 200);
       e.restrict(new Set(look.LITE_LAYERS), look.LITE_GRASS);
       expect([...e.layers].sort()).toEqual(["grade", "grass", "ground", "sky"]);
-      expect(near.geometry.instanceCount).toBe(200 * 200 * look.LITE_GRASS);
-      expect(near.visible).toBe(true);
+      expect(Math.abs(blades(scene, "env_grass_near") - 200 * 200 * look.LITE_GRASS)).toBeLessThanOrEqual(env.GRASS.near.chunks ** 2); // each chunk rounds its half
+      // a camera over the lawn west of the great tree, looking down on it: the chunks round the player drawn, the ones behind it not
+      const cam = new THREE.PerspectiveCamera(40, 16 / 9, 0.1, 500);
+      cam.position.set(-25.6, 12, 17);
+      cam.lookAt(-25.6, 0, 5.2);
+      cam.updateMatrixWorld();
+      e.update(cam, new THREE.Vector3(-25.6, 0, 5.2), 2.5);
+      expect(chunks(scene, "env_grass_near").some((m) => m.visible)).toBe(true);
+      const drawn = chunks(scene, "env_grass_far").filter((m) => m.visible).length;
+      expect(drawn).toBeGreaterThan(0);
+      expect(drawn).toBeLessThan(env.GRASS.far.chunks ** 2 / 2); // behind the camera or past 30 m: not drawn
       for (const n of ["env_leaves", "env_dust", "env_steam", "env_falling_leaves"]) expect(scene.getObjectByName(n)!.visible, n).toBe(false);
       expect(scene.getObjectByName("env_sky")!.visible).toBe(true);
       for (const k of ["r", "g", "b"] as const) expect(crown.color[k]).toBeCloseTo(crownColour[k], 6); // the crown's own colour back
@@ -741,7 +755,7 @@ describe.skipIf(!assetIndex)("bug 2: daylight is clearly perceptible at each qua
       const liteSpace = await world.SceneSpace.create(L2, assets, STREET);
       const lite = env.buildEnv(liteSpace.scene, new Set(look.LITE_LAYERS), { seeThrough: see.patchSeeThrough, seeAttr: see.SEE_ATTR, aoHidden: [], grassDensity: look.LITE_GRASS });
       expect([...lite.layers].sort()).toEqual(["grade", "grass", "ground", "sky"]);
-      expect((liteSpace.scene.getObjectByName("env_grass_far") as THREE.Mesh<THREE.InstancedBufferGeometry>).geometry.instanceCount).toBe(200 * 200 * look.LITE_GRASS);
+      expect(Math.abs(blades(liteSpace.scene, "env_grass_far") - 200 * 200 * look.LITE_GRASS)).toBeLessThanOrEqual(env.GRASS.far.chunks ** 2);
       for (const n of ["env_leaves", "env_dust", "env_steam", "env_falling_leaves"]) expect(liteSpace.scene.getObjectByName(n), n).toBeUndefined();
       // on an interior: no town layers, the renderer's still on
       const room = await world.SceneSpace.create(L2, assets, "room");
@@ -751,7 +765,7 @@ describe.skipIf(!assetIndex)("bug 2: daylight is clearly perceptible at each qua
       vi.doUnmock("../src/look");
       vi.resetModules();
     }
-  });
+  }, 20000); // three env builds on the real town (full, lite, a room): ~3 s alone, more under the parallel suite
 
   it("an interior shifts less than the street, and keeps its own wall colour (background/fog untouched)", async () => {
     const room = await buildSpace(L, "room");
@@ -879,8 +893,9 @@ describe("see-through: whatever blocks a focus fades as a whole object", () => {
     expect(see.vis[7]).toBe(1);
   });
 
-  it("sets up one scissored ID render and pixel read for a focus", () => {
+  it("sets up one scissored ID render and async pixel read for a focus; never a sync read", () => {
     const calls: string[] = [];
+    const g = fakeGl2();
     const viewport = new THREE.Vector4(10, 20, 1280, 720);
     const scissor = new THREE.Vector4(30, 40, 600, 400);
     let scissorTest = true;
@@ -890,6 +905,7 @@ describe("see-through: whatever blocks a focus fades as a whole object", () => {
     let throwRead = false;
     const renderer = {
       autoClear: true,
+      getContext: () => g.gl,
       getDrawingBufferSize: (v: THREE.Vector2) => v.set(1280, 720),
       getRenderTarget: () => target,
       getViewport: (v: THREE.Vector4) => v.copy(viewport),
@@ -909,6 +925,7 @@ describe("see-through: whatever blocks a focus fades as a whole object", () => {
       clear: () => calls.push("clear"),
       render: (scene: THREE.Scene) => {
         calls.push("render");
+        if (throwRead) throw new Error("read failed");
         expect(scene.children).toHaveLength(2);
         const proxy = scene.children[0] as THREE.Mesh;
         const idMesh = scene.children[1] as THREE.Mesh;
@@ -917,7 +934,7 @@ describe("see-through: whatever blocks a focus fades as a whole object", () => {
         expect((idMesh.material as THREE.ShaderMaterial).stencilFunc).toBe(THREE.EqualStencilFunc);
         expect(idMesh.geometry).toBe(geo);
       },
-      readRenderTargetPixels: () => { calls.push("readPixels"); if (throwRead) throw new Error("read failed"); },
+      readRenderTargetPixels: () => calls.push("syncRead"),
     } as unknown as THREE.WebGLRenderer;
     const geo = new THREE.BoxGeometry();
     geo.setAttribute(SEE_ATTR, new THREE.Float32BufferAttribute(new Array(geo.getAttribute("position").count).fill(SEE_ID0), 1));
@@ -931,7 +948,9 @@ describe("see-through: whatever blocks a focus fades as a whole object", () => {
     const beforeScissor = scissor.clone();
     const update = () => see.update(1 / 60, [new THREE.Vector3()], [{ id: 0, asset: "box" }], [detector.sample(source, r.camera, new THREE.Vector3())]);
     update();
-    expect(calls).toContain("readPixels");
+    expect(g.calls).toContain(`readPixels:${SEE_THROUGH.sampleSize}x${SEE_THROUGH.sampleSize}@0`);
+    g.signal(g.gl.CONDITION_SATISFIED);
+    detector.poll();
     expect(target).toBeNull();
     expect(viewport).toEqual(beforeViewport);
     expect(scissor).toEqual(beforeScissor);
@@ -956,6 +975,7 @@ describe("see-through: whatever blocks a focus fades as a whole object", () => {
     expect(renderer.autoClear).toBe(true);
     expect(calls.at(-2)).toBe("target:default");
     expect(calls.at(-1)).toBe("target:offscreen");
+    expect(calls).not.toContain("syncRead");
     expect(silhouetteProjection(r.camera, new THREE.Vector3(), 1280, 720).elements.every(Number.isFinite)).toBe(true);
   });
 
@@ -1056,13 +1076,24 @@ describe("see-through: whatever blocks a focus fades as a whole object", () => {
     expect(detector.counts(0).silhouette).toBe(0);
     detector.poll();
     expect(g.calls).not.toContain("getBufferSubData");
-    // a failed wait falls back to the sync read for good
+    // a failed wait rests the pass for ASYNC_RETRY_MS (no pass, never a sync read), then it reads async again
     detector.sample(source, camera, focus.clone().setX(3));
     g.signal(g.gl.WAIT_FAILED);
+    const log = quietWarn();
     detector.poll();
+    log.restore();
+    const n0 = calls.length;
     detector.sample(source, camera, focus.clone().setX(4));
-    expect(calls.at(-1)).toBe("syncRead");
-    expect(detector.counts(0).covered).toEqual(new Map([[2, 6]]));
+    expect(calls).toHaveLength(n0); // resting: no pass
+    expect(detector.debug()[0]).toMatchObject({ asyncPaused: true, pending: false });
+    expect(detector.current(0)).toBeNull(); // moved: no evidence
+    clock.advance(ASYNC_RETRY_MS);
+    g.signal(g.gl.CONDITION_SATISFIED);
+    detector.sample(source, camera, focus.clone().setX(4));
+    expect(calls.at(-1)).toBe("render");
+    detector.poll();
+    expect(detector.counts(0).covered).toEqual(new Map([[5, 6]]));
+    expect(calls).not.toContain("syncRead");
     } finally {
       clock.restore();
     }
@@ -1109,7 +1140,7 @@ describe("see-through: whatever blocks a focus fades as a whole object", () => {
       t.g.signal(t.g.gl.TIMEOUT_EXPIRED);
       const away = focus.clone().setX(0.5);
       t.frame(away);
-      expect(t.detector.debug()[0]).toMatchObject({ slot: 0, pending: true, timeouts: 0, syncFallback: false });
+      expect(t.detector.debug()[0]).toMatchObject({ slot: 0, pending: true, timeouts: 0, asyncPaused: false });
       const before = t.renders();
       t.clock.advance(FENCE_TIMEOUT_MS - 1);
       t.detector.poll(); // one poll, just inside the budget
@@ -1119,7 +1150,7 @@ describe("see-through: whatever blocks a focus fades as a whole object", () => {
       t.g.calls.length = 0;
       t.detector.poll(); // the second poll, FENCE_TIMEOUT_MS after the queue: dropped
       expect(t.g.calls).toEqual(["clientWaitSync:0", "deleteSync", "deleteBuffer"]);
-      expect(t.detector.debug()[0]).toMatchObject({ pending: false, timeouts: 1, syncFallback: false });
+      expect(t.detector.debug()[0]).toMatchObject({ pending: false, timeouts: 1, asyncPaused: false });
       expect(log.logged).toHaveLength(1);
       // the next pass runs although the focus has not moved since the dropped one was queued
       t.detector.sample(t.source, t.camera, away);
@@ -1136,7 +1167,7 @@ describe("see-through: whatever blocks a focus fades as a whole object", () => {
     }
   });
 
-  it("WebGL2: a read still in flight when the slot has gone MAX_SAMPLE_AGE_MS without a result is abandoned for a sync read", () => {
+  it("WebGL2: a read still in flight is waited for however old the decision gets: never abandoned for a sync read", () => {
     const t = asyncRig();
     const log = quietWarn();
     const focus = new THREE.Vector3();
@@ -1148,19 +1179,24 @@ describe("see-through: whatever blocks a focus fades as a whole object", () => {
     t.clock.advance(FENCE_TIMEOUT_MS + 10);
     t.detector.poll(); // timed out
     t.clock.advance(10);
-    t.detector.sample(t.source, t.camera, focus); // re-queued at 140 ms: still young enough to wait
-    expect(t.detector.debug()[0]).toMatchObject({ pending: true, timeouts: 1, syncReads: 0 });
-    t.clock.advance(MAX_SAMPLE_AGE_MS - 135); // the read is 115 ms old (inside its fence budget), the decision 255 ms
+    t.detector.sample(t.source, t.camera, focus); // re-queued
+    expect(t.detector.debug()[0]).toMatchObject({ pending: true, timeouts: 1 });
+    t.clock.advance(MAX_SAMPLE_AGE_MS); // the decision is old; the read is still inside its fence budget
+    const renders = t.renders();
     t.g.calls.length = 0;
     log.restore();
     t.detector.sample(t.source, t.camera, focus);
-    expect(t.g.calls).toEqual(["clientWaitSync:0", "deleteSync", "deleteBuffer"]); // polled, then abandoned
-    expect(t.calls.slice(-2)).toEqual(["render", "syncRead"]);
-    expect(t.detector.debug()[0]).toMatchObject({ pending: false, timeouts: 1, syncReads: 1, syncFallback: false, lastSampleAgeMs: 0 });
-    expect(t.detector.current(0)?.covered).toEqual(new Map([[2, 6]]));
+    expect(t.g.calls).toEqual(["clientWaitSync:0"]); // polled, still waiting
+    expect(t.renders()).toBe(renders); // no second pass
+    expect(t.calls).not.toContain("syncRead");
+    expect(t.detector.debug()[0]).toMatchObject({ pending: true, timeouts: 1 });
+    expect(t.detector.current(0)).toBeNull(); // no evidence while it waits
+    t.g.signal(t.g.gl.CONDITION_SATISFIED);
+    t.detector.poll();
+    expect(t.detector.current(0)?.covered).toEqual(new Map([[5, 6]]));
   });
 
-  it("WebGL2: walking with fences that never signal, no fresh sample is ever older than MAX_SAMPLE_AGE_MS plus a frame, and the tree clears", () => {
+  it("WebGL2: walking with fences that never signal, no sync read ever runs, the pass rests after three timeouts and the tree still clears", () => {
     const t = asyncRig();
     const log = quietWarn();
     try {
@@ -1168,27 +1204,23 @@ describe("see-through: whatever blocks a focus fades as a whole object", () => {
       t.g.signal(t.g.gl.ALREADY_SIGNALED);
       for (let i = 0; i < 150; i++) t.frame(focus);
       expect(t.vis()).toBeCloseTo(SEE_THROUGH.fadeTo, 2);
-      // stuck: every fence stays unsignalled while the player walks out from under the tree (the
-      // sync read sees id 2, not the tree)
+      // stuck: every fence stays unsignalled while the player walks out from under the tree
       t.g.signal(t.g.gl.TIMEOUT_EXPIRED);
       let x = 0;
-      let worst = 0;
-      let fellBack = -1;
+      let paused = -1;
       for (let i = 0; i < 5 * 60; i++) {
         t.frame(new THREE.Vector3((x += 0.05), 0, 0));
         const d = t.detector.debug()[0];
-        // the result from under the tree was valid until the walk began: age counts from there
-        worst = Math.max(worst, Math.min(d.lastSampleAgeMs ?? Infinity, (i + 1) * 1000 / 60));
-        if (fellBack < 0 && d.syncFallback) fellBack = i;
-        if (i === Math.ceil((SEE_THROUGH.holdSeconds + MAX_SAMPLE_AGE_MS / 1000) * 60) + 2) expect(t.vis()).toBeGreaterThan(SEE_THROUGH.fadeTo + 0.01); // easing back already
+        if (paused < 0 && d.asyncPaused) paused = i;
       }
-      expect(worst).toBeLessThanOrEqual(MAX_SAMPLE_AGE_MS + 1000 / 60 + 1);
+      // no evidence: the hold runs out and the tree eases back
       expect(t.vis()).toBe(1);
-      // three timeouts in a row switch the context to the sync read for good
-      expect(fellBack).toBeGreaterThan(0);
-      expect(t.detector.debug()[0]).toMatchObject({ timeouts: 3, syncFallback: true, pending: false });
-      expect(t.detector.debug()[0].syncReads).toBeGreaterThan(5 * 60 - fellBack - 2);
-      expect(log.logged).toHaveLength(2); // the first timeout, then the switch
+      expect(t.calls).not.toContain("syncRead");
+      // three timeouts in a row rest the pass (ASYNC_RETRY_MS), then it tries again
+      expect(paused).toBeGreaterThan(0);
+      expect(paused).toBeLessThanOrEqual(Math.ceil((3 * FENCE_TIMEOUT_MS) / (1000 / 60)) + 3);
+      expect(t.detector.debug()[0].skipped.unavailable).toBeGreaterThan(0);
+      expect(log.logged).toHaveLength(2); // the first timeout, then the rest
     } finally {
       log.restore();
     }
@@ -1288,7 +1320,8 @@ describe("see-through: whatever blocks a focus fades as a whole object", () => {
       expect(clearedAt).toBeGreaterThan(0);
       expect(see.status(occluders).faded).toEqual([]);
       const walked = detector.debug()[0];
-      expect(walked).toMatchObject({ timeouts: 0, syncReads: 0, syncFallback: false, silhouettePixels: 6 });
+      expect(walked).toMatchObject({ timeouts: 0, asyncPaused: false, silhouettePixels: 6 });
+      expect(stub.calls).not.toContain("syncRead");
       expect(walked.skipped.unmoved).toBe(before.skipped.unmoved); // moving: never skipped as unmoved
       expect(walked.skipped.pending).toBe(before.skipped.pending);
       // every call either rendered a pass or was an off-cadence frame, half and half
@@ -1310,9 +1343,10 @@ describe("see-through: whatever blocks a focus fades as a whole object", () => {
       const readPixels = t.g.gl.readPixels;
       t.g.gl.readPixels = () => { throw new Error("pack failed"); };
       t.g.calls.length = 0;
-      t.detector.sample(t.source, t.camera, focus); // falls back to the sync read for this pass
+      t.detector.sample(t.source, t.camera, focus); // not queued: nothing pending, no sync read; the next sample re-runs it
       expect(t.detector.debug()[0].pending).toBe(false);
-      expect(t.calls.at(-1)).toBe("syncRead");
+      expect(t.calls.at(-1)).toBe("render");
+      expect(t.calls).not.toContain("syncRead");
       expect(t.g.calls).toEqual(["createBuffer", `bufferData:${SEE_THROUGH.sampleSize ** 2 * 4}`, "deleteBuffer"]);
       t.g.gl.readPixels = readPixels;
       // a poll that throws while reading back drops the read
@@ -1342,20 +1376,18 @@ describe("see-through: whatever blocks a focus fades as a whole object", () => {
     }
   });
 
-  it("WebGL1 (no fences): falls back to a synchronous read; skips when neither camera nor focus moved", () => {
+  it("no fences (a WebGL1-like context): no pass and no sync read, ever; nothing to fade by", () => {
     const { calls, renderer, source, camera } = stubRenderer({}); // a context without fenceSync
     const detector = new SeeThroughDetector(renderer);
     const focus = new THREE.Vector3();
-    expect(detector.sample(source, camera, focus)).toEqual({ silhouette: 6, covered: new Map([[2, 6]]) });
-    expect(calls).toEqual(["render", "syncRead"]);
-    detector.sample(source, camera, focus.clone().addScalar(1e-4)); // under the epsilon
-    expect(calls).toHaveLength(2);
+    expect(detector.sample(source, camera, focus)).toEqual({ silhouette: 0, covered: new Map() });
     detector.sample(source, camera, focus.clone().setZ(0.5)); // focus moved
-    expect(calls).toHaveLength(4);
     camera.position.x += 0.5; // camera moved
     camera.updateMatrixWorld();
     detector.sample(source, camera, focus.clone().setZ(0.5));
-    expect(calls).toHaveLength(6);
+    expect(calls).toEqual([]);
+    expect(detector.debug()[0]).toMatchObject({ asyncPaused: true, passes: 0, skipped: { unavailable: 3 } });
+    expect(detector.current(0)).toBeNull();
     detector.invalidateSlot(0); // the focus left (scene ended): its counts go
     expect(detector.counts(0).silhouette).toBe(0);
   });
