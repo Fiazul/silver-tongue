@@ -742,53 +742,55 @@ its street rendering is unchanged.
 
 ### Interior view
 
-All five rooms use the same enclosed view in Classic, Full and Lite (Stardew / Coral Island
-style: the whole small room, the player small in it). `LayoutIndex` derives the camera volume
-from shell width/depth/height, or the box room's `size` and highest wall, plus the arrival
-point (`view.entry`). Walking bounds and the exit trigger do not enlarge that camera volume.
+All five rooms use the same enclosed view in Classic, Full and Lite, the way Coral Island /
+The Sims show a room: one fixed camera per room, pitched like the street's. `LayoutIndex`
+derives the camera volume from shell width/depth/height, or the box room's `size` and highest
+wall, plus the arrival point (`view.entry`) and the walls' thickness inside it (`view.wall`:
+shells 0.15 m, `SHELL_WALL`; box rooms' walls stand outside, 0).
 
-`src/interior-camera.ts` looks straight at the back wall from the open front, pitched down
-55-70°, and the eye may stand **above the ceiling**: the ceiling is single-sided (invisible
-from above), and every frame ray (checked at the corners and along each edge, `rayLanding`)
-must cross the ceiling height 0.2 m inside the outer wall planes (`INTERIOR_WALL`, past the
-0.15 m walls), so no wall top, cap or outside shows. Below that the ray must land on the floor,
-the back wall or a side wall, never through the open front. Nothing in a built room stands
-above its ceiling (tested on the real assets). The steep pitch is what keeps the player whole
-near the open front: the ray to their head crosses the ceiling height (ceiling - 1.7 m) /
-tan(pitch) closer to the eye, and must still be inside the opening.
+`src/interior-camera.ts` looks straight at the back wall from in front of the open front,
+pitched down 40-45° (`INTERIOR_PITCH_RANGE`). Per room and aspect (cached, a few ms) it tries
+every pitch and fov 20-70° and fits the room's depth exactly: the frame's bottom edge meets the
+floor 0.1 m inside the open front, its top edge the back wall 5 cm above the ceiling. That fixes
+the eye's height and depth, often above the ceiling and in front of the room. Scoring: the
+player 30-40 % of the frame height at the room's centre (`PLAYER_SIZE`; body 1.7 x 0.5 m), then
+at least 80 % of the floor in view, then the most floor and back wall, then a pitch near the
+street's 42°. The eye never moves up, down or in depth. It pans sideways only when the room is
+wider than the frame (portrait), and only once the player passes a dead zone (NDC x 0.45),
+gently (`CAMERA.interiorFollow`, 2.5/s) and then stops. At 16:9 the whole room is in view from
+one eye and the camera never moves.
 
-`solveFrame` searches pitch, eye height (0.25-5 m above the ceiling) and fov, and scores the
-player whole (feet and head) everywhere on the floor (0.5 m grid) from some valid eye first,
-then 20-35 % of the frame height (`PLAYER_SIZE`; body 1.7 m x 0.5 m) at the room's centre and
-the arrival point, then the camera not needing to move, then the floor in view. That search
-takes 0.3-3 s, so it is precomputed per room and aspect bucket into `src/interior-frames.json`
-(`npx tsx packages/world3d/scripts/interior-frames.ts`, ~5 min; a test fails while the table is
-stale). At run time `interiorFrame` scores the five nearest buckets at the real aspect (a few ms)
-and checks their eyes there, so every ray is valid whatever the bucket. The camera sits at the
-home eye (most floor in view) and moves, gently (`CAMERA.interiorFollow`, 2.5/s), only when the
-player would leave the frame. Dialogue focus and viewport resizing use the same frame, without
-the street's zoom or UI view offset.
+The enclosure makes those eyes safe (`src/interior-enclosure.ts` `ENCLOSURE`). The back and side
+walls continue above the walls' tops on their inner faces, up to 8 m. The side walls continue
+4 m past the open front, from the floor up. So no wall top, wall end or outside can show. The
+ceiling is single-sided, so it is invisible from above. `rayLanding` checks every frame ray
+against that volume; tests raycast the built rooms.
 
-Measured (test/interior-camera.test.ts, 1920x1080 and 390x844): the player whole everywhere in
-all five rooms; at 16:9 the player is 21-26 % of the frame height on arrival and 28-31 % at the
-centre, 19-41 % across the whole floor (the 3.5 x 3 m room reaches 41 % right by its open front);
-portrait 21-29 % on arrival, 19-34 % across the floor.
+Measured (1920x1080 / 390x844), player size on arrival and at the centre:
+tea house 31/29 and 32/28 %, noodle shop 31/29 and 34/29 %, shop 30/28 and 32/28 %,
+room 41/40 and 37/36 %, stairs 35/34 and 32/30 %. Pitch is 40° for the 6 x 5 m rooms, 42° for the
+room (45° portrait) and 42° for the stairs. At 16:9 all the floor and the whole back wall are in
+view. Portrait shows about half of each and pans. The player is whole over the whole floor in
+every room.
 
 Outlines draw at `INTERIOR_OUTLINE` (0.4) of their street width inside a room: the hull is
 world-space (2.2 cm) and at interior distances it drew ~3x wider, showing through thin parts
 (backpack straps, shoes) as dark slivers.
 
-`src/interior-enclosure.ts` adds inward-facing, single-sided wall planes behind the
-authored walls, a warm ceiling, and a floor safety plane just below the original slab.
-The original wall finishes, furniture, window frames and closed doors stay in place.
-Shell material instances use front faces only; shell outline hulls are hidden. The
-separate +x wall GLBs (and their omitted dressing) remain omitted, so the right side wall in
-view is the enclosure's plain inward plane (the back wall's colour); the front plane is never in
-view. There are **no cut caps, ghost walls or added sills**.
+`src/interior-enclosure.ts` adds inward-facing, single-sided planes: behind the authored walls
+below the ceiling, on their inner faces above it and in front of the room (see above), a warm
+ceiling and a floor safety plane just below the original slab. The original wall finishes,
+furniture, window frames and closed doors stay in place. Shell material instances use front
+faces only; shell outline hulls are hidden. The shells' separate +x wall GLBs stay omitted: the
+library's are from a newer, textured batch than the vendored shells. Instead the right wall
+plane (and the side walls' run in front of the room) is painted in the left wall's bands
+(`bandWalls`: its dado, trim and plaster, sampled from the built wall). The walls' upward
+continuations take the top band's colour. In the real look they take the room's shadows.
+There are **no cut caps, ghost walls or added sills**.
 
 Room entry/exit reuses the existing 700 ms fade-through: the space and camera pose
 change at its dark midpoint (220 ms), so there is no visible trip through wall edges
-or exterior scenery. Interior follow settles over roughly 1 s. Leaving restores
+or exterior scenery. The camera does not move on arrival; a portrait pan settles in about 1 s. Leaving restores
 the street camera's FOV, near plane, distance and scene zoom, and the outline width.
 
 Daylight still drives the room's existing hemisphere/sun colours, its window sky
@@ -814,12 +816,13 @@ Layout fields under `interiors.<id>.backdrop`:
 - `opening`: retained fallback shaft dimensions; visible shafts attach to window geometry.
 
 Unit tests check all five rooms at 1920×1080, 390×845 (9:19.5), and 390×844, including
-focus at every edge, dialogue updates and resizing. At every frustum corner and 9 points along
-each frame edge the ray crosses the ceiling height inside the walls (eye above it), and its first
-hit is the floor, the back wall or a side wall (never the open front or the ceiling). The
-enclosure walls overlap the floor and ceiling planes by 2 cm (no seam).
+focus at every edge, dialogue updates and resizing. The first hit is the floor, the back wall
+or a side wall, never the open front, the ceiling or nothing. That holds at every edge (9 points)
+and a 9 x 7 grid across the frame, on the enclosure alone, and on the built rooms from every pan
+position, where no hit may be a wall top or a wall's front end.
 They also verify inward-only walls, a ceiling, no caps and no exterior geometry in
-current rooms. The enclosure adds six planes (six calls / 12 triangles); Classic builds
+current rooms. The enclosure adds 9-15 planes (measured: shop and stairs 9, noodle shop and
+room 13, tea house 15; one call and 2 triangles each, outside the batching guard); Classic builds
 no real-look light/shaft objects. Full/Lite add at most one visible two-triangle shaft
 and no new shadow maps. These are geometry estimates, not GPU timing measurements.
 

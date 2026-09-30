@@ -3,7 +3,7 @@
 // one anchor helper, with blockers, picking, street life and the time-of-day light. The town adds
 // its landscape (at the origin), the sky dome, the sun from town.json and a far haze.
 import * as THREE from "three";
-import { buildInteriorEnclosure, interiorFaces } from "./interior-enclosure";
+import { bandWalls, buildInteriorEnclosure, interiorFaces } from "./interior-enclosure";
 import { buildInteriorBackdrop } from "./interior-backdrop";
 import type { GLTF, GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { mergeGeometries, mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
@@ -748,7 +748,7 @@ export class SceneSpace {
       scene.add(floor);
       statics.push(floor);
     }
-    buildInteriorEnclosure(scene, layout, (colour) => this.assets.toon.flat(colour));
+    const enclosure = buildInteriorEnclosure(scene, layout, (colour) => this.assets.toon.flat(colour));
     this.backdrop = buildInteriorBackdrop(scene, layout, LOOK.real, (colour) => this.assets.toon.flat(colour));
     for (const g of layout.ground) {
       const size = [0, 1, 2].map((i) => g.max[i] - g.min[i]);
@@ -773,7 +773,7 @@ export class SceneSpace {
       const o = await this.assets.instance(b.asset);
       this.place(o, b);
       o.name = b.id;
-      if (layout.interior && L.asset(b.asset).origin === "shell") interiorFaces(o);
+      if (layout.interior && L.asset(b.asset).origin === "shell") { interiorFaces(o); o.userData.shell = true; }
       this.backdrop?.dressWindows(o);
       o.userData.see = this.seeSpec(o, b.id, b.asset);
       scene.add(o);
@@ -803,6 +803,9 @@ export class SceneSpace {
       scene.add(proxy);
       this.pickables.push(proxy);
     });
+    bandWalls(enclosure, layout, statics, (colour) => this.assets.toon.flat(colour));
+    // Real look: the enclosure takes the room's shadows like the authored walls it continues.
+    if (LOOK.real) enclosure?.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.receiveShadow = true; });
     this.batching.before = drawCalls(scene);
     this.batching.merged = mergeStatic(scene, statics);
     this.batching.after = drawCalls(scene);

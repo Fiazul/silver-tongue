@@ -1,212 +1,154 @@
 import * as THREE from "three";
-import FRAMES from "./interior-frames.json";
+import { ENCLOSURE } from "./interior-enclosure";
 import type { InteriorView } from "./layout";
 
 /**
- * The view: straight at the back wall from the open front (Stardew-style: both side walls in
- * view, the front one never), pitched down PITCH_RANGE. Steeper than the
- * street: with the eye above the ceiling, the ray to a player's head crosses the ceiling height
- * (3 m - 1.7 m) / tan(pitch) nearer the eye, so a steeper view keeps the player whole closer to the
- * open front (the strip where no ray can reach the head through the ceiling opening).
+ * The interior camera: one fixed eye per room and aspect, the way Coral Island / The Sims show a
+ * room. It looks straight at the back wall from in front of the open front, pitched down like the
+ * street camera (INTERIOR_PITCH_RANGE), and may stand above the ceiling and in front of the room:
+ * the enclosure (interior-enclosure.ts ENCLOSURE) carries the walls up and forward, the ceiling is
+ * single-sided, so every frame ray lands on the floor or a wall face. The frame fits the room's
+ * depth exactly: its bottom edge meets the floor just inside the open front, its top edge the back
+ * wall just above the ceiling. Only a gentle sideways pan (dead zone) when the room is wider than
+ * the frame; otherwise the camera does not move.
  */
-const AZIMUTH = 0;
-const PITCHES = [55, 60, 65, 70];
-const PITCH_RANGE: readonly [number, number] = [PITCHES[0], PITCHES[PITCHES.length - 1]];
-const PITCH_PREFERRED = 60;
-/** Exported for tests: the allowed pitch range (degrees). */
-export const INTERIOR_PITCH_RANGE = PITCH_RANGE;
-interface Basis { key: string; az: number; pitch: number; F: THREE.Vector3; R: THREE.Vector3; U: THREE.Vector3 }
-function basis(azDeg: number, pitchDeg: number): Basis {
-  const a = THREE.MathUtils.degToRad(azDeg), sa = Math.sin(a), ca = Math.cos(a);
-  const p = THREE.MathUtils.degToRad(pitchDeg), SIN = Math.sin(p), COS = Math.cos(p);
-  return {
-    key: `${azDeg}/${pitchDeg}`, az: azDeg, pitch: pitchDeg,
-    F: new THREE.Vector3(-COS * sa, -SIN, -COS * ca),
-    R: new THREE.Vector3(ca, 0, -sa),
-    U: new THREE.Vector3(-SIN * sa, COS, -SIN * ca),
-  };
-}
-const BASES = new Map<string, Basis>();
-/**
- * Where a frame ray crosses the ceiling height (eye above the ceiling), it stays this far inside
- * the room's outer wall planes: past the authored walls' thickness (shells 0.15 m; box rooms'
- * walls stand outside the bounds), so no wall top, cap or outside shows. The ceiling itself is
- * single-sided (interior-enclosure.ts): invisible from above.
- */
-export const INTERIOR_WALL = 0.2;
-/** Floor hits stay this far from the open front (its plane reaches just under the floor). */
-const FRONT = 0.05;
-/** Eye inside the room (at or below the ceiling): inset from the outer wall planes. */
-const EDGE = 0.02;
-/** The eye stays this far under the ceiling when it is inside the room (fallback frame only). */
-const HEAD = 0.12;
-/** Searched (solveFrame): eye height above the ceiling (m) and fov (degrees), with PITCHES.
- * About 0.3-3 s a room and aspect: precomputed (interiorFrame). */
-const RISE_RANGE = [0.25, 5] as const, RISE_STEP = 0.25, FOV_RANGE = [30, 72] as const, FOV_STEP = 2;
-
-/** Frame limits: the top edge stays this far below the horizon; fov range and step (degrees). */
-const TOP_DROP = 8;
-const VFOV_MAX = 72, HFOV_MAX = 84, VFOV_MIN = 8;
-/** Eye positions tried per axis for one (azimuth, height, fov). */
-const EYE_GRID = 12;
-/** The player's height on screen the frame aims for (fraction of the frame height). */
-export const PLAYER_SIZE: readonly [number, number] = [0.2, 0.35];
-/** Head height above the feet for the framing checks. */
-const HEAD_UP = 1.7;
-/** Frame rays checked: corners and three more along each edge (NDC). */
-const RAYS: [number, number][] = [-1, -0.5, 0, 0.5, 1].flatMap((t) => [[t, -1], [t, 1], [-1, t], [1, t]] as [number, number][])
-  .filter(([x, y], i, all) => all.findIndex(([a, b]) => a === x && b === y) === i);
+export const INTERIOR_PITCH_RANGE: readonly [number, number] = [40, 45];
+/** Pitch preferred on a tie (the street camera's, camera.ts CAMERA.elevationDeg). */
+const PITCH_PREFERRED = 42;
+/** The player's size the frame aims for (fraction of the frame height; body 1.7 m x 0.5 m). */
+export const PLAYER_SIZE: readonly [number, number] = [0.3, 0.4];
+/** The frame's bottom edge meets the floor this far inside the open front; its top edge the back
+ * wall this far above the ceiling (the whole back wall in view). */
+const FRONT_MARGIN = 0.1, TOP_MARGIN = 0.05;
+/** The eye keeps this far from the enclosure's top and front end. */
+const KEEP = 0.3;
+/** Pan dead zone: the camera pans only once the player's centre passes this NDC x. */
+export const PAN_DEAD_ZONE = 0.45;
+/** Pan follow rate (1/s) is the rig's (camera.ts CAMERA.interiorFollow). */
+const HEAD_UP = 1.7, BODY = 0.25;
+/** Floor share (from the eye at the room's centre line) below which a frame is heavily penalised. */
+const FLOOR_MIN = 0.8;
 
 export interface InteriorFrame {
-  /** vertical fov, degrees */
+  /** vertical fov and pitch, degrees */
   fov: number;
-  /** azimuth, degrees (AZIMUTH) */
-  az: number;
-  /** pitch, degrees (PITCH_RANGE) */
   pitch: number;
-  /** eye height above the floor (may be above the ceiling) */
-  height: number;
-  /** eye positions checked valid: every frame ray lands on the floor or a far wall */
-  eyes: THREE.Vector3[];
-  /** the eye the room is framed from when the player needs no follow */
-  home: THREE.Vector3;
-  /** share of the floor in view from home */
-  cover: number;
+  /** the eye: height and depth fixed, x pans within [xMin, xMax] (equal: no pan) */
+  y: number;
+  z: number;
+  xMin: number;
+  xMax: number;
+  /** floor and back wall in view from the eye at the room's centre line (0-1) */
+  floorShare: number;
+  backShare: number;
 }
 
-function rayDir(b: Basis, tx: number, ty: number, sx: number, sy: number) {
-  return b.F.clone().addScaledVector(b.R, sx * tx).addScaledVector(b.U, sy * ty);
+interface Basis { F: THREE.Vector3; R: THREE.Vector3; U: THREE.Vector3 }
+function basis(pitchDeg: number): Basis {
+  const p = THREE.MathUtils.degToRad(pitchDeg), s = Math.sin(p), c = Math.cos(p);
+  return { F: new THREE.Vector3(0, -s, -c), R: new THREE.Vector3(1, 0, 0), U: new THREE.Vector3(0, c, -s) };
 }
 
-/**
- * Where one frame ray from `eye` first meets the room: "floor", "left", "back", "right" (the side
- * walls and the back wall face the camera; the +x side is the enclosure's inward plane) or null
- * (the open front's plane, the ceiling from below, a wall top, the outside). Above the ceiling the
- * ray must cross the ceiling height INTERIOR_WALL inside the outer wall planes; below it the eye
- * must be inside the room.
- */
-export function rayLanding(room: InteriorView, eye: THREE.Vector3, d: THREE.Vector3): "floor" | "left" | "back" | "right" | null {
-  const { min, max } = room.bounds;
-  if (d.y >= -1e-6) return null;
-  let px = eye.x, py = eye.y, pz = eye.z;
-  if (eye.y > room.ceiling) {
-    const t = (room.ceiling - eye.y) / d.y;
-    px += d.x * t; pz += d.z * t; py = room.ceiling;
-    if (px <= min[0] + INTERIOR_WALL || px >= max[0] - INTERIOR_WALL || pz <= min[1] + INTERIOR_WALL || pz >= max[1] - INTERIOR_WALL) return null;
-  } else if (px <= min[0] + EDGE || px >= max[0] - EDGE || pz <= min[1] + EDGE || pz >= max[1] - EDGE) return null;
-  const tFloor = (room.floor - py) / d.y;
-  const tx = d.x < 0 ? (min[0] - px) / d.x : d.x > 0 ? (max[0] - px) / d.x : Infinity;
-  const tz = d.z < 0 ? (min[1] - pz) / d.z : d.z > 0 ? (max[1] - pz) / d.z : Infinity;
-  if (tFloor <= tx && tFloor <= tz) {
-    const hx = px + d.x * tFloor, hz = pz + d.z * tFloor;
-    return hx > min[0] && hx < max[0] && hz > min[1] && hz < max[1] - FRONT ? "floor" : null;
-  }
-  if (tx <= tz) return d.x < 0 ? "left" : "right";
-  return d.z < 0 ? "back" : null;
-}
-
-/** Every checked frame ray lands on the room (floor or a far wall). */
-function validEye(room: InteriorView, b: Basis, tx: number, ty: number, eye: THREE.Vector3) {
-  for (const [sx, sy] of RAYS) if (!rayLanding(room, eye, rayDir(b, tx, ty, sx, sy))) return false;
-  return true;
-}
-
-/** Screen position (NDC) of a world point seen from `eye` with the frame's orientation. */
-function ndc(b: Basis, eye: THREE.Vector3, tx: number, ty: number, px: number, py: number, pz: number) {
-  const vx = px - eye.x, vy = py - eye.y, vz = pz - eye.z;
-  const depth = vx * b.F.x + vy * b.F.y + vz * b.F.z;
+/** Screen position (NDC) of a point from `eye` (straight-on view, pitch in `b`). */
+function ndc(b: Basis, eye: THREE.Vector3, tx: number, ty: number, x: number, y: number, z: number) {
+  const vx = x - eye.x, vy = y - eye.y, vz = z - eye.z;
+  const depth = vy * b.F.y + vz * b.F.z;
   if (depth <= 0.05) return undefined;
-  return { x: (vx * b.R.x + vz * b.R.z) / (depth * tx), y: (vx * b.U.x + vy * b.U.y + vz * b.U.z) / (depth * ty) };
+  return { x: vx / (depth * tx), y: (vy * b.U.y + vz * b.U.z) / (depth * ty) };
 }
 
-/** Screen bands (NDC) the player must stay in: strict first, then relaxed. */
-const BANDS = [{ x: 0.8, top: 0.8, bottom: -0.85 }, { x: 0.92, top: 0.92, bottom: -0.95 }];
-type Band = (typeof BANDS)[number];
-type View = { fov: number; az: number; pitch: number };
-const tangents = (v: View, aspect: number) => {
-  const ty = Math.tan(THREE.MathUtils.degToRad(v.fov) / 2);
-  const key = `${v.az}/${v.pitch}`;
-  let b = BASES.get(key);
-  if (!b) { b = basis(v.az, v.pitch); BASES.set(key, b); }
-  return { tx: ty * aspect, ty, b };
-};
-
-function framed(v: View, aspect: number, eye: THREE.Vector3, focus: THREE.Vector3, band: Band) {
-  const { tx, ty, b } = tangents(v, aspect);
-  for (const up of [0, HEAD_UP]) {
-    const p = ndc(b, eye, tx, ty, focus.x, focus.y + up, focus.z);
-    if (!p || Math.abs(p.x) > band.x || p.y > band.top || p.y < band.bottom) return false;
-  }
-  return true;
-}
-
-/** Body radius for the framing checks and the size measure (m). */
-const BODY = 0.25;
-
-/** The player's height on screen (fraction of the frame height) at `focus`, seen from `eye`: the
- * screen extent of their body (1.7 m tall, BODY round), so a steep view still counts their depth. */
-export function playerSize(v: View, aspect: number, eye: THREE.Vector3, focus: THREE.Vector3) {
-  const { tx, ty, b } = tangents(v, aspect);
-  const fx = b.F.x, fz = b.F.z, n = Math.hypot(fx, fz) || 1;
+/** The player's height on screen (fraction of the frame height) at `focus` from `eye`. */
+export function playerSize(frame: { fov: number; pitch: number }, aspect: number, eye: THREE.Vector3, focus: THREE.Vector3) {
+  const b = basis(frame.pitch), ty = Math.tan(THREE.MathUtils.degToRad(frame.fov) / 2), tx = ty * aspect;
   let lo = Infinity, hi = -Infinity;
   for (const up of [0, HEAD_UP]) for (const k of [-BODY, BODY]) {
-    const p = ndc(b, eye, tx, ty, focus.x + (fx / n) * k, focus.y + up, focus.z + (fz / n) * k);
+    const p = ndc(b, eye, tx, ty, focus.x, focus.y + up, focus.z - k);
     if (!p) return 1;
     lo = Math.min(lo, p.y); hi = Math.max(hi, p.y);
   }
   return (hi - lo) / 2;
 }
 
-/** Where the player can be: the floor inside the walls, on a `step` m grid (plus the arrival point). */
-export function roomFoci(room: InteriorView, step = 0.5) {
-  const { min, max } = room.bounds, inset = INTERIOR_WALL + 0.15, out: THREE.Vector3[] = [];
-  const nx = Math.max(1, Math.round((max[0] - min[0] - 2 * inset) / step)), nz = Math.max(1, Math.round((max[1] - min[1] - 2 * inset) / step));
-  for (let i = 0; i <= nx; i++) for (let j = 0; j <= nz; j++)
-    out.push(new THREE.Vector3(min[0] + inset + ((max[0] - min[0] - 2 * inset) * i) / nx, room.floor, min[1] + inset + ((max[1] - min[1] - 2 * inset) * j) / nz));
-  if (room.entry) out.push(new THREE.Vector3(room.entry[0], room.floor, room.entry[1]));
-  return out;
+/** The room's inside (the walls' inner faces) and the enclosure around it. */
+function volume(room: InteriorView) {
+  const t = room.wall ?? 0, { min, max } = room.bounds;
+  return { xi0: min[0] + t, xi1: max[0] - t, zi0: min[1] + t, z1: max[1], zf: max[1] + ENCLOSURE.front, top: room.floor + ENCLOSURE.top };
 }
 
-/** Share of the floor (inside the walls, 0.4 m grid) inside the frame from `eye`. */
-function floorCoverage(room: InteriorView, v: View, aspect: number, eye: THREE.Vector3) {
-  const { min, max } = room.bounds, { tx, ty, b } = tangents(v, aspect);
+/**
+ * Where a frame ray from `eye` leaves the enclosure: "floor" (inside the room), "wall" (the back
+ * wall, a side wall or their extensions) or null (the floor's missing in front of the room, the
+ * enclosure's open end or top: the outside). The eye must be inside the enclosure.
+ */
+export function rayLanding(room: InteriorView, eye: THREE.Vector3, d: THREE.Vector3): "floor" | "wall" | null {
+  const v = volume(room);
+  if (eye.x <= v.xi0 || eye.x >= v.xi1 || eye.z <= v.zi0 || eye.z >= v.zf || eye.y >= v.top || eye.y <= room.floor) return null;
+  if (d.y >= 0) return null;
+  const tFloor = (room.floor - eye.y) / d.y;
+  const tx = d.x < 0 ? (v.xi0 - eye.x) / d.x : d.x > 0 ? (v.xi1 - eye.x) / d.x : Infinity;
+  const tz = d.z < 0 ? (v.zi0 - eye.z) / d.z : d.z > 0 ? (v.zf - eye.z) / d.z : Infinity;
+  const t = Math.min(tFloor, tx, tz);
+  if (t === tFloor) return eye.z + d.z * t < v.z1 ? "floor" : null;
+  if (t === tx) return "wall";
+  return d.z < 0 ? "wall" : null;
+}
+
+/** Frame rays checked: corners and three more along each edge (NDC). */
+const RAYS: [number, number][] = [-1, -0.5, 0, 0.5, 1].flatMap((t) => [[t, -1], [t, 1], [-1, t], [1, t]] as [number, number][])
+  .filter(([x, y], i, all) => all.findIndex(([a, c]) => a === x && c === y) === i);
+
+function validEye(room: InteriorView, b: Basis, tx: number, ty: number, eye: THREE.Vector3) {
+  return RAYS.every(([sx, sy]) => rayLanding(room, eye, b.F.clone().addScaledVector(b.R, sx * tx).addScaledVector(b.U, sy * ty)) !== null);
+}
+
+/** Share of the floor (inside the walls, 0.25 m grid) and of the back wall's width in view. */
+function coverage(room: InteriorView, b: Basis, tx: number, ty: number, eye: THREE.Vector3) {
+  const v = volume(room);
   let n = 0, seen = 0;
-  for (let x = min[0] + INTERIOR_WALL; x <= max[0] - INTERIOR_WALL; x += 0.4) for (let z = min[1] + INTERIOR_WALL; z <= max[1] - INTERIOR_WALL; z += 0.4) {
+  for (let x = v.xi0 + 0.1; x <= v.xi1 - 0.1; x += 0.25) for (let z = v.zi0 + 0.1; z <= v.z1 - 0.1; z += 0.25) {
     n++;
     const p = ndc(b, eye, tx, ty, x, room.floor, z);
     if (p && Math.abs(p.x) <= 1 && Math.abs(p.y) <= 1) seen++;
   }
-  return n ? seen / n : 0;
+  let bn = 0, bs = 0;
+  for (let x = v.xi0 + 0.05; x <= v.xi1 - 0.05; x += 0.1) {
+    bn++;
+    const lo = ndc(b, eye, tx, ty, x, room.floor, v.zi0), hi = ndc(b, eye, tx, ty, x, room.ceiling, v.zi0);
+    if (lo && hi && Math.abs(lo.x) <= 1 && Math.abs(hi.x) <= 1 && lo.y >= -1 && hi.y <= 1) bs++;
+  }
+  return { floor: n ? seen / n : 0, back: bn ? bs / bn : 0 };
 }
 
-/** The foci scored (roomFoci) and the size probes: the room's centre and the arrival point. */
-function focusSets(room: InteriorView) {
-  const centre = new THREE.Vector3((room.bounds.min[0] + room.bounds.max[0]) / 2, room.floor, (room.bounds.min[1] + room.bounds.max[1]) / 2);
-  return { foci: roomFoci(room), probes: [centre, ...(room.entry ? [new THREE.Vector3(room.entry[0], room.floor, room.entry[1])] : [])] };
+/** The frame for one pitch and fov: depth fitted exactly, x pan range, or undefined if the eye
+ * would leave the enclosure or any frame ray would miss it. */
+function frameFor(room: InteriorView, aspect: number, pitch: number, fov: number): (InteriorFrame & { size: number }) | undefined {
+  const b = basis(pitch), v = volume(room);
+  const ty = Math.tan(THREE.MathUtils.degToRad(fov) / 2), tx = ty * aspect;
+  const low = THREE.MathUtils.degToRad(pitch + fov / 2), high = THREE.MathUtils.degToRad(pitch - fov / 2);
+  if (low >= Math.PI / 2 - 0.05 || high <= 0.05) return undefined;
+  const tb = Math.tan(low), tt = Math.tan(high);
+  const zb = v.z1 - FRONT_MARGIN, C = room.ceiling - room.floor + TOP_MARGIN, D = zb - v.zi0;
+  const H = (C + D * tt) / (1 - tt / tb), z = zb + H / tb, y = room.floor + H;
+  if (y > v.top - KEEP || z > v.zf - KEEP) return undefined;
+  const cx = (v.xi0 + v.xi1) / 2;
+  const centre = new THREE.Vector3(cx, y, z);
+  const cover = coverage(room, b, tx, ty, centre);
+  // Pan range: only when the room is wider than the frame. The frame's half-width at the front
+  // floor edge (its nearest floor): the eye may pan until that edge reaches a side wall.
+  const near = (z - zb) * -b.F.z + (y - room.floor) * -b.F.y; // view depth of the front floor edge
+  const half = near * tx;
+  const slack = Math.max(0, (v.xi1 - v.xi0) / 2 - half);
+  const xMin = cx - slack, xMax = cx + slack;
+  for (const x of slack > 0 ? [xMin, cx, xMax] : [cx]) if (!validEye(room, b, tx, ty, new THREE.Vector3(x, y, z))) return undefined;
+  const middle = new THREE.Vector3(cx, room.floor, (v.zi0 + v.z1) / 2);
+  return { fov, pitch, y, z, xMin, xMax, floorShare: cover.floor, backShare: cover.back, size: playerSize({ fov, pitch }, aspect, centre, middle) };
 }
-
-/** Table key for a room: its camera volume (two rooms with the same volume share their frames). */
-export function frameKey(room: InteriorView) {
-  const r = (v: number) => Math.round(v * 1000) / 1000;
-  return [...room.bounds.min, ...room.bounds.max, room.floor, room.ceiling, ...(room.entry ?? [])].map(r).join(",");
-}
-/** Aspect buckets of the precomputed table (scripts/interior-frames.ts): phones in portrait 0.40 to
- * 0.80 in 0.02 steps, then to 2.50 in 0.05 steps, plus 16:9 exactly. */
-export const FRAME_ASPECTS = [
-  ...Array.from({ length: 20 }, (_, i) => 0.4 + i * 0.02),
-  ...Array.from({ length: 35 }, (_, i) => 0.8 + i * 0.05),
-  16 / 9,
-].map((a) => Math.round(a * 10000) / 10000).sort((a, b) => a - b);
-type FrameParams = { aspect: number; pitch: number; fov: number; height: number };
-const NEAREST = 5;
-const TABLE = FRAMES as Record<string, FrameParams[]>;
 
 /**
- * The room's frame for one aspect, cached. The search (solveFrame) takes seconds, so its results
- * are precomputed per room and aspect bucket (src/interior-frames.json, scripts/interior-frames.ts).
- * A viewport scores the NEAREST buckets' pitch, eye height and fov at its own aspect (evaluate:
- * a few ms) and takes the best; its eyes are checked at that aspect, so every frame ray is valid
- * whatever the bucket. A room missing from the table (edited layout) solves live.
+ * The room's frame for one aspect (cached): every pitch in INTERIOR_PITCH_RANGE and fov 20-70°
+ * (1° steps, a few ms in all), scored: the player PLAYER_SIZE at the room's centre, then at least
+ * FLOOR_MIN of the floor in view without panning, then the most floor and back wall, then a pitch
+ * near the street's.
  */
 const frames = new WeakMap<InteriorView, Map<number, InteriorFrame>>();
 export function interiorFrame(room: InteriorView, aspect: number): InteriorFrame {
@@ -215,152 +157,45 @@ export function interiorFrame(room: InteriorView, aspect: number): InteriorFrame
   frames.set(room, cache);
   const hit = cache.get(aspect);
   if (hit) return hit;
-  const rows = [...(TABLE[frameKey(room)] ?? [])].sort((a, b) => Math.abs(a.aspect - aspect) - Math.abs(b.aspect - aspect)).slice(0, NEAREST);
-  const { foci, probes } = focusSets(room);
-  let best: Candidate | undefined;
-  for (const r of rows) {
-    const c = evaluate(room, aspect, r.pitch, r.height, r.fov, foci, probes, EYE_GRID, 0);
-    if (c && (!best || c.score > best.score)) best = c;
-  }
-  const frame = best?.frame ?? solveFrame(room, aspect);
+  let best: InteriorFrame | undefined, bestScore = -Infinity;
+  for (let pitch = INTERIOR_PITCH_RANGE[0]; pitch <= INTERIOR_PITCH_RANGE[1]; pitch += 1)
+    for (let fov = 20; fov <= 70; fov += 1) {
+      const f = frameFor(room, aspect, pitch, fov);
+      if (!f) continue;
+      const off = Math.max(0, f.size - PLAYER_SIZE[1]) + Math.max(0, PLAYER_SIZE[0] - f.size);
+      const score = -off * 1e4 - Math.max(0, FLOOR_MIN - f.floorShare) * 5e3 + f.floorShare * 100 + f.backShare * 50 - Math.abs(pitch - PITCH_PREFERRED);
+      if (score > bestScore) { bestScore = score; best = f; }
+    }
+  const frame = best ?? { fov: 50, pitch: PITCH_PREFERRED, y: room.ceiling - 0.2, z: room.bounds.max[1] - 0.05, xMin: 0, xMax: 0, floorShare: 0, backShare: 0 };
   cache.set(aspect, frame);
   return frame;
 }
 
-/** The eye window for one view and height: the bottom edge's floor hits (near side) and, above the
- * ceiling, the corner rays' ceiling crossings bound it (necessary conditions; validEye decides). */
-function eyeWindow(room: InteriorView, b: Basis, tx: number, ty: number, height: number) {
-  const { min, max } = room.bounds, above = height - (room.ceiling - room.floor);
-  const lo = [-Infinity, -Infinity], hi = [Infinity, Infinity];
-  for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
-    const d = rayDir(b, tx, ty, sx, sy);
-    if (d.y >= 0) return undefined;
-    const o = [d.x / -d.y, d.z / -d.y];
-    for (const i of [0, 1]) {
-      if (sy === -1 && i === 1) hi[i] = Math.min(hi[i], max[i] - FRONT - height * o[i]);
-      if (above > 0) { lo[i] = Math.max(lo[i], min[i] + INTERIOR_WALL - above * o[i]); hi[i] = Math.min(hi[i], max[i] - INTERIOR_WALL - above * o[i]); }
-      else { lo[i] = Math.max(lo[i], min[i] + EDGE); hi[i] = Math.min(hi[i], max[i] - EDGE); }
-    }
-  }
-  return lo[0] < hi[0] && lo[1] < hi[1] ? { lo, hi } : undefined;
-}
-
-/** The eye for `focus`: `home` when it frames the player, else the eye nearest to home that does
- * (strict band, then relaxed); undefined when none does. */
-function eyeFor(v: View, aspect: number, eyes: THREE.Vector3[], home: THREE.Vector3, focus: THREE.Vector3) {
-  for (const band of BANDS) {
-    if (framed(v, aspect, home, focus, band)) return home;
-    let best: THREE.Vector3 | undefined, near = Infinity;
-    for (const p of eyes) {
-      const d = p.distanceToSquared(home);
-      if (d < near && framed(v, aspect, p, focus, band)) { near = d; best = p; }
-    }
-    if (best) return best;
-  }
-  return undefined;
-}
-
-interface Candidate { frame: InteriorFrame; score: number; share: number }
-
-/** One (pitch, eye height, fov): its valid eyes, home eye (most floor in view) and score. */
-/** The frame for one (pitch, eye height, fov) at this aspect: its valid eyes on a grid and its home
- * eye (the one that sees most of the floor); undefined when no eye is valid. */
-export function buildFrame(room: InteriorView, aspect: number, pitch: number, height: number, deg: number, grid = EYE_GRID): InteriorFrame | undefined {
-  const v = { fov: deg, az: AZIMUTH, pitch };
-  const { tx, ty, b } = tangents(v, aspect);
-  const w = eyeWindow(room, b, tx, ty, height);
-  if (!w) return undefined;
-  const eyes: THREE.Vector3[] = [];
-  // cell centres, never the window's edges: an eye on a constraint's boundary is valid or not by
-  // rounding, and a frame that needs one would not survive a slightly different viewport
-  for (let i = 0; i <= grid; i++) for (let j = 0; j <= grid; j++) {
-    const e = new THREE.Vector3(w.lo[0] + ((w.hi[0] - w.lo[0]) * (i + 0.5)) / (grid + 1), room.floor + height, w.lo[1] + ((w.hi[1] - w.lo[1]) * (j + 0.5)) / (grid + 1));
-    if (validEye(room, b, tx, ty, e)) eyes.push(e);
-  }
-  if (!eyes.length) return undefined;
-  const some = eyes.filter((_, k) => k % Math.ceil(eyes.length / 20) === 0);
-  let home = some[0], cover = -1;
-  for (const p of some) { const c = floorCoverage(room, v, aspect, p); if (c > cover + 1e-9) { cover = c; home = p; } }
-  return { ...v, height, eyes, home, cover };
-}
-
-function evaluate(room: InteriorView, aspect: number, pitch: number, height: number, deg: number, foci: THREE.Vector3[], probes: THREE.Vector3[], grid: number, floorShare: number): Candidate | undefined {
-  const frame = buildFrame(room, aspect, pitch, height, deg, grid);
-  if (!frame) return undefined;
-  const { eyes, home, cover } = frame, v = frame;
-  let fromHome = 0, fromAny = 0, missed = 0;
-  const allowed = Math.floor((1 - floorShare) * foci.length + 1e-9) + 1; // worse than the best so far: stop
-  for (const f of foci) {
-    const e = eyeFor(v, aspect, eyes, home, f);
-    if (e) { fromAny++; if (e === home) fromHome++; }
-    else if (++missed > allowed) return undefined;
-  }
-  let off = 0; // the player's size at the room's centre and the arrival point
-  for (const f of probes) {
-    const e = eyeFor(v, aspect, eyes, home, f);
-    const size = e ? playerSize(v, aspect, e, f) : 1;
-    off += Math.max(0, size - PLAYER_SIZE[1]) + Math.max(0, PLAYER_SIZE[0] - size);
-  }
-  const share = fromAny / foci.length;
-  const hc = room.ceiling - room.floor;
-  const score = share * 1e6 - (off / probes.length) * 5e4 + (fromHome / foci.length) * 1e3 + cover * 200 - (height - hc) - Math.abs(pitch - PITCH_PREFERRED) * 2;
-  return { frame, score, share };
-}
-
-/**
- * The frame: a coarse search over pitch, eye height and fov, then a finer one round the best,
- * scored (evaluate):
- * 1. the player whole (feet and head) over as much of the room as some valid eye allows;
- * 2. the player PLAYER_SIZE of the frame at the room's centre and the arrival point;
- * 3. the same from the home eye alone (the camera need not move); 4. the most floor in view;
- * then the lowest eye and a pitch near PITCH_PREFERRED.
- */
-export function solveFrame(room: InteriorView, aspect: number): InteriorFrame {
-  const hc = room.ceiling - room.floor;
-  const { foci, probes } = focusSets(room);
-  const vMax = (pitch: number) => Math.min(VFOV_MAX, 2 * (pitch - TOP_DROP), THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(HFOV_MAX) / 2) / aspect)));
-  let best: Candidate | undefined;
-  const consider = (pitch: number, height: number, deg: number, grid: number, foci: THREE.Vector3[]) => {
-    const c = evaluate(room, aspect, pitch, height, deg, foci, probes, grid, best ? best.share : 0);
-    if (!c) return;
-    if (!best || c.score > best.score) best = c;
-  };
-  for (const pitch of PITCHES)
-    for (let height = hc + RISE_RANGE[0]; height <= hc + RISE_RANGE[1] + 1e-6; height += RISE_STEP)
-      for (let deg = FOV_RANGE[0]; deg <= Math.min(FOV_RANGE[1], vMax(pitch)); deg += FOV_STEP) consider(pitch, height, deg, EYE_GRID, foci);
-  const found = best as Candidate | undefined;
-  if (found) return found.frame;
-  const top = hc - HEAD; // no valid frame at all (degenerate room): a narrow view from under the ceiling
-  const home = new THREE.Vector3((room.bounds.min[0] + room.bounds.max[0]) / 2, room.floor + top, room.bounds.max[1] - EDGE);
-  return { fov: VFOV_MIN, az: AZIMUTH, pitch: PITCH_PREFERRED, height: top, eyes: [home], home, cover: 0 };
-}
-
-/** The eye for `focus` (eyeFor), home when no valid eye frames the player. */
-function target(frame: InteriorFrame, focus: THREE.Vector3, aspect: number) {
-  return eyeFor(frame, aspect, frame.eyes, frame.home, focus) ?? frame.home;
-}
-
-/** Fit the camera to the room: every frame ray lands on the floor or a far wall (never a near wall,
- * a wall top, the ceiling or outside); the eye may stand above the single-sided ceiling. The room is
- * framed from one home eye; the camera moves (gently: `blend` is the follow step, 1 snaps) only when
- * the player would leave the frame. */
+/** Fit the camera to the room: the fixed eye, panned sideways only when the player leaves the dead
+ * zone (and the room is wider than the frame). `blend` is the pan step (1: snap, centring the
+ * player within the pan range). */
 export function applyInteriorCamera(camera: THREE.PerspectiveCamera, room: InteriorView, focus: THREE.Vector3, blend = 1) {
   const aspect = Math.max(0.1, camera.aspect);
   const frame = interiorFrame(room, aspect);
+  const b = basis(frame.pitch);
   camera.fov = frame.fov;
   camera.near = 0.04;
-  if (camera.view) camera.clearViewOffset(); // scene UI lifting must not break the enclosure clamp
-  const goal = target(frame, focus, aspect);
-  let eye = blend >= 1 ? goal.clone() : camera.position.clone().lerp(goal, blend);
-  // Never frame from an unchecked point: a blend between two valid eyes (or across a resize) that
-  // fails the check takes the valid eye nearest to it (a step of at most the eye grid's spacing).
-  const { tx, ty, b } = tangents(frame, aspect);
-  if (!validEye(room, b, tx, ty, eye)) {
-    let near = Infinity, pick = goal;
-    for (const p of frame.eyes) { const d = p.distanceToSquared(eye); if (d < near) { near = d; pick = p; } }
-    eye = pick.clone();
+  if (camera.view) camera.clearViewOffset(); // scene UI lifting must not break the enclosure fit
+  const clampX = (x: number) => THREE.MathUtils.clamp(x, frame.xMin, frame.xMax);
+  let x: number;
+  if (blend >= 1 || camera.position.y !== frame.y || camera.position.z !== frame.z) x = clampX(focus.x);
+  else {
+    x = clampX(camera.position.x);
+    const ty = Math.tan(THREE.MathUtils.degToRad(frame.fov) / 2), tx = ty * aspect;
+    const eye = new THREE.Vector3(x, frame.y, frame.z);
+    const p = ndc(b, eye, tx, ty, focus.x, focus.y + HEAD_UP / 2, focus.z);
+    if (p && Math.abs(p.x) > PAN_DEAD_ZONE) {
+      const depth = (focus.y + HEAD_UP / 2 - frame.y) * b.F.y + (focus.z - frame.z) * b.F.z;
+      const goal = clampX(focus.x - Math.sign(p.x) * PAN_DEAD_ZONE * depth * tx);
+      x = Math.abs(goal - x) < 0.002 ? goal : x + (goal - x) * blend; // lands: no endless creep
+    }
   }
-  camera.position.copy(eye);
+  camera.position.set(x, frame.y, frame.z);
   camera.lookAt(camera.position.clone().add(b.F));
   camera.updateProjectionMatrix();
   camera.updateMatrixWorld(true);

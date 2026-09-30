@@ -329,6 +329,10 @@ export interface TownLook {
   flyover: CameraKey[];
 }
 
+/** Wall thickness of the interior shells (tools/blender: every shell's walls are 0.15 m, inside
+ * its footprint; test/interior-camera.test.ts checks the built walls against it). */
+export const SHELL_WALL = 0.15;
+
 /** One scene space, normalised: the town and every interior go through this shape. */
 export interface InteriorView {
   bounds: Box2;
@@ -336,6 +340,8 @@ export interface InteriorView {
   ceiling: number;
   /** where the player arrives (x, z): the interior camera must frame it (interior-camera.ts) */
   entry?: Vec2;
+  /** the authored walls' thickness inside `bounds` (shells 0.15 m; box rooms' walls stand outside: 0) */
+  wall?: number;
 }
 
 export interface SpaceLayout {
@@ -787,6 +793,7 @@ export class LayoutIndex {
         bounds: { min: [-W / 2, -D], max: [W / 2, 0] }, floor: floorY,
         ceiling: this.interiorHeight(i),
         entry: ((p) => [p[0], p[2]] as Vec2)(this.entrySpawn(id).pos),
+        wall: i.shell ? SHELL_WALL : 0,
       },
       interior: !i.outdoor,
     };

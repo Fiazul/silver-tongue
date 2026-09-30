@@ -22,7 +22,7 @@ export const CAMERA = {
   sceneLiftPortrait: 0.16,
   /** follow damping, 1/s */
   follow: 3.5,
-  /** the same inside a room (interior-camera.ts): gentler, the room barely needs to move */
+  /** the sideways pan inside a room (interior-camera.ts: fixed eye, pans only past a dead zone) */
   interiorFollow: 2.5,
   /** aim this far above the feet */
   aimHeight: 1.0,
@@ -131,7 +131,7 @@ export class CameraRig {
   update(dt: number, focus: THREE.Vector3, inScene: boolean) {
     const k = 1 - Math.exp(-CAMERA.follow * dt);
     if (this.room) {
-      // Gentle follow: the eye drifts inside the room's valid region (interior-camera.ts), ~1 s to settle.
+      // Fixed eye; a gentle sideways pan past the dead zone when the room is wider than the frame.
       this.aim.copy(focus);
       this.applyRoom(1 - Math.exp(-CAMERA.interiorFollow * dt));
       return;
