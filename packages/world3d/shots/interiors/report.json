@@ -4,8 +4,8 @@
    "file": "noodle_shop-classic-midday.png",
    "portrait": false,
    "camera": "gameplay",
-   "calls": 38,
-   "triangles": 41960,
+   "calls": 40,
+   "triangles": 42268,
    "errors": []
   },
   {
@@ -52,8 +52,8 @@
    "file": "tea_house-classic-midday.png",
    "portrait": false,
    "camera": "gameplay",
-   "calls": 28,
-   "triangles": 36240,
+   "calls": 32,
+   "triangles": 36412,
    "errors": []
   },
   {
@@ -100,8 +100,8 @@
    "file": "stairs-classic-midday.png",
    "portrait": false,
    "camera": "gameplay",
-   "calls": 31,
-   "triangles": 23080,
+   "calls": 33,
+   "triangles": 24784,
    "errors": []
   },
   {
