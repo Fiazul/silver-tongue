@@ -1,0 +1,562 @@
+{
+ "label": "after",
+ "url": "http://127.0.0.1:9311/",
+ "q": "&fps=0",
+ "frames": 12,
+ "stepMs": 80,
+ "load": [
+  1.79,
+  3.05,
+  3.37
+ ],
+ "rows": [
+  {
+   "tier": "full",
+   "scene": "street",
+   "look": {
+    "tier": "full",
+    "shadowMap": true,
+    "budget": {
+     "dprCap": 2,
+     "renderScale": 1,
+     "dynamic": false,
+     "minScale": 0.6,
+     "ao": "half",
+     "msaa": 0,
+     "fxaa": true,
+     "shadowSize": 2048,
+     "shadowEvery": 2,
+     "fps": 0
+    }
+   },
+   "walkMs": 1323,
+   "end": [
+    -17.437920000004773,
+    0,
+    31.5
+   ],
+   "band": {
+    "n": 3628682,
+    "mean": 21.1,
+    "p95": 87.93
+   },
+   "roi": null,
+   "pairs": [
+    23.76,
+    25.02,
+    22.92,
+    25.98,
+    22.11,
+    23.98,
+    24.48,
+    22.25,
+    9.5,
+    20.41,
+    9.41
+   ],
+   "lag": {
+    "frames": 38,
+    "movingFrames": 37,
+    "staleShadowFrames": 0,
+    "lagMeanM": 0,
+    "lagMaxM": 0,
+    "frameMeanMs": 35.09,
+    "frameP95Ms": 46.2,
+    "mapRedraws": 4,
+    "casterRedraws": 37
+   },
+   "gpu": null,
+   "errors": 0,
+   "errorText": []
+  },
+  {
+   "tier": "full",
+   "scene": "tree",
+   "look": {
+    "tier": "full",
+    "shadowMap": true,
+    "budget": {
+     "dprCap": 2,
+     "renderScale": 1,
+     "dynamic": false,
+     "minScale": 0.6,
+     "ao": "half",
+     "msaa": 0,
+     "fxaa": true,
+     "shadowSize": 2048,
+     "shadowEvery": 2,
+     "fps": 0
+    }
+   },
+   "walkMs": 907,
+   "end": [
+    -19.079039999985675,
+    0,
+    12.5
+   ],
+   "band": {
+    "n": 3105077,
+    "mean": 2.93,
+    "p95": 8.8
+   },
+   "roi": {
+    "n": 951675,
+    "mean": 1.99,
+    "p95": 5
+   },
+   "pairs": [
+    3.48,
+    3.45,
+    2.65,
+    2.67,
+    3.87,
+    2.61,
+    2.84,
+    2.61,
+    2.61,
+    3.59,
+    1.76
+   ],
+   "lag": {
+    "frames": 65,
+    "movingFrames": 64,
+    "staleShadowFrames": 0,
+    "lagMeanM": 0,
+    "lagMaxM": 0,
+    "frameMeanMs": 14.03,
+    "frameP95Ms": 26.1,
+    "mapRedraws": 5,
+    "casterRedraws": 64
+   },
+   "gpu": null,
+   "errors": 0,
+   "errorText": []
+  },
+  {
+   "tier": "full",
+   "scene": "interior",
+   "look": {
+    "tier": "full",
+    "shadowMap": true,
+    "budget": {
+     "dprCap": 2,
+     "renderScale": 1,
+     "dynamic": false,
+     "minScale": 0.6,
+     "ao": "half",
+     "msaa": 0,
+     "fxaa": true,
+     "shadowSize": 2048,
+     "shadowEvery": 2,
+     "fps": 0
+    }
+   },
+   "walkMs": 1105,
+   "end": [
+    -1.0154190094152529,
+    0.06,
+    -2.1909090755782192
+   ],
+   "band": {
+    "n": 3075532,
+    "mean": 2.31,
+    "p95": 5.86
+   },
+   "roi": null,
+   "pairs": [
+    1.17,
+    1.18,
+    1.54,
+    4.08,
+    3.13,
+    3.63,
+    2.98,
+    4.34,
+    1.87,
+    0.85,
+    0.59
+   ],
+   "lag": {
+    "frames": 153,
+    "movingFrames": 72,
+    "staleShadowFrames": 0,
+    "lagMeanM": 0,
+    "lagMaxM": 0,
+    "frameMeanMs": 6.16,
+    "frameP95Ms": 21.3,
+    "mapRedraws": 1,
+    "casterRedraws": 152
+   },
+   "gpu": null,
+   "errors": 0,
+   "errorText": []
+  },
+  {
+   "tier": "lite",
+   "scene": "street",
+   "look": {
+    "tier": "lite",
+    "shadowMap": true,
+    "budget": {
+     "dprCap": 1.5,
+     "renderScale": 0.75,
+     "dynamic": true,
+     "minScale": 0.5,
+     "ao": "off",
+     "msaa": 0,
+     "fxaa": true,
+     "shadowSize": 1024,
+     "shadowEvery": 3,
+     "fps": 0
+    }
+   },
+   "walkMs": 930,
+   "end": [
+    -17.423519999992834,
+    0,
+    31.5
+   ],
+   "band": {
+    "n": 2061164,
+    "mean": 21.1,
+    "p95": 86.14
+   },
+   "roi": null,
+   "pairs": [
+    19.42,
+    20.72,
+    20.6,
+    20.92,
+    21.23,
+    21.59,
+    21.77,
+    21.07,
+    20.77,
+    21.73,
+    22.18
+   ],
+   "lag": {
+    "frames": 108,
+    "movingFrames": 107,
+    "staleShadowFrames": 0,
+    "lagMeanM": 0,
+    "lagMaxM": 0,
+    "frameMeanMs": 8.59,
+    "frameP95Ms": 14.9,
+    "mapRedraws": 5,
+    "casterRedraws": 107
+   },
+   "gpu": null,
+   "errors": 0,
+   "errorText": []
+  },
+  {
+   "tier": "lite",
+   "scene": "tree",
+   "look": {
+    "tier": "lite",
+    "shadowMap": true,
+    "budget": {
+     "dprCap": 1.5,
+     "renderScale": 0.75,
+     "dynamic": true,
+     "minScale": 0.5,
+     "ao": "off",
+     "msaa": 0,
+     "fxaa": true,
+     "shadowSize": 1024,
+     "shadowEvery": 3,
+     "fps": 0
+    }
+   },
+   "walkMs": 936,
+   "end": [
+    -19.050239999997657,
+    0,
+    12.5
+   ],
+   "band": {
+    "n": 1735879,
+    "mean": 2.22,
+    "p95": 0.28
+   },
+   "roi": {
+    "n": 505539,
+    "mean": 1.33,
+    "p95": 0
+   },
+   "pairs": [
+    2.51,
+    2.22,
+    2.51,
+    2.33,
+    2.25,
+    2.07,
+    2.28,
+    1.98,
+    2.11,
+    2.06,
+    2.14
+   ],
+   "lag": {
+    "frames": 128,
+    "movingFrames": 127,
+    "staleShadowFrames": 0,
+    "lagMeanM": 0,
+    "lagMaxM": 0,
+    "frameMeanMs": 7.28,
+    "frameP95Ms": 13.2,
+    "mapRedraws": 5,
+    "casterRedraws": 127
+   },
+   "gpu": null,
+   "errors": 0,
+   "errorText": []
+  },
+  {
+   "tier": "lite",
+   "scene": "interior",
+   "look": {
+    "tier": "lite",
+    "shadowMap": true,
+    "budget": {
+     "dprCap": 1.5,
+     "renderScale": 0.75,
+     "dynamic": true,
+     "minScale": 0.5,
+     "ao": "off",
+     "msaa": 0,
+     "fxaa": true,
+     "shadowSize": 1024,
+     "shadowEvery": 3,
+     "fps": 0
+    }
+   },
+   "walkMs": 924,
+   "end": [
+    -0.9789100526745771,
+    0.06,
+    -2.181255231033913
+   ],
+   "band": {
+    "n": 1729981,
+    "mean": 2.22,
+    "p95": 2.72
+   },
+   "roi": null,
+   "pairs": [
+    1.39,
+    1.22,
+    2.86,
+    3.37,
+    3.15,
+    3.51,
+    3.69,
+    2.99,
+    1.16,
+    0.87,
+    0.2
+   ],
+   "lag": {
+    "frames": 244,
+    "movingFrames": 126,
+    "staleShadowFrames": 0,
+    "lagMeanM": 0,
+    "lagMaxM": 0,
+    "frameMeanMs": 3.83,
+    "frameP95Ms": 10.6,
+    "mapRedraws": 1,
+    "casterRedraws": 243
+   },
+   "gpu": null,
+   "errors": 0,
+   "errorText": []
+  },
+  {
+   "tier": "classic",
+   "scene": "street",
+   "look": {
+    "tier": "classic",
+    "shadowMap": false,
+    "budget": {
+     "dprCap": 2,
+     "renderScale": 1,
+     "dynamic": false,
+     "minScale": 0.6,
+     "ao": "half",
+     "msaa": 0,
+     "fxaa": true,
+     "shadowSize": 2048,
+     "shadowEvery": 2,
+     "fps": 0
+    }
+   },
+   "walkMs": 938,
+   "end": [
+    -17.428000000000004,
+    0,
+    31.5
+   ],
+   "band": {
+    "n": 3610378,
+    "mean": 15.25,
+    "p95": 84.7
+   },
+   "roi": null,
+   "pairs": [
+    15.34,
+    16.58,
+    16.45,
+    16.5,
+    16.5,
+    16.5,
+    16.19,
+    16.62,
+    16.18,
+    16.12,
+    9.39
+   ],
+   "lag": {
+    "frames": 177,
+    "movingFrames": 176,
+    "staleShadowFrames": 176,
+    "lagMeanM": 1.4987,
+    "lagMaxM": 2.9856,
+    "frameMeanMs": 5.32,
+    "frameP95Ms": 8.3,
+    "mapRedraws": 0,
+    "casterRedraws": 0
+   },
+   "gpu": null,
+   "errors": 0,
+   "errorText": []
+  },
+  {
+   "tier": "classic",
+   "scene": "tree",
+   "look": {
+    "tier": "classic",
+    "shadowMap": false,
+    "budget": {
+     "dprCap": 2,
+     "renderScale": 1,
+     "dynamic": false,
+     "minScale": 0.6,
+     "ao": "half",
+     "msaa": 0,
+     "fxaa": true,
+     "shadowSize": 2048,
+     "shadowEvery": 2,
+     "fps": 0
+    }
+   },
+   "walkMs": 1074,
+   "end": [
+    -19.054079999995245,
+    0,
+    12.5
+   ],
+   "band": {
+    "n": 3274121,
+    "mean": 1.68,
+    "p95": 0
+   },
+   "roi": {
+    "n": 867502,
+    "mean": 1.6,
+    "p95": 0
+   },
+   "pairs": [
+    1.68,
+    1.84,
+    1.78,
+    1.59,
+    1.74,
+    1.65,
+    1.56,
+    1.63,
+    1.68,
+    1.73,
+    1.57
+   ],
+   "lag": {
+    "frames": 161,
+    "movingFrames": 160,
+    "staleShadowFrames": 160,
+    "lagMeanM": 1.5339,
+    "lagMaxM": 2.9264,
+    "frameMeanMs": 5.7,
+    "frameP95Ms": 9.4,
+    "mapRedraws": 0,
+    "casterRedraws": 0
+   },
+   "gpu": null,
+   "errors": 0,
+   "errorText": []
+  },
+  {
+   "tier": "classic",
+   "scene": "interior",
+   "look": {
+    "tier": "classic",
+    "shadowMap": false,
+    "budget": {
+     "dprCap": 2,
+     "renderScale": 1,
+     "dynamic": false,
+     "minScale": 0.6,
+     "ao": "half",
+     "msaa": 0,
+     "fxaa": true,
+     "shadowSize": 2048,
+     "shadowEvery": 2,
+     "fps": 0
+    }
+   },
+   "walkMs": 917,
+   "end": [
+    -0.9924773505228075,
+    0.06,
+    -2.184603106546185
+   ],
+   "band": {
+    "n": 3866751,
+    "mean": 1.39,
+    "p95": 0
+   },
+   "roi": null,
+   "pairs": [
+    1.2,
+    0.08,
+    0.06,
+    0.87,
+    2.61,
+    2.01,
+    2.22,
+    2.16,
+    2.5,
+    1.08,
+    0.5
+   ],
+   "lag": {
+    "frames": 208,
+    "movingFrames": 118,
+    "staleShadowFrames": 118,
+    "lagMeanM": 0.7392,
+    "lagMaxM": 1.4062,
+    "frameMeanMs": 4.42,
+    "frameP95Ms": 9.7,
+    "mapRedraws": 0,
+    "casterRedraws": 0
+   },
+   "gpu": null,
+   "errors": 0,
+   "errorText": []
+  }
+ ],
+ "loadAfter": [
+  2.63,
+  2.78,
+  3.17
+ ]
+}

@@ -1,0 +1,141 @@
+{
+ "label": "after-aooff",
+ "url": "http://127.0.0.1:9311/",
+ "q": "&fps=0&ao=off",
+ "frames": 12,
+ "stepMs": 80,
+ "load": [
+  2.63,
+  2.78,
+  3.17
+ ],
+ "rows": [
+  {
+   "tier": "full",
+   "scene": "street",
+   "look": {
+    "tier": "full",
+    "shadowMap": true,
+    "budget": {
+     "dprCap": 2,
+     "renderScale": 1,
+     "dynamic": false,
+     "minScale": 0.6,
+     "ao": "off",
+     "msaa": 0,
+     "fxaa": true,
+     "shadowSize": 2048,
+     "shadowEvery": 2,
+     "fps": 0
+    }
+   },
+   "walkMs": 910,
+   "end": [
+    -17.45967999999523,
+    0,
+    31.5
+   ],
+   "band": {
+    "n": 3692747,
+    "mean": 23,
+    "p95": 91.77
+   },
+   "roi": null,
+   "pairs": [
+    23.04,
+    21.3,
+    21.54,
+    22.6,
+    22.64,
+    22.89,
+    23.48,
+    23.28,
+    24.32,
+    23.73,
+    24.04
+   ],
+   "lag": {
+    "frames": 88,
+    "movingFrames": 87,
+    "staleShadowFrames": 0,
+    "lagMeanM": 0,
+    "lagMaxM": 0,
+    "frameMeanMs": 10.39,
+    "frameP95Ms": 23.4,
+    "mapRedraws": 5,
+    "casterRedraws": 87
+   },
+   "gpu": null,
+   "errors": 0,
+   "errorText": []
+  },
+  {
+   "tier": "full",
+   "scene": "tree",
+   "look": {
+    "tier": "full",
+    "shadowMap": true,
+    "budget": {
+     "dprCap": 2,
+     "renderScale": 1,
+     "dynamic": false,
+     "minScale": 0.6,
+     "ao": "off",
+     "msaa": 0,
+     "fxaa": true,
+     "shadowSize": 2048,
+     "shadowEvery": 2,
+     "fps": 0
+    }
+   },
+   "walkMs": 1117,
+   "end": [
+    -19.053759999990476,
+    0,
+    12.5
+   ],
+   "band": {
+    "n": 3103183,
+    "mean": 3.02,
+    "p95": 8.44
+   },
+   "roi": {
+    "n": 907675,
+    "mean": 1.98,
+    "p95": 2.93
+   },
+   "pairs": [
+    3.35,
+    2.91,
+    2.96,
+    2.79,
+    3.35,
+    2.93,
+    2.42,
+    2.88,
+    3.03,
+    3.49,
+    3.13
+   ],
+   "lag": {
+    "frames": 76,
+    "movingFrames": 75,
+    "staleShadowFrames": 0,
+    "lagMeanM": 0,
+    "lagMaxM": 0,
+    "frameMeanMs": 12.26,
+    "frameP95Ms": 30,
+    "mapRedraws": 4,
+    "casterRedraws": 75
+   },
+   "gpu": null,
+   "errors": 0,
+   "errorText": []
+  }
+ ],
+ "loadAfter": [
+  1.95,
+  2.54,
+  3.06
+ ]
+}

@@ -1211,8 +1211,8 @@ is the repository's `dist/courses`. Build stamping uses asynchronous Git calls.
 
 | tier | look | environment layers | render budget (`look.ts BUDGETS`, "Performance" below) |
 | --- | --- | --- | --- |
-| Full | real | all: ground, grass, leaves, sky, bloom, grade, particles | DPR cap 2, scale 1, AO at half resolution, FXAA (no MSAA), 2048 shadow map redrawn every 2nd frame, 60 fps cap |
-| Lite | real | ground, grass at half the blades (`LITE_GRASS`, far band unshadowed), sky, grade; no bloom, leaf cards or particles | DPR cap 1.5 x scale 0.75 (dynamic 0.5-0.75), no AO, FXAA, 1024 shadow map every 3rd frame, 60 fps cap (30 in Settings) |
+| Full | real | all: ground, grass, leaves, sky, bloom, grade, particles | DPR cap 2, scale 1, AO at half resolution, FXAA (no MSAA), 2048 shadow map (static layer cached, casters every frame they move, every 2nd idle), 60 fps cap |
+| Lite | real | ground, grass at half the blades (`LITE_GRASS`, far band unshadowed), sky, grade; no bloom, leaf cards or particles | DPR cap 1.5 x scale 0.75 (dynamic 0.5-0.75), no AO, FXAA, 1024 shadow map (casters every frame they move, every 3rd idle), 60 fps cap (30 in Settings) |
 | Classic | toon | none; nothing of `reallook.ts` / `envlook.ts` loads | none: DPR cap 2, canvas antialias below DPR 2, every animation frame, as always |
 
 - Settings → Graphics: Full / Lite / Classic. The choice is saved and applies at the next page load
@@ -1233,7 +1233,7 @@ is the repository's `dist/courses`. Build stamping uses asynchronous Git calls.
   `grassDensity`, `valve { state, meanMs }`, `saved`, plus the composer's ms and the env build ms,
   and the budget: `budget`, `renderScale`, `pixelRatio`, `fps` (the pacer's target now),
   `dynamicScale { scale, changes }`, `envTimings` (ms per part of the env build), `envCache`
-  (`{ hits, misses }`), `grass { chunks, drawn, blades }`, `shadowUpdates` / `shadowFrames`.
+  (`{ hits, misses }`), `grass { chunks, drawn, blades }`, `shadowUpdates` (static layer) / `shadowCasterUpdates` / `shadowFrames`.
 - The valve's drop to Lite also takes Lite's budget live: AO off, the render scale (and dynamic
   resolution), the frame rate; the shadow map keeps its size until the next load.
 - Force a tier: the URL (`?look=lite`), or `localStorage` `silver-tongue:world3d:prefs` `graphics`.
@@ -1249,7 +1249,7 @@ is the repository's `dist/courses`. Build stamping uses asynchronous Git calls.
   median): Full 18.1-18.3 / 6.6 ms, Lite 15.1-16.3 / 6.5-6.9 ms, Classic 4.4-4.7 / 4.5 ms.
 
 - `?look=real`: sun shadows (PCF, the tier's map size, a 44 m ortho box that follows the player in
-  2 m steps snapped to shadow texels, redrawn only when due: "Performance"; three 0.186 dropped
+  1 m steps snapped to shadow texels, a static and a casters layer redrawn when due: "Shadows"; three 0.186 dropped
   PCFSoftShadowMap, `shadow.radius` softens instead), a PMREM
   environment from a gradient of the space's sky (dome zenith, horizon, the hemisphere's ground;
   rebuilt on `setDaylight`), the hemisphere at 0.35x, the sun at 1.3x, an EffectComposer (the scene
@@ -1400,11 +1400,50 @@ Measured first, then fixed by category, each behind the tier's render budget (`l
 - Antialiasing: FXAA after the output pass (which writes an 8-bit target for it) in place of 4x
   MSAA (4 ms of the colour pass at 1080p); the canvas's own antialias is off in the real look.
   `?msaa=`, `?fxaa=0|1`.
-- Shadows: the sun's map redraws only when due (`ShadowScheduler`, the light's
-  `shadow.autoUpdate` off): at once when the sun or the shadow box moves (its centre in 2 m steps,
-  `SHADOW_CELL`), else every 2nd frame (Full) / 3rd (Lite) while animated casters (the player at
-  least) are in the box, never in a still scene. Lite's map is 1024. Grass, leaf cards and
-  particles never cast. `?shadow=`, `?shadowEvery=`.
+- Shadows (`src/shadows.ts`, "Shadows" below): two layers in the one sun map, each redrawn only
+  when due (`ShadowScheduler`, the light's `shadow.autoUpdate` off). The static layer (the town,
+  the crowns) is cached in its own depth target and redrawn when the sun, the shadow box (its
+  centre in 1 m steps, `SHADOW_CELL`) or the static set changes, never in a still scene; the
+  animated casters (the player, NPCs, walkers, pets and what they hold) are drawn over it every
+  frame one of them moves, else every 2nd frame (Full) / 3rd (Lite) while they only animate in
+  place (`shadowEvery`). Lite's map is 1024. Grass, leaf cards and particles never cast.
+  `?shadow=`, `?shadowEvery=`.
+
+### Shadows (real look, `src/shadows.ts`, `scripts/motion-capture.mjs`)
+
+Steady while the player walks (the report: "shadow flickers when I walk"; before / after in
+`shots/look/shadow-stability/`):
+
+- Box: a 44 m ortho box round the player; its centre is snapped in the light's own frame to whole
+  shadow texels (`snapShadowBox`, in `SHADOW_CELL` steps; the light never turns per frame), so
+  after every step the static world lands on the same texel positions: no edge shimmer. (Already
+  so since the performance pass; kept, now tested against the shadow camera three builds.)
+- Lag: before, the whole map redrew every 2nd / 3rd frame while walking, so the player's own
+  shadow sat up to a few frames behind their feet and caught up in jumps (half the walking frames
+  stale, up to 16 cm off, at 60 fps). Now the casters' layer redraws every frame a caster moves:
+  the static layer is drawn into a cached depth target (the casters hidden), the casters alone
+  into the light's map, then the cached depth merged in (a full-screen pass writing
+  `gl_FragDepth`, the nearer wins). The passes run inside the scene render's own shadow pass
+  (`SunShadow.draw` plans them before the render; the renderer's shadow pass is wrapped once).
+- Edge: the shadow fades out over the box's outer 12 % (`SHADOW_EDGE`, 5.3 m, three's lights
+  chunk patched once: `patchShadowEdge`) instead of stopping at a line that stepped with the box.
+- Bias in world units from the texel (`shadowBias`): `normalBias` 1.5 texels (3.2 cm Full,
+  6.4 cm Lite: Lite's old 3 cm was under a texel), depth bias 1.5 cm (was -0.0004 of the 159 m
+  range: 6.4 cm, lifting the shadow off the feet).
+- AO (GTAO, Full) uses three's fixed noise (no per-frame rotation) and the grade's grain is still
+  under reduced motion; the grass bands fade over 3.5 m / 6 m with per-blade jitter. Neither is a
+  hard band moving with the camera (captures below).
+- `scripts/motion-capture.mjs`: per tier x scene (the street with the follow camera, the lawn by
+  the great tree with a held camera, the noodle shop), 12 canvas copies 80 ms apart while the
+  player walks; the frame-to-frame luma change in the shadow band (mean, p95), the player's
+  distance from where the map last drew them (`lag`), frame times; contact strips (frames, then
+  the pair differences as heat; palette-quantized). Measured (`shots/look/shadow-stability/*.json`,
+  headless Chrome on the Vega 11, load 2-5): the player's shadow stale on 35/73 (Full street),
+  28/56 (Full lawn), 83/126 (Lite street) walking frames before, up to 16 cm behind; 0 after on
+  every real-look row. The static shadow band with the camera held (lawn) changes as little
+  before as after (mean 2.9 / 2.9 luma, the willow's sway and walkers); AO off changes nothing
+  measurable (2.99 vs 2.94). GPU shadow ms per frame while walking (`?perf=1`): Full 1.35 -> 0.88
+  (street), 1.34 -> 0.84 (lawn); Lite 0.97 -> 0.55, 0.52 -> 0.66. Classic draws no shadows.
 - See-through read-back: never synchronous (Real look, "See-through" above; `test/perf.test.ts`
   greps the source for any other read-back in the frame loop).
 - Grass: the LOD bands and frustum-culled chunks (Environment layers, `grass`).
@@ -1717,10 +1756,15 @@ that role said last).
   padding, every source texel (base colour and ORM) at its remapped UV; static families (`world.ts
   StaticFamilies`): two assets' atlases in one page, their colours in one draw (vertex colours,
   see-through ids, texels through the remap), flat colours in one, glass apart, hulls in theirs.
+- `test/shadows.test.ts`: the sun shadow while walking: the box's centre on whole texels in the
+  shadow camera's own frame (a static point keeps its sub-texel position along a walk), sub-texel
+  and sub-cell moves not moving it, the bias bounds, the edge fade's continuity and the chunk
+  patch, the two layers' draw (static only when due and without the casters, casters every frame
+  one moves, every `every` frames idle) and the grass bands' soft fades.
 - `test/perf.test.ts`: the performance pass: each tier's render budget and its URL overrides, the
   render scale's resolution (Lite on a 1080x2400 DPR 2.6 phone under half of Full's 1080p pixels),
   dynamic resolution's thresholds and hysteresis, frame pacing at 60 / 30 on 60-144 Hz displays
-  with dt-correct game time, the shadow map's redraw triggers, the grass LOD bands, chunk wrap and
+  with dt-correct game time, the shadow layers' redraw triggers, the grass LOD bands, chunk wrap and
   culling, the probe's long-frame causes, the saved frame rate, and a source grep: no synchronous
   GPU read-back (`readRenderTargetPixels`, a waiting `clientWaitSync`, `finish()`) in the frame
   loop; the prefetcher's time slices on a fake clock (steps of 0.3-2 ms: every slice within 4 ms;

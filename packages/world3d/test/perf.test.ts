@@ -9,7 +9,8 @@ import { join } from "node:path";
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { GRASS, grassBands, grassChunkVisible, LITE_FAR_FADE, wrapIntervals } from "../src/envlook";
-import { BUDGETS, budgetFor, DynamicScale, FramePacer, lookFor, renderPixelRatio, resolveLook, SHADOW_CELL, ShadowScheduler } from "../src/look";
+import { BUDGETS, budgetFor, DynamicScale, FramePacer, lookFor, renderPixelRatio, resolveLook, SHADOW_CELL } from "../src/look";
+import { ShadowScheduler } from "../src/shadows";
 import { longFrameCause } from "../src/perf";
 import { PREFETCH_SLICE_MS, TimeSlicer } from "../src/prefetch";
 import { loadPrefs, PREFS_KEY, savePrefs } from "../src/prefs";
@@ -147,23 +148,26 @@ describe("frame pacing (FramePacer) and dt", () => {
 });
 
 describe("the shadow map's redraws (ShadowScheduler)", () => {
-  it("the sun or the box moving: at once; animated casters in the box: every `every` frames; nothing moving: never", () => {
+  it("static layer: the sun, the box or the static set changing, else never; casters: with it, every frame one moves, else every `every` frames animating", () => {
     const s = new ShadowScheduler(2);
-    expect(s.due(1, "0,0,0", true)).toBe(true); // first frame
-    expect(s.due(1, "0,0,0", true)).toBe(false);
-    expect(s.due(1, "0,0,0", true)).toBe(true); // 2 frames on
-    expect(s.due(1, "0,0,0", true)).toBe(false);
-    expect(s.due(1, "2,0,0", true)).toBe(true); // the box stepped a cell
-    expect(s.due(2, "2,0,0", true)).toBe(true); // the sun moved (setDaylight)
-    expect(s.due(2, "2,0,0", true)).toBe(false);
-    for (let i = 0; i < 100; i++) expect(s.due(2, "2,0,0", false)).toBe(false); // a still scene keeps its map
-    expect(s.due(2, "2,0,0", true)).toBe(true);
-    expect(s.updates).toBe(5);
-    expect(s.frames).toBe(108);
-    // lite: every third frame
+    const due = (sun: number, box: string, moving = false, animated = true, statics = "9") => s.due(sun, box, statics, moving, animated);
+    expect(due(1, "0,0,0")).toEqual({ statics: true, casters: true }); // first frame
+    expect(due(1, "0,0,0")).toEqual({ statics: false, casters: false });
+    expect(due(1, "0,0,0")).toEqual({ statics: false, casters: true }); // 2 frames on: the idle animation
+    expect(due(1, "0,0,0", true)).toEqual({ statics: false, casters: true }); // a caster moved: every frame
+    expect(due(1, "0,0,0", true)).toEqual({ statics: false, casters: true });
+    expect(due(1, "93,0,0", true)).toEqual({ statics: true, casters: true }); // the box stepped a cell
+    expect(due(2, "93,0,0")).toEqual({ statics: true, casters: true }); // the sun moved (setDaylight)
+    expect(due(2, "93,0,0", false, true, "10")).toEqual({ statics: true, casters: true }); // a static root landed
+    for (let i = 0; i < 100; i++) expect(due(2, "93,0,0", false, false, "10")).toEqual({ statics: false, casters: false }); // a still scene keeps its map
+    expect(due(2, "93,0,0", false, true, "10").casters).toBe(true);
+    expect(s.updates).toBe(4);
+    expect(s.casterUpdates).toBe(8);
+    expect(s.frames).toBe(109);
+    // lite: every third frame while the casters only animate in place, every frame while one walks
     const l = new ShadowScheduler(3);
-    const hits = Array.from({ length: 12 }, () => l.due(0, "k", true)).filter(Boolean).length;
-    expect(hits).toBe(4);
+    expect(Array.from({ length: 12 }, () => l.due(0, "k", "1", false, true).casters).filter(Boolean).length).toBe(4);
+    expect(Array.from({ length: 12 }, () => l.due(0, "k", "1", true, true).casters).every(Boolean)).toBe(true);
     expect(SHADOW_CELL).toBeGreaterThan(0);
   });
 });

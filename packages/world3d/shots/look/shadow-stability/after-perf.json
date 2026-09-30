@@ -1,0 +1,279 @@
+{
+ "label": "after-perf",
+ "url": "http://127.0.0.1:9311/",
+ "q": "&fps=0&perf=1",
+ "frames": 12,
+ "stepMs": 80,
+ "load": [
+  1.95,
+  2.54,
+  3.06
+ ],
+ "rows": [
+  {
+   "tier": "full",
+   "scene": "street",
+   "look": {
+    "tier": "full",
+    "shadowMap": true,
+    "budget": {
+     "dprCap": 2,
+     "renderScale": 1,
+     "dynamic": false,
+     "minScale": 0.6,
+     "ao": "half",
+     "msaa": 0,
+     "fxaa": true,
+     "shadowSize": 2048,
+     "shadowEvery": 2,
+     "fps": 0
+    }
+   },
+   "walkMs": 951,
+   "end": [
+    -17.451679999995232,
+    0,
+    31.5
+   ],
+   "band": {
+    "n": 3701562,
+    "mean": 23.8,
+    "p95": 92.85
+   },
+   "roi": null,
+   "pairs": [
+    21.52,
+    24.1,
+    23.51,
+    23.95,
+    24.02,
+    23.61,
+    24.75,
+    22.96,
+    24.61,
+    24.53,
+    24.04
+   ],
+   "lag": {
+    "frames": 71,
+    "movingFrames": 70,
+    "staleShadowFrames": 0,
+    "lagMeanM": 0,
+    "lagMaxM": 0,
+    "frameMeanMs": 13.17,
+    "frameP95Ms": 26.6,
+    "mapRedraws": 4,
+    "casterRedraws": 70
+   },
+   "gpu": {
+    "frames": 74,
+    "shadowMs": 0.882,
+    "totalMs": 9.935
+   },
+   "errors": 0,
+   "errorText": []
+  },
+  {
+   "tier": "full",
+   "scene": "tree",
+   "look": {
+    "tier": "full",
+    "shadowMap": true,
+    "budget": {
+     "dprCap": 2,
+     "renderScale": 1,
+     "dynamic": false,
+     "minScale": 0.6,
+     "ao": "half",
+     "msaa": 0,
+     "fxaa": true,
+     "shadowSize": 2048,
+     "shadowEvery": 2,
+     "fps": 0
+    }
+   },
+   "walkMs": 1155,
+   "end": [
+    -19.056640000009523,
+    0,
+    12.5
+   ],
+   "band": {
+    "n": 3098758,
+    "mean": 2.84,
+    "p95": 7.84
+   },
+   "roi": {
+    "n": 948938,
+    "mean": 1.8,
+    "p95": 3.28
+   },
+   "pairs": [
+    3.2,
+    2.61,
+    2.71,
+    3.56,
+    2.66,
+    2.95,
+    3.19,
+    2.74,
+    2.75,
+    2.74,
+    2.11
+   ],
+   "lag": {
+    "frames": 65,
+    "movingFrames": 64,
+    "staleShadowFrames": 0,
+    "lagMeanM": 0,
+    "lagMaxM": 0,
+    "frameMeanMs": 13.89,
+    "frameP95Ms": 28.9,
+    "mapRedraws": 4,
+    "casterRedraws": 64
+   },
+   "gpu": {
+    "frames": 69,
+    "shadowMs": 0.842,
+    "totalMs": 10.142
+   },
+   "errors": 0,
+   "errorText": []
+  },
+  {
+   "tier": "lite",
+   "scene": "street",
+   "look": {
+    "tier": "lite",
+    "shadowMap": true,
+    "budget": {
+     "dprCap": 1.5,
+     "renderScale": 0.75,
+     "dynamic": true,
+     "minScale": 0.5,
+     "ao": "off",
+     "msaa": 0,
+     "fxaa": true,
+     "shadowSize": 1024,
+     "shadowEvery": 3,
+     "fps": 0
+    }
+   },
+   "walkMs": 942,
+   "end": [
+    -17.456799999999973,
+    0,
+    31.5
+   ],
+   "band": {
+    "n": 2062709,
+    "mean": 21.12,
+    "p95": 86.66
+   },
+   "roi": null,
+   "pairs": [
+    19.75,
+    20.41,
+    20.76,
+    20.61,
+    21.79,
+    21,
+    21.76,
+    21.02,
+    21.42,
+    21.71,
+    21.96
+   ],
+   "lag": {
+    "frames": 129,
+    "movingFrames": 128,
+    "staleShadowFrames": 0,
+    "lagMeanM": 0,
+    "lagMaxM": 0,
+    "frameMeanMs": 7.21,
+    "frameP95Ms": 10.8,
+    "mapRedraws": 5,
+    "casterRedraws": 128
+   },
+   "gpu": {
+    "frames": 132,
+    "shadowMs": 0.547,
+    "totalMs": 6.167
+   },
+   "errors": 0,
+   "errorText": []
+  },
+  {
+   "tier": "lite",
+   "scene": "tree",
+   "look": {
+    "tier": "lite",
+    "shadowMap": true,
+    "budget": {
+     "dprCap": 1.5,
+     "renderScale": 0.75,
+     "dynamic": true,
+     "minScale": 0.5,
+     "ao": "off",
+     "msaa": 0,
+     "fxaa": true,
+     "shadowSize": 1024,
+     "shadowEvery": 3,
+     "fps": 0
+    }
+   },
+   "walkMs": 1105,
+   "end": [
+    -19.040639999997623,
+    0,
+    12.5
+   ],
+   "band": {
+    "n": 1736058,
+    "mean": 2.26,
+    "p95": 0.28
+   },
+   "roi": {
+    "n": 505685,
+    "mean": 1.32,
+    "p95": 0
+   },
+   "pairs": [
+    2.36,
+    2.45,
+    2.8,
+    2.13,
+    2.39,
+    1.9,
+    2.22,
+    2.21,
+    2.16,
+    2.4,
+    1.79
+   ],
+   "lag": {
+    "frames": 120,
+    "movingFrames": 119,
+    "staleShadowFrames": 0,
+    "lagMeanM": 0,
+    "lagMaxM": 0,
+    "frameMeanMs": 7.81,
+    "frameP95Ms": 14.2,
+    "mapRedraws": 5,
+    "casterRedraws": 119
+   },
+   "gpu": {
+    "frames": 123,
+    "shadowMs": 0.661,
+    "totalMs": 6.692
+   },
+   "errors": 0,
+   "errorText": []
+  }
+ ],
+ "loadAfter": [
+  2.95,
+  2.67,
+  3.03
+ ]
+}

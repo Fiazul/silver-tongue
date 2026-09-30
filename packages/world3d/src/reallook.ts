@@ -169,6 +169,11 @@ const GRADE_MAIN = /* glsl */ `
   }
 `;
 
+/** shadows.ts SunShadow's draw (scene.userData.sunShadow) */
+interface SunShadowDraw {
+  draw(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera): void;
+}
+
 export interface RealLook {
   /** `focus`: the player (the grass, dust and shadow box centre on it); the camera's position if absent */
   render(scene: THREE.Scene, camera: THREE.Camera, focus?: THREE.Vector3): void;
@@ -466,6 +471,8 @@ export function createRealLook(renderer: THREE.WebGLRenderer, seeThrough: (m: TH
     renderPass.camera = camera;
     gtao.scene = scene;
     gtao.camera = camera;
+    // the sun's shadow layers: planned here, drawn in the scene render's own shadow pass (world.ts puts its shadows.ts SunShadow on the scene; typed here, not imported: the main bundle's)
+    (scene.userData.sunShadow as SunShadowDraw | undefined)?.draw(renderer, scene, camera);
     composer.render();
     return performance.now() - t0;
   }

@@ -23,7 +23,8 @@ import type { WalkArea } from "./player";
 import { ScatterMotion, WalkerMotion } from "./streetlife";
 import { markSince } from "./perf";
 import type { Gate } from "./prefetch";
-import { LOOK, REAL_HEMI, REAL_SHADOW, REAL_SUN, SHADOW_CELL, ShadowScheduler, type LookGround, type LookSky } from "./look";
+import { LOOK, REAL_HEMI, REAL_SHADOW, REAL_SUN, SHADOW_CELL, type LookGround, type LookSky } from "./look";
+import { patchShadowEdge, shadowBias, snapShadowBox, SunShadow } from "./shadows";
 
 const DEG = Math.PI / 180;
 export const BACKGROUND = "#EDD9B8";
@@ -1321,11 +1322,14 @@ export class SceneSpace {
     c.near = 1;
     c.far = REAL_SHADOW.distance * 2;
     c.updateProjectionMatrix();
-    s.shadow.bias = REAL_SHADOW.bias;
-    s.shadow.normalBias = REAL_SHADOW.normalBias;
-    s.shadow.autoUpdate = false; // followSun says when (ShadowScheduler)
-    s.shadow.needsUpdate = true;
+    const b = shadowBias(REAL_SHADOW.half, LOOK.budget.shadowSize, c.near, c.far); // world units, from the texel
+    s.shadow.bias = b.bias;
+    s.shadow.normalBias = b.normalBias;
     s.shadow.radius = 3;
+    // two layers, redrawn when due (shadows.ts SunShadow: the light's autoUpdate off); drawn by reallook.ts before the scene
+    patchShadowEdge();
+    this.sunShadow = new SunShadow(s, LOOK.budget.shadowEvery);
+    this.scene.userData.sunShadow = this.sunShadow;
     this.scene.add(s.target);
     this.hemi.intensity *= REAL_HEMI;
     s.intensity *= REAL_SUN;
@@ -1356,29 +1360,23 @@ export class SceneSpace {
   }
 
   /**
-   * Real look only: the sun and its shadow box on the player, in steps of SHADOW_CELL (a whole
-   * number of shadow texels in the light's frame: no shimmer), and whether the map redraws this
-   * frame (look.ts ShadowScheduler: the sun or the box moved, else every shadowEvery frames with
-   * the animated player in it). A map not redrawn keeps the matrix it was drawn with: consistent.
+   * Real look only: the sun and its shadow box on the player, the box's centre snapped to whole
+   * shadow texels in the light's frame in steps of SHADOW_CELL (shadows.ts snapShadowBox: the
+   * static world lands on the same texels after every step, no shimmer; the light never turns
+   * here), and the box handed to the SunShadow that redraws its layers when due.
    */
   private followSun(p: THREE.Vector3) {
-    const z = this.sunDir;
-    const x = new THREE.Vector3(0, 1, 0).cross(z).normalize();
-    const y = new THREE.Vector3().crossVectors(z, x);
-    const texel = (2 * REAL_SHADOW.half) / this.sun.shadow.mapSize.x;
-    const step = Math.max(1, Math.round(SHADOW_CELL / texel)) * texel;
-    const snap = (v: number) => Math.round(v / step) * step;
-    const sx = snap(p.dot(x));
-    const sy = snap(p.dot(y));
-    const sz = snap(p.dot(z));
     const t = this.sun.target.position;
-    t.copy(x).multiplyScalar(sx).addScaledVector(y, sy).addScaledVector(z, sz);
-    this.sun.position.copy(t).addScaledVector(z, REAL_SHADOW.distance);
+    const box = snapShadowBox(p, this.sunDir, REAL_SHADOW.half, this.sun.shadow.mapSize.x, SHADOW_CELL, t);
+    this.sun.position.copy(t).addScaledVector(this.sunDir, REAL_SHADOW.distance);
     this.sun.target.updateMatrixWorld();
-    this.sun.shadow.needsUpdate = this.shadowPlan.due(this.lookSky?.version ?? 0, `${sx},${sy},${sz}`, true);
+    this.sunShadow?.aim(box.key, this.lookSky?.version ?? 0);
   }
-  /** Real look only: when the sun's map redraws (followSun) */
-  readonly shadowPlan = new ShadowScheduler(LOOK.budget.shadowEvery);
+  /** Real look only: the sun's two-layer shadow (shadows.ts); its plan counts the redraws */
+  private sunShadow?: SunShadow;
+  get shadowPlan() {
+    return this.sunShadow?.plan ?? null;
+  }
 
   /** Assigns one bounded id to a fadeable static root. */
   private seeSpec(o: THREE.Object3D, id: string, asset: string): SeeSpec {

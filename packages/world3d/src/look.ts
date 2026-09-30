@@ -12,7 +12,7 @@
 // to compare what the materials alone do. After load only the safety valve moves it (LookValve:
 // full -> lite, this session, when the first seconds run slow). Each real tier also carries a render
 // budget (BUDGETS, budgetFor: resolution, AO, antialiasing, shadow map, frame rate) and the pure
-// pieces of the frame loop's performance logic: DynamicScale, FramePacer, ShadowScheduler.
+// pieces of the frame loop's performance logic: DynamicScale, FramePacer (the shadow redraw plan: shadows.ts).
 import type * as THREE from "three";
 import { PREFS_KEY } from "./prefs";
 import { coarsePointer } from "./touch";
@@ -58,7 +58,7 @@ export interface RenderBudget {
   fxaa: boolean;
   /** the sun's shadow map (square) */
   shadowSize: number;
-  /** ShadowScheduler: with animated casters in the shadow box, the map redraws every this many frames (the sun or the box moving: at once) */
+  /** shadows.ts ShadowScheduler: while the animated casters only animate in place, their shadow redraws every this many frames (one moving: every frame; the sun or the box moving: the static layer too) */
   shadowEvery: number;
   /** frame pacing: draws at most this many frames a second (0: every animation frame, uncapped) */
   fps: number;
@@ -204,36 +204,13 @@ export class FramePacer {
   }
 }
 
+// The sun shadow's redraw plan (ShadowScheduler) and its two layers: shadows.ts.
 /**
- * When the sun's shadow map redraws (RenderBudget.shadowEvery; the light's shadow.autoUpdate is
- * off): at once when the sun moved (LookSky.version) or the shadow box moved (its centre snaps to
- * SHADOW_CELL m: `boxKey`), else every `every` frames while animated casters (the player, NPCs,
- * walkers) are in the box (`dynamic`), else never: a still scene keeps its map.
+ * m: the shadow box's centre moves in steps of this (a whole number of shadow texels). 1 m (was 2):
+ * the box's faded edge (shadows.ts SHADOW_EDGE, 5.3 m) moves a fifth of its width per step, and
+ * the static layer redraws ~3 times a second at walking pace (3.2 m/s).
  */
-export class ShadowScheduler {
-  private sun = NaN;
-  private key = "";
-  private last = -Infinity;
-  private frame = 0;
-  updates = 0;
-  frames = 0;
-  constructor(public every: number) {}
-
-  due(sunVersion: number, boxKey: string, dynamic: boolean): boolean {
-    const f = this.frame++;
-    this.frames++;
-    const go = sunVersion !== this.sun || boxKey !== this.key || (dynamic && f - this.last >= this.every);
-    if (go) {
-      this.sun = sunVersion;
-      this.key = boxKey;
-      this.last = f;
-      this.updates++;
-    }
-    return go;
-  }
-}
-/** m: the shadow box's centre moves in steps of this (a whole number of shadow texels) */
-export const SHADOW_CELL = 2;
+export const SHADOW_CELL = 1;
 
 /** Idle (README "Performance"): no input for IDLE_S seconds and no cutscene, the real look paces at IDLE_FPS */
 export const IDLE_S = 20;
@@ -409,5 +386,5 @@ export interface LookGround {
 export const REAL_HEMI = 0.35;
 /** Real look: sun intensity scale (the direct light carries the shadows; the sky fill is lower) */
 export const REAL_SUN = 1.3;
-/** Real look: half-size (m) of the sun's ortho shadow box round the player, and the map size. */
-export const REAL_SHADOW = { half: 22, mapSize: 2048, distance: 80, bias: -0.0004, normalBias: 0.03 };
+/** Real look: half-size (m) of the sun's ortho shadow box round the player, the map size, the light's distance (the bias: shadows.ts shadowBias). */
+export const REAL_SHADOW = { half: 22, mapSize: 2048, distance: 80 };

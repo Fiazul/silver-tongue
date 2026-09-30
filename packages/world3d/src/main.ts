@@ -854,6 +854,7 @@ async function main() {
     hand.putBack(); // nothing leaves a shop unpaid
     space.scene.remove(player.root, marker, guideMarker.root, trail.mesh);
     space = next;
+    player.root.userData.dynamicShadow = true; // shadows.ts: the casters' layer, redrawn every frame it moves
     space.scene.add(player.root, marker, guideMarker.root, trail.mesh);
     pathKey = "";
     glance = 0;
@@ -1937,7 +1938,7 @@ async function main() {
         const buf = renderer.getDrawingBufferSize(new THREE.Vector2());
         return { ...textureBytes(space.scene, real?.targets() ?? []), glTextures: renderer.info.memory.textures, geometries: renderer.info.memory.geometries, programs: renderer.info.programs?.length ?? 0, pixelRatio: renderer.getPixelRatio(), drawingBuffer: [buf.x, buf.y], renderScale: LOOK.real ? renderScale : 1 };
       },
-      look: () => ({ ...LOOK, renderScale: LOOK.real ? renderScale : 1, pixelRatio: renderer.getPixelRatio(), fps: LOOK.real ? pacer.fps : 0, dynamicScale: dynScale ? { scale: dynScale.scale, changes: dynScale.changes } : null, valve: { state: valve.state, meanMs: valve.meanMs }, saved: prefs.graphics ?? null, composerMs: real ? +real.stats.frameMs.toFixed(2) : null, envBuilds: real?.stats.envBuilds ?? 0, shadowMap: renderer.shadowMap.enabled, envLayers: real?.stats.envLayers ?? [], envBuildMs: real?.stats.envBuildMs ?? 0, envTimings: real?.stats.envTimings ?? null, envCache: real?.stats.envCache ?? null, grass: real?.stats.grass ?? null, shadowUpdates: space.shadowPlan.updates, shadowFrames: space.shadowPlan.frames }),
+      look: () => ({ ...LOOK, renderScale: LOOK.real ? renderScale : 1, pixelRatio: renderer.getPixelRatio(), fps: LOOK.real ? pacer.fps : 0, dynamicScale: dynScale ? { scale: dynScale.scale, changes: dynScale.changes } : null, valve: { state: valve.state, meanMs: valve.meanMs }, saved: prefs.graphics ?? null, composerMs: real ? +real.stats.frameMs.toFixed(2) : null, envBuilds: real?.stats.envBuilds ?? 0, shadowMap: renderer.shadowMap.enabled, envLayers: real?.stats.envLayers ?? [], envBuildMs: real?.stats.envBuildMs ?? 0, envTimings: real?.stats.envTimings ?? null, envCache: real?.stats.envCache ?? null, grass: real?.stats.grass ?? null, shadowUpdates: space.shadowPlan?.updates ?? 0, shadowCasterUpdates: space.shadowPlan?.casterUpdates ?? 0, shadowFrames: space.shadowPlan?.frames ?? 0 }),
       dayCard: () => game?.model.dayCard,
       /** the parcel: where core says it goes, and whether the player has it in hand */
       errand: () => ({ to: game?.core.state.errand?.to ?? null, carrying: carry.holding, clip: player.actor.state }),
