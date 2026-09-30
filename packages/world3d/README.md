@@ -563,10 +563,13 @@ language" option when that NPC is the mentor and notes are waiting. With one ite
 
 ## Character animation
 
-Every human and pet is posed procedurally each frame by `src/animator.ts` (pure, no three.js);
-`src/actor.ts` puts the pose on the rig. The baked clips in the GLBs (`idle`, `walk`, `talk`,
-`carry_*`) are no longer played: `idle` and `talk` were short sine loops (4 s / 2 s) that rolled
-the hips and swung the spine and head left and right like a metronome, every character in step.
+The NPCs (story NPCs, walkers, extras, pets) are posed procedurally each frame by
+`src/animator.ts` (pure, no three.js); `src/actor.ts` puts the pose on the rig. Their baked clips
+(`idle`, `walk`, `talk`, `carry_*`) are not played: `idle` and `talk` were short sine loops (4 s /
+2 s) that rolled the hips and swung the spine and head left and right like a metronome, every
+character in step. **The player is not animated by it**: `AssetCache.playerActor` builds it with
+`procedural: false`, so it keeps its baked clips on the `AnimationMixer` (idle / walk / talk /
+carry from `anim.ts`) and `player.ts` turns it with `turnToward`, as before.
 
 **Rig** (st-human-v1, docs/asset-conventions.md): 22 skinned joints, rigid weights. Hips (root,
 translates), Spine, Chest, Neck, Head (+ HeadTop), per side Shoulder, Arm, ForeArm, Hand (+
@@ -584,15 +587,16 @@ ease-out, no pop). Layers sum:
 
 | Layer | Driven by | What it does |
 |---|---|---|
-| idle | always (fades out walking) | breathing (chest ~1 deg pitch, shoulders, 0.22-0.3 Hz), weight shift onto one leg every 4-8 s (hips 1.5 cm, hip up, shoulders counter, feet kept planted), look-around (head yaw up to 28 deg, pitch 5 deg) at random 2.5-7 s intervals, damped while talking / listening |
+| idle | always (fades out walking) | breathing (chest ~1 deg pitch, shoulders, 0.22-0.3 Hz; the neck undoes it exactly, so the head stays level), weight shift onto one leg every 4-8 s (hips 1.5 cm, hip up, shoulders counter, feet kept planted; none started in dialogue), look-around only when idle and out of dialogue: one glance every 6-12 s, a 2 s smoothstep ease, at most 20 deg yaw / 4 deg pitch (no spring, no sine) |
 | walk | state `walk` / `carry_walk`, ground speed | step length and cadence from speed (`stepBaseM + stepPerMps * v`, capped), feet on a stance / swing path solved by a soft two-bone IK per leg (planted in stance, knee bends, toe-off pitch), run blend from 1.6 to 3.0 m/s (shorter stance, higher lift, more lean, bent elbows), arm counter-swing 17-24 deg, bob 2-3 cm twice a cycle, pelvis / shoulder counter-twist, lean into the pace and into acceleration, the head counters the twist and lean; stopping: a 0.5 s settle dip |
-| talk | `actor.talking` (their line is on screen) | head nods on a pseudo-syllable clock (2-4 Hz, random amplitude, ~18 % skipped), a new slight head tilt each phrase (1.5-3.5 s), a forearm gesture (20-40 deg, 0.5-0.75 s) every 2-5 s (mostly the right hand), a 2.5 deg lean toward the listener |
-| listen | `actor.listening` (the other side of a scene or bark) | head tilt 3-5 deg to a seeded side, small nods every ~2 s with 30 % skipped |
+| talk | `actor.talking` (their line is on screen) | a forearm gesture (20-40 deg, 0.5-0.75 s) every 2-5 s (mostly the right hand), a 2.5 deg lean toward the listener |
+| dialogue | talking or listening (one weight: a line changing hands doesn't tip the head) | a still 3-5 deg head tilt, eyes a touch down, and one small nod (0.6-1.5 deg, pitch only, 0.6 s) every 2.2-3.5 s; listening skips 30 %. Nothing else moves the head in dialogue |
+| listen | `actor.listening` (the scene NPC while it isn't talking) | feeds the dialogue layer |
 | carry | `actor.carrying` (a `carry: true` prop) | both forearms up in front of the chest, the chest back a touch; arm swing and gestures fade out |
 | sit | `actor.sitting` | hips and knees at 90 deg, hips lowered by the thigh length (nothing seats a character yet) |
 | react | `actor.react(kind, toward?)` / `actor.shrug()` | one-shots with smooth envelopes (a repeat fades the old one out under the new): `greet` a raised-hand wave (2 s), `happy` anticipation + small hop + landing (1 s), `confused` shoulders up, palms out, head tilt (1.1 s), `nod` (0.7 s), `reach` near arm forward, hold 0.4 s, back (1.1 s). `toward` picks the near arm; a prop in the right hand makes it the left |
-| face | `actor.face(yaw, dt, omega)` | the body turns on a critically damped ease (no overshoot, no oscillation); the head (70 %) and neck (30 %) lead by the rest of the turn, up to 45 deg, easing back as the body arrives |
-| pet | pets | spine breathing, quicker look-around, the tail idles and now and then wags in a 1.4 s burst |
+| face | `actor.face(yaw, dt, omega)` (a fixed yaw: home facing, a walker's heading) / `actor.facePoint(x, z, dt, omega)` (the player) | the body turns on a critically damped ease (no overshoot); the head runs its own faster critically damped turn to the same target (`headTurnOmega`), so it gets there first and holds while the body catches up (lead <= 45 deg, head 70 % / neck 30 %). `facePoint` aims once and re-aims only when the player moves more than `aimDeadM` (0.6 m) or `aimDeadDeg` (12 deg) from where it aimed (`FaceAim`): one smooth turn per re-aim, never a per-frame track. `fixedHead` actors (walkers, pigeons) don't lead or look around: the head keeps the heading, the walk's pelvis / shoulder twist cancelled exactly at the head |
+| pet | pets | spine breathing, the same look-around rules, the tail rests and now and then wags in a 1.4 s burst (the only yaw oscillation left, on the tail) |
 
 Distances scale with height (`k` = HeadTop height / 1.7: the kid moves smaller); every interval,
 tempo, side and amplitude is jittered from a per-character seed (`ActorOptions.seed`, default the
@@ -601,25 +605,26 @@ inputs: the same motion.
 
 **Tuning:** `TUNE` in `src/animator.ts` (ranges are `[min, max]`, jittered per character):
 `blendS`, `breathHz`, `breathChestDeg`, `shiftEveryS`, `shiftCm`, `lookEveryS`, `lookYawDeg`,
-`stepBaseM` / `stepPerMps` / `stepMaxM`, `runFrom` / `runTo`, `armSwingDeg`, `bobCm`, `crouchCm`,
-`liftCm`, `leanDeg`, `accelLeanDegPerMps2`, `settleS` / `settleCm`, `headLeadMaxDeg` /
-`headLeadS`, `turnOmega` (7: NPCs; the player uses 16, walkers 10), `syllableHz`, `nodDeg`,
-`syllableSkip`, `gestureEveryS`, `gestureS`, `gestureForeDeg`, `talkLeanDeg`, `listenTiltDeg`,
-`listenNodEveryS`, `listenNodDeg`, `listenSkip`. Soft IK starts at 92 % of the leg's length
+`lookEaseS`, `stepBaseM` / `stepPerMps` / `stepMaxM`, `runFrom` / `runTo`, `armSwingDeg`, `bobCm`, `crouchCm`,
+`liftCm`, `leanDeg`, `accelLeanDegPerMps2`, `settleS` / `settleCm`, `headLeadMaxDeg`,
+`headTurnOmega`, `turnOmega` (7: NPCs; walkers 10), `nodEveryS`, `nodDeg`, `nodS`,
+`gestureEveryS`, `gestureS`, `gestureForeDeg`, `talkLeanDeg`, `listenTiltDeg`, `listenNodEveryS`,
+`listenNodDeg`, `listenSkip`, `aimDeadM`, `aimDeadDeg`. Soft IK starts at 92 % of the leg's length
 (`SOFT_IK`): the knee never snaps straight.
 
 **Who plays what:**
-- Player: walk / idle from its ground speed, turns with `face` (head first); listens during a
-  scene or a bark.
+- Player: the baked clips (idle / walk from its ground speed, talk, carry) on the mixer, turned by
+  `player.ts` `turnToward`; no animator, no reactions, no listening (`test/animator.test.ts` checks
+  `AssetCache.playerActor` never builds one).
 - NPCs idle at their stand; within `FACE_RANGE` (3 m, kept until 3.5 m: no to-and-fro at the edge)
-  and always during their scene they `face` the player, else turn back to the stand's facing. They
-  talk while their line is in the bubble and listen the rest of their scene.
-- Walkers walk at their ground speed (the same gait, ~1.1 m/s), `face` their heading; pigeons and
-  the cat idle (pet layer) and turn with `face`.
-- Game events -> reactions (`main.ts` `reactToEvent` / `syncWorld` / `startBark`): a scene starts:
-  the NPC greets; a bark starts: the figure greets; a right reply: the NPC nods; a mix-up: the NPC
-  is `confused` (`shrug()`); money changes hands (`shopping`, `wages`): both reach; a scene ends:
-  both are happy. Sleep / the day change is a screen fade: no pose.
+  and always during their scene they `facePoint` the player (dead zone), else turn back to the
+  stand's facing. They talk while their line is in the bubble and listen the rest of their scene.
+- Walkers walk at their ground speed (~1.1 m/s), `face` their heading with a `fixedHead`; pigeons
+  (`fixedHead`) and the cat idle (pet layer).
+- Game events -> the scene NPC's reactions (`main.ts` `reactToEvent` / `syncWorld` / `startBark`):
+  a scene starts: a greeting; a bark starts: the figure greets; a right reply: a small nod (4 deg);
+  a mix-up: `confused` (`shrug()`); money changes hands (`shopping`, `wages`): a reach; a scene
+  ends: happy. Sleep / the day change is a screen fade: no pose.
 - Held props come from `layout.json` `npcs.<name>.heldProp` (and `walkers[].heldProp`); only
   `{asset, carry: true}` (boxes, bags) plays the carry layer: the player's parcel
   (`player.errandProp`, `delivery_bag`) during an errand. `hold(prop)` puts a prop (origin at its
@@ -632,16 +637,18 @@ inputs: the same motion.
 **Cost:** pure CPU bone transforms, no mixer: ~0.07 ms per frame for 10 characters (the cost test
 in `test/animator.test.ts`, best of 5 x 1000 updates, budget 0.2 ms).
 
-**Debug:** `world3d.anim()` lists each character's state and layer weights (`playerLayers`,
-`npcs.<id>.layers`); `world3d.react(who, kind)` plays a reaction on the player or an NPC;
-`world3d.frameOf(who)` gives a character's screen box.
+**Debug:** `world3d.anim()` lists each character's state and layer weights (`npcs.<id>.layers`);
+`world3d.react(npc, kind)` plays a reaction on an NPC; `world3d.frameOf(who)` gives a character's
+screen box and head angles (`CharacterActor.headAngles()`); `world3d.walkTo(x, z, true)` walks the
+player even while a scene holds input (the capture's walk round).
 
-**Seeing it:** `scripts/motion-capture.mjs` grabs 12 frames 80 ms apart straight out of the canvas
-after each draw (`world3d.afterDraw`; page screenshots take ~300 ms here) and lays them out as a
-contact strip per shot in `shots/motion/`: `01-idle-player`, `02-walk-player`, `03-talk-wang` (he
-talks, the player listens), `04-react-greet`, `05-react-confused`; `report.json` has the frame
-times, `world3d.anim()` at the first and last frame and the console errors. Serve a dist with the
-course audio beside it (else the clips 404):
+**Seeing it:** `scripts/motion-capture.mjs` grabs frames straight out of the canvas after each draw
+(`world3d.afterDraw`; page screenshots take ~300 ms here) and lays them out as a contact strip per
+shot in `shots/motion/`: `01-wang-idle`, `02-wang-dialogue-still`, `03-wang-dialogue-player-walks`,
+each a 4 s window (12 frames, 333 ms apart) with Old Wang's head yaw / pitch / roll traced on every
+drawn frame. `report.json` has the traces, their stats (largest change per frame, direction
+reversals, range), `world3d.anim()` at the first and last frame and the console errors. Serve a dist
+with the course audio beside it (else the clips 404):
 
 ```sh
 URL=http://127.0.0.1:8910/ CHROME=/usr/bin/google-chrome nice -n 15 node scripts/motion-capture.mjs
@@ -1690,7 +1697,8 @@ that role said last).
   meaning in bn, the one-off hint, sound off, a story NPC with nothing to say, the Go to list and
   core inputs ending it); a held walker / pigeon.
 - `test/anim.test.ts`: the animation state machine and `CharacterActor`'s clip / no-bones fallbacks.
-- `test/animator.test.ts`: the procedural animator: no pops across every state and reaction (a
+- `test/animator.test.ts`: the procedural animator (NPCs; the player keeps its clips): no spring in the
+  head (idle / dialogue / walk-round traces), no pops across every state and reaction (a
   jump wouldn't shrink with the frame time), determinism per seed, the gait tracking speed, idle
   bounds (kid smaller), turn-to-face without overshoot (head first), talk / listen rhythms, poses
   and planted feet on the real rigs, the cost budget.

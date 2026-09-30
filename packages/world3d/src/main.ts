@@ -244,7 +244,7 @@ async function main() {
     await assets.preload(plan.first);
     // The town: its ground and everything that never moves now; its people stream in (SceneSpace.ready).
     const spaces = new Map<string, SceneSpace>([[STREET, await SceneSpace.create(L, assets, STREET, { stream: true })]]);
-    const player = new Player(await assets.actor(LAYOUT.player.character), spaces.get(STREET)!.area);
+    const player = new Player(await assets.playerActor(LAYOUT.player.character), spaces.get(STREET)!.area);
     // The parcel of an errand, in the player's hands while core has one (state.errand).
     const carry = new PlayerCarry(player.actor, bagAsset ? await assets.instance(bagAsset) : null, bagSpec);
     // The real look (look.ts: the full / lite tier, or `?look=real`): its chunk, the composer and
@@ -1054,9 +1054,8 @@ async function main() {
     // The scene's NPC talks while their line is on screen (the player stays on idle).
     // A story NPC with nothing to talk about barks: they talk too.
     space.setTalking(m.scene && m.bubble?.npc === m.scene.npc ? m.scene.npc : m.bark && space.npcs.has(m.bark.id) ? m.bark.id : null);
-    // The other side of a scene listens (head tilt, slow nods): the player while the NPC talks, the NPC otherwise.
+    // The scene's NPC listens while it isn't talking (the player keeps its clips: it has no animator).
     for (const [n, v] of space.npcs) v.actor.listening = m.scene?.npc === n;
-    player.actor.listening = !!m.scene || !!m.bark;
     if (barking && m.bark?.id !== barking.fig.id) releaseBark();
     const npc = m.scene?.npc ?? null;
     if (npc === sceneNpc) return;
@@ -1078,22 +1077,16 @@ async function main() {
   }
 
   /**
-   * Game events -> one-shot poses (animator.ts reactions; the mix-up shrug comes through syncWorld):
-   * a right reply: the NPC nods; money changes hands (shopping, wages): both reach; a scene done:
-   * both are happy.
+   * Game events -> the scene NPC's one-shot poses (animator.ts reactions; the mix-up shrug comes
+   * through syncWorld): a right reply: a nod; money changes hands (shopping, wages): a reach; a scene
+   * done: happy. The player never gets these (it plays its baked clips).
    */
   function reactToEvent(e: { type: string; matched?: boolean; reason?: string }) {
     const npc = sceneNpc ? space.npcs.get(sceneNpc)?.actor : undefined;
-    if (e.type === "actionPerformed" && e.matched) npc?.react("nod");
-    else if (e.type === "walletChanged" && (e.reason === "shopping" || e.reason === "wages")) {
-      if (npc) {
-        player.actor.react("reach", npc.root.position);
-        npc.react("reach", player.position);
-      }
-    } else if (e.type === "sceneEnded") {
-      npc?.react("happy");
-      player.actor.react("happy");
-    }
+    if (!npc) return;
+    if (e.type === "actionPerformed" && e.matched) npc.react("nod");
+    else if (e.type === "walletChanged" && (e.reason === "shopping" || e.reason === "wages")) npc.react("reach", player.position);
+    else if (e.type === "sceneEnded") npc.react("happy");
   }
 
   /** Opens a game (new, chosen, or the last played); `name`: the start flow's, given to a new game. */
@@ -1586,7 +1579,7 @@ async function main() {
       if (a) {
         const dx = player.position.x - a.root.position.x;
         const dz = player.position.z - a.root.position.z;
-        if (barking.fig.kind === "extra" && Math.hypot(dx, dz) > 1e-3) a.face(Math.atan2(dx, dz), dt);
+        if (barking.fig.kind === "extra" && Math.hypot(dx, dz) > 1e-3) a.facePoint(player.position.x, player.position.z, dt);
         if (Math.hypot(dx, dz) > TALK_RANGE + BARK_LEAVE_M) game!.endBark();
       }
     } else if (b && space.npcs.has(b.id)) {
@@ -1850,7 +1843,6 @@ async function main() {
       shop: () => ({ holding: hand.spot?.id ?? null, inHand: hand.inHand }),
       anim: () => ({
         player: player.actor.state,
-        playerLayers: player.actor.layers,
         npcs: Object.fromEntries([...space.npcs].map(([n, v]) => [n, { state: v.actor.state, clips: v.actor.animated, clip: v.actor.playing?.getClip().name ?? null, carrying: v.actor.carrying, shrugging: v.actor.shrugging, layers: v.actor.layers }])),
         walkers: space.walkers.map((w) => ({ state: w.actor.state, waiting: w.motion.waiting })),
       }),
@@ -1861,16 +1853,16 @@ async function main() {
         if (!a) return null;
         const top = project(a.headTop());
         const foot = project(a.root.position.clone());
-        return { top, foot, at: a.root.position.toArray(), yaw: a.root.rotation.y };
+        return { top, foot, at: a.root.position.toArray(), yaw: a.root.rotation.y, head: a.headAngles() };
       },
       /** motion capture: `fn` runs after every draw (scripts/motion-capture.mjs copies frames out of the canvas); null stops it */
       afterDraw: (fn: ((canvas: HTMLCanvasElement) => void) | null) => {
         afterDraw = fn;
       },
-      /** a one-shot pose (animator.ts Reaction) on the player or an NPC here, aimed at the other */
-      react: (who: string, kind: Reaction) => {
-        const a = who === "player" ? player.actor : space.npcs.get(who)?.actor;
-        a?.react(kind, who === "player" ? undefined : player.position);
+      /** a one-shot pose (animator.ts Reaction) on an NPC here, aimed at the player */
+      react: (npc: string, kind: Reaction) => {
+        const a = space.npcs.get(npc)?.actor;
+        a?.react(kind, player.position);
         return !!a;
       },
       /** everyone here who barks: id, role, where they are now, whether held (talking) */
@@ -1885,7 +1877,7 @@ async function main() {
       bark: (id: string) => startBark(id),
       /** the bark on screen (null: none) */
       barkShown: () => game?.model.bark ?? null,
-      walkTo: (x: number, z: number) => player.walkTo(x, z),
+      walkTo: (x: number, z: number, scripted = false) => player.walkTo(x, z, { scripted }),
       // teleport(x, z): places the player, then runs the same edge-triggered zone check `nav.step`
       // does every frame of real walking, so core's place (and the space the player lands in)
       // follows the jump instead of only the raw position (a stale place broke space.npcs.has(npc)

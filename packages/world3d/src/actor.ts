@@ -8,7 +8,7 @@
 // No loader and no renderer here: it runs headless under vitest.
 import * as THREE from "three";
 import { ANIM_STATES, AnimMachine, clipFor, DEFAULT_STRIDE, FADE, WALK_ON, walkTimeScale, type AnimState } from "./anim";
-import { Animator, DEFAULT_DIMS, HUMAN_JOINTS, NJ, PET_JOINTS, TUNE, type Reaction, type RigDims } from "./animator";
+import { Animator, DEFAULT_DIMS, FaceAim, HUMAN_JOINTS, NJ, PET_JOINTS, TUNE, type Reaction, type RigDims } from "./animator";
 import { WALK_SPEED } from "./movement";
 
 export const HEAD_BONE = "HeadTop";
@@ -27,6 +27,10 @@ export interface ActorOptions {
   headTopY?: number;
   /** seeds this character's timing (default: the rig's name and how many came before it) */
   seed?: string;
+  /** false: never the procedural animator (the player: its baked clips on the mixer) */
+  procedural?: boolean;
+  /** the head keeps to the body's heading: no look-around, no turn lead (walkers, pigeons) */
+  fixedHead?: boolean;
 }
 
 /** How many actors each rig name has had: the default seed, so two walkers of one GLB differ. */
@@ -143,6 +147,10 @@ export class CharacterActor {
   /** the procedural animator (humans and pets on the shared skeletons), else null */
   readonly animator: Animator | null = null;
   private pose: RigPose | null = null;
+  /** the dialogue aim with its dead zone (facePoint) */
+  private aim = new FaceAim();
+  /** the Head bone's rest orientation in the model, inverted (headAngles) */
+  private headRestInv = new THREE.Quaternion();
   /** in a scene or a bark, the other one is talking: listen (head tilt, slow nods) */
   listening = false;
   /** seated (hips and knees bent) */
@@ -163,14 +171,22 @@ export class CharacterActor {
     const n = (seedCounts.get(base) ?? 0) + 1;
     seedCounts.set(base, n);
     const seed = opts.seed ?? `${base}#${n}`;
+    const head = model.getObjectByName("Head");
+    if (head) {
+      model.updateWorldMatrix(true, true);
+      const m = new THREE.Matrix4().copy(model.matrixWorld).invert().multiply(head.matrixWorld);
+      m.decompose(new THREE.Vector3(), this.headRestInv, new THREE.Vector3());
+      this.headRestInv.normalize().invert();
+    }
+    const procedural = opts.procedural !== false;
     const has = (names: readonly string[]) => names.every((x) => model.getObjectByName(x));
-    if (has(HUMAN_JOINTS)) {
-      this.animator = new Animator(seed, "human", humanDims(model, opts.headTopY));
+    if (procedural && has(HUMAN_JOINTS)) {
+      this.animator = new Animator(seed, "human", humanDims(model, opts.headTopY), opts.fixedHead === true);
       this.pose = new RigPose(model, HUMAN_SLOTS, "Hips");
       return;
     }
-    if (has(Object.keys(PET_JOINTS))) {
-      this.animator = new Animator(seed, "pet", DEFAULT_DIMS);
+    if (procedural && has(Object.keys(PET_JOINTS))) {
+      this.animator = new Animator(seed, "pet", DEFAULT_DIMS, opts.fixedHead === true);
       this.pose = new RigPose(model, PET_SLOTS, null);
       return;
     }
@@ -270,6 +286,36 @@ export class CharacterActor {
    * no oscillation) while the head leads by the rest of the turn. Without the animator: an ease.
    */
   face(yaw: number, dt: number, omega: number = TUNE.turnOmega) {
+    this.aim.clear();
+    this.turnTo(yaw, dt, omega);
+  }
+
+  /**
+   * Turn-to-face a world point (the player): aimed once, re-aimed only when the point moves past
+   * the dead zone (TUNE.aimDeadM / aimDeadDeg), each re-aim one smooth turn; never a continuous
+   * track of every step.
+   */
+  facePoint(x: number, z: number, dt: number, omega: number = TUNE.turnOmega) {
+    const p = this.root.position;
+    this.turnTo(this.aim.aim(p.x, p.z, x, z), dt, omega);
+  }
+
+  /** The head's world orientation against its rest pose, degrees: yaw (0 = +z, toward +x positive), pitch (down positive), roll. */
+  headAngles(): { yaw: number; pitch: number; roll: number } | null {
+    const h = this.body.getObjectByName("Head");
+    if (!h) return null;
+    this.root.updateWorldMatrix(true, true);
+    const q = h.getWorldQuaternion(new THREE.Quaternion()).multiply(this.headRestInv);
+    const f = new THREE.Vector3(0, 0, 1).applyQuaternion(q);
+    const up = new THREE.Vector3(0, 1, 0).applyQuaternion(q);
+    const R = 180 / Math.PI;
+    const yaw = Math.atan2(f.x, f.z);
+    // roll: the up vector's lean across the facing direction
+    const side = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
+    return { yaw: yaw * R, pitch: Math.atan2(-f.y, Math.hypot(f.x, f.z)) * R, roll: Math.asin(Math.max(-1, Math.min(1, up.dot(side)))) * R };
+  }
+
+  private turnTo(yaw: number, dt: number, omega: number) {
     const r = this.root.rotation;
     if (this.animator) r.y = this.animator.turn(r.y, yaw, dt, omega);
     else {

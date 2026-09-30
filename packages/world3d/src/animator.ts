@@ -57,9 +57,11 @@ export const TUNE = {
   shiftEveryS: [4, 8],
   shiftCm: 1.5,
   shiftHipDeg: 1.5,
-  lookEveryS: [2.5, 7],
-  lookYawDeg: 28,
-  lookPitchDeg: 5,
+  /** look-around: only idle and out of dialogue, one glance every 6-12 s, eased over lookEaseS, at most 20 degrees */
+  lookEveryS: [6, 12],
+  lookEaseS: 2,
+  lookYawDeg: 20,
+  lookPitchDeg: 4,
   /** step length (m) = min(max, base + perMps * speed) * height/1.7 */
   stepBaseM: 0.25,
   stepPerMps: 0.16,
@@ -77,25 +79,30 @@ export const TUNE = {
   settleS: 0.5,
   settleCm: 1.6,
   headLeadMaxDeg: 45,
-  headLeadS: 0.06,
+  /** the head's own turn (1/s, critically damped, faster than the body's): it gets there first, then holds */
+  headTurnOmega: 11,
   /** default turn-to-face stiffness (1/s): ~0.65 s to settle a big turn */
   turnOmega: 7,
-  syllableHz: [2, 4],
-  nodDeg: [1.2, 3.5],
-  syllableSkip: 0.18,
+  /** talking: a small nod every 2.2-3.5 s (never more than one a second), 0.6-1.5 degrees, over nodS */
+  nodEveryS: [2.2, 3.5],
+  nodDeg: [0.6, 1.5],
+  nodS: 0.6,
   gestureEveryS: [2, 5],
   gestureS: [0.5, 0.75],
   gestureForeDeg: [20, 40],
   talkLeanDeg: 2.5,
   listenTiltDeg: [3, 5],
-  listenNodEveryS: 2,
-  listenNodDeg: [1.8, 3.2],
+  listenNodEveryS: [2.2, 3.5],
+  listenNodDeg: [0.6, 1.5],
   listenSkip: 0.3,
+  /** dialogue aim dead zone: re-aim at the player only once they move this far (m) or this much (deg) */
+  aimDeadM: 0.6,
+  aimDeadDeg: 12,
 } as const;
 
 /** One-shot poses. greet: a raised-hand wave; happy: a little hop; confused: a shrug with a head tilt; nod: agreeing; reach: hand something over. */
 export type Reaction = "greet" | "happy" | "confused" | "nod" | "reach";
-export const REACTION_S: Record<Reaction, number> = { greet: 2.0, happy: 1.0, confused: 1.1, nod: 0.7, reach: 1.1 };
+export const REACTION_S: Record<Reaction, number> = { greet: 2.0, happy: 1.0, confused: 1.1, nod: 0.8, reach: 1.1 };
 
 export interface AnimatorInputs {
   /** ground speed this frame, m/s */
@@ -179,6 +186,34 @@ export class Damped {
   }
 }
 
+/**
+ * Where an NPC looks in dialogue: the player's position when it last aimed. It re-aims only once
+ * the player has moved more than TUNE.aimDeadM from that point or TUNE.aimDeadDeg around it, so
+ * the head and body make one smooth turn per re-aim instead of tracking every step.
+ */
+export class FaceAim {
+  private ax = NaN;
+  private az = NaN;
+  yaw = 0;
+  /** re-aims so far (tests, debug) */
+  aims = 0;
+  /** The committed yaw for a character at (sx, sz) looking at (px, pz). */
+  aim(sx: number, sz: number, px: number, pz: number): number {
+    const want = Math.atan2(px - sx, pz - sz);
+    if (Number.isNaN(this.ax) || Math.hypot(px - this.ax, pz - this.az) > TUNE.aimDeadM || Math.abs(wrapAngle(want - this.yaw)) > TUNE.aimDeadDeg * DEG) {
+      this.ax = px;
+      this.az = pz;
+      this.yaw = want;
+      this.aims++;
+    }
+    return this.yaw;
+  }
+  /** Looking elsewhere: the next aim starts fresh. */
+  clear() {
+    this.ax = NaN;
+  }
+}
+
 /** A countdown that fires at random intervals in [lo, hi]. */
 class Every {
   t: number;
@@ -248,17 +283,17 @@ export class Animator {
   private energy: number;
   private breathHz: number;
   private breathPh: number;
-  private syllableHzLo: number;
   private tiltSide: number;
+  /** walkers, pigeons: the head keeps to the body's heading (no look-around, no turn lead) */
+  fixedHead: boolean;
   // weights
-  readonly w = { walk: new Damped(), talk: new Damped(), listen: new Damped(), carry: new Damped(), sit: new Damped() };
+  readonly w = { walk: new Damped(), talk: new Damped(), listen: new Damped(), dialogue: new Damped(), carry: new Damped(), sit: new Damped() };
   // idle
   private shift = new Damped();
   private shiftTarget = 0;
   private shiftEvery: Every;
-  private lookYaw = new Damped();
-  private lookPitch = new Damped();
-  private lookTarget = [0, 0];
+  /** the look-around glance: a smoothstep tween from `from` to `to` over `dur` */
+  private look = { from: [0, 0], to: [0, 0], t: 0, dur: 1 };
   private lookEvery: Every;
   // walk
   /** gait phase, cycles (one cycle = two steps) */
@@ -270,42 +305,40 @@ export class Animator {
   private settleT = -1;
   private wasWalking = false;
   // talk
-  private syl = { t: 0, dur: 0.3, amp: 0 };
-  private emphasis = new Damped();
-  private phraseTilt = 0;
-  private emphasisEvery: Every;
+  private nodEvery: Every;
+  private nod = { t: -1, amp: 0 };
   private gestureEvery: Every;
   private gesture = { t: -1, dur: 0.6, side: "right" as Side, amp: 0.5 };
   // listen
-  private listenEvery: Every;
-  private listenNod = { t: -1, amp: 0 };
   // react
   private active: Active[] = [];
   // face
   private turnV = 0;
-  private leadTarget = 0;
+  /** the head's world yaw on its own critically damped turn (NaN: not turning) */
+  private headYaw = NaN;
+  private headV = 0;
+  private leadFresh = false;
   private lead = new Damped();
   // pets
   private wagEvery: Every;
   private wagT = -1;
 
-  constructor(seed: string | number, kind: "human" | "pet" = "human", dims: RigDims = DEFAULT_DIMS) {
+  constructor(seed: string | number, kind: "human" | "pet" = "human", dims: RigDims = DEFAULT_DIMS, fixedHead = false) {
     this.kind = kind;
+    this.fixedHead = fixedHead;
     this.r = rng(typeof seed === "number" ? seed : hashSeed(seed));
     const r = this.r;
     this.dims = dims;
     this.energy = lerp(0.85, 1.15, r());
     this.breathHz = pick(r, TUNE.breathHz);
     this.breathPh = r() * 2 * Math.PI;
-    this.syllableHzLo = lerp(TUNE.syllableHz[0], 2.6, r());
     this.tiltSide = r() < 0.5 ? -1 : 1;
     this.shiftTarget = (r() < 0.5 ? -1 : 1) * lerp(0.4, 1, r());
     this.shift.x = this.shiftTarget;
     this.shiftEvery = new Every(r, TUNE.shiftEveryS[0], TUNE.shiftEveryS[1], r());
     this.lookEvery = new Every(r, TUNE.lookEveryS[0], TUNE.lookEveryS[1], r());
-    this.emphasisEvery = new Every(r, 1.5, 3.5, r());
+    this.nodEvery = new Every(r, TUNE.nodEveryS[0], TUNE.nodEveryS[1], r());
     this.gestureEvery = new Every(r, TUNE.gestureEveryS[0], TUNE.gestureEveryS[1], r());
-    this.listenEvery = new Every(r, TUNE.listenNodEveryS * 0.7, TUNE.listenNodEveryS * 1.3, r());
     this.wagEvery = new Every(r, 3, 8, r());
     this.t = r() * 100;
     legIk(dims, dims.legZ, dims.legY, this.restLeg);
@@ -327,7 +360,9 @@ export class Animator {
 
   /**
    * Turn-to-face: the body's new yaw from `current` toward `target` (critically damped, `omega`
-   * 1/s); the head leads by the rest of the way (up to TUNE.headLeadMaxDeg), eased in `update`.
+   * 1/s: no overshoot from rest). The head runs its own, faster critically damped turn toward the
+   * same target in world yaw, so it gets there first and holds while the body catches up; its
+   * lead over the body is capped at TUNE.headLeadMaxDeg. Fixed heads (walkers, pigeons) don't lead.
    */
   turn(current: number, target: number, dt: number, omega: number = TUNE.turnOmega): number {
     const e = wrapAngle(current - target);
@@ -339,14 +374,28 @@ export class Animator {
       e2 = 0;
       this.turnV = 0;
     }
-    this.leadTarget = clamp(wrapAngle(-e2), -TUNE.headLeadMaxDeg * DEG, TUNE.headLeadMaxDeg * DEG);
-    return target + e2;
+    const body = target + e2;
+    if (this.fixedHead) return body;
+    // the head's world yaw, as an error from the target (starts where the head is now)
+    let h = Number.isNaN(this.headYaw) ? wrapAngle(current + this.lead.x - target) : wrapAngle(this.headYaw - target);
+    const hw = TUNE.headTurnOmega;
+    const hx = Math.exp(-hw * dt);
+    const ht = (this.headV + hw * h) * dt;
+    this.headV = (this.headV - hw * ht) * hx;
+    h = (h + ht) * hx;
+    this.headYaw = target + h;
+    const max = TUNE.headLeadMaxDeg * DEG;
+    this.lead.x = clamp(wrapAngle(this.headYaw - body), -max, max);
+    this.lead.v = 0;
+    this.leadFresh = true;
+    return body;
   }
 
   /** The body was placed (a teleport, a scene start): no turn in flight. */
   resetTurn() {
     this.turnV = 0;
-    this.leadTarget = 0;
+    this.headYaw = NaN;
+    this.headV = 0;
     this.lead.x = this.lead.v = 0;
   }
 
@@ -370,18 +419,24 @@ export class Animator {
     const walkW = clamp(W.walk.step(i.walking ? 1 : 0, bw, dt), 0, 1);
     const talkW = clamp(W.talk.step(i.talking && !i.walking ? 1 : 0, bw, dt), 0, 1);
     const listenW = clamp(W.listen.step(i.listening && !i.talking && !i.walking ? 1 : 0, bw, dt), 0, 1);
+    const dialogueW = clamp(W.dialogue.step((i.talking || i.listening) && !i.walking ? 1 : 0, bw, dt), 0, 1);
     const carryW = clamp(W.carry.step(i.carrying ? 1 : 0, bw, dt), 0, 1);
     const sitW = clamp(W.sit.step(i.sitting && !i.walking ? 1 : 0, bw * 0.7, dt), 0, 1);
-    // the head leads the body's turn (consumed: a frame without turn() lets it ease back)
-    this.lead.step(this.leadTarget, 1 / TUNE.headLeadS, dt);
-    this.leadTarget = 0;
+    // a frame without turn(): the lead eases back to the body, the head's own turn is dropped
+    if (!this.leadFresh) {
+      this.lead.step(0, 6, dt);
+      this.headYaw = NaN;
+      this.headV = 0;
+    }
+    this.leadFresh = false;
     if (this.kind === "pet") return this.pet(dt, walkW);
     const feet = { left: { z: 0, lift: 0, pitch: 0 }, right: { z: 0, lift: 0, pitch: 0 } };
-    this.idle(dt, 1 - walkW, talkW + listenW);
+    this.idle(dt, 1 - walkW, walkW > 0.02 || talkW > 0.02 || listenW > 0.02 || i.talking || i.listening || this.active.length > 0);
     this.walk(dt, i.speed, walkW, carryW, feet);
     if (talkW > 1e-3) this.talk(dt, talkW, carryW);
     else this.gesture.t = -1;
-    if (listenW > 1e-3) this.listen(dt, listenW);
+    if (dialogueW > 1e-3) this.dialogue(dt, dialogueW, i.talking);
+    else this.nod.t = -1;
     if (carryW > 1e-3) this.carry(carryW);
     for (const a of this.active) this.reaction(a);
     // turn-to-face lead: mostly the head, some neck
@@ -394,14 +449,14 @@ export class Animator {
     this.rot[j * 3 + axis] += v;
   }
 
-  /** breathing, weight shift, look-around; `w` fades it out while walking, `busy` damps the look-around (talking, listening) */
-  private idle(dt: number, w: number, busy: number) {
+  /** breathing, weight shift, look-around; `w` fades it out while walking; `busy` (walking, dialogue, a reaction): no look-around */
+  private idle(dt: number, w: number, busy: boolean) {
     const k = this.dims.k;
     const b = Math.sin(2 * Math.PI * this.breathHz * this.t + this.breathPh);
     // breathing: the chest lifts (pitches back a touch), the shoulders rise, all at ~0.25 Hz
     this.add(CHEST, 0, -TUNE.breathChestDeg * DEG * b * w);
     this.add(SPINE, 0, -0.3 * DEG * b * w);
-    this.add(NECK, 0, TUNE.breathChestDeg * 0.6 * DEG * b * w); // the head stays level
+    this.add(NECK, 0, (TUNE.breathChestDeg + 0.3) * DEG * b * w); // the neck undoes it exactly: the head stays level
     for (const side of ["left", "right"] as const) {
       const S = SIDE[side];
       this.add(S.sho, 2, S.s * TUNE.breathShoulderDeg * DEG * (0.5 + 0.5 * b) * w);
@@ -409,25 +464,43 @@ export class Animator {
     }
     this.hips[1] += 0.0015 * k * b * w;
     // weight shift: onto one leg, every 4-8 s, eased over ~1.5 s
-    if (this.shiftEvery.tick(dt)) this.shiftTarget = -Math.sign(this.shiftTarget || 1) * lerp(0.4, 1, this.r());
+    // (not in dialogue or a reaction: a shift there tips the head through the chain; the last one just settles)
+    if (!busy && this.shiftEvery.tick(dt)) this.shiftTarget = -Math.sign(this.shiftTarget || 1) * lerp(0.4, 1, this.r());
     const s = this.shift.step(this.shiftTarget, 2.4, dt) * w * this.energy;
     this.hips[0] += s * TUNE.shiftCm * 0.01 * k;
     this.add(HIPS, 2, s * TUNE.shiftHipDeg * DEG); // the loaded side's hip rises
     this.add(CHEST, 2, -s * TUNE.shiftHipDeg * 1.3 * DEG); // shoulders counter it
     this.add(HEAD, 2, s * TUNE.shiftHipDeg * 0.25 * DEG);
-    // look-around: now and then a glance somewhere, held, often back to the front
-    if (this.lookEvery.tick(dt)) {
-      const home = this.r() < 0.4;
-      this.lookTarget[0] = home ? 0 : (this.r() * 2 - 1) * TUNE.lookYawDeg * DEG;
-      this.lookTarget[1] = home ? 0 : (this.r() * 2 - 1) * TUNE.lookPitchDeg * DEG;
+    const [ly, lp] = this.lookAround(dt, busy);
+    this.add(HEAD, 1, ly * 0.7 * w);
+    this.add(NECK, 1, ly * 0.3 * w);
+    this.add(HEAD, 0, lp * w);
+  }
+
+  /**
+   * The look-around glance (yaw, pitch): only when idle and out of dialogue, one every 6-12 s,
+   * eased over TUNE.lookEaseS with a smoothstep (one monotonic turn, no spring), often back to the
+   * front. Busy or a fixed head: back to the front in 0.8 s and the countdown waits.
+   */
+  private lookAround(dt: number, busy: boolean): [number, number] {
+    const L = this.look;
+    L.t += dt;
+    const u = smooth(L.t / L.dur);
+    const y = L.from[0] + (L.to[0] - L.from[0]) * u;
+    const p = L.from[1] + (L.to[1] - L.from[1]) * u;
+    const start = (ty: number, tp: number, dur: number) => {
+      L.from = [y, p];
+      L.to = [ty, tp];
+      L.t = 0;
+      L.dur = dur;
+    };
+    if (busy || this.fixedHead) {
+      if (L.to[0] !== 0 || L.to[1] !== 0) start(0, 0, 0.8);
+    } else if (this.lookEvery.tick(dt)) {
+      const home = this.r() < 0.4 && (L.to[0] !== 0 || L.to[1] !== 0);
+      start(home ? 0 : (this.r() * 2 - 1) * TUNE.lookYawDeg * DEG, home ? 0 : (this.r() * 2 - 1) * TUNE.lookPitchDeg * DEG, TUNE.lookEaseS);
     }
-    const quiet = 1 - clamp(busy, 0, 1) * 0.85;
-    const ly = this.lookYaw.step(this.lookTarget[0] * quiet, 4, dt) * w;
-    const lp = this.lookPitch.step(this.lookTarget[1] * quiet, 4, dt) * w;
-    this.add(HEAD, 1, ly * 0.75);
-    this.add(NECK, 1, ly * 0.25);
-    this.add(CHEST, 1, ly * 0.12);
-    this.add(HEAD, 0, lp);
+    return [y, p];
   }
 
   private walk(dt: number, speed: number, w: number, carryW: number, feet: Record<Side, { z: number; lift: number; pitch: number }>) {
@@ -490,9 +563,10 @@ export class Animator {
     const lean = (lerp(TUNE.leanDeg[0], TUNE.leanDeg[1], run) * DEG + this.accelLean.x) * w;
     this.add(SPINE, 0, lean * 0.5);
     this.add(CHEST, 0, lean * 0.5);
-    this.add(HEAD, 1, -(hipsYaw + chestYaw) * 0.9);
-    this.add(HEAD, 0, -lean * 0.7 + 1.2 * DEG * Math.cos(4 * Math.PI * ph) * w * 0.4);
-    this.add(HEAD, 2, -roll * 0.8);
+    // the head keeps the heading exactly (cancels the pelvis / shoulder twist), looks ahead, stays level
+    this.add(HEAD, 1, -(hipsYaw + chestYaw));
+    this.add(HEAD, 0, -lean * 0.7);
+    this.add(HEAD, 2, -roll);
     // arms: counter-swing (left arm forward with the right leg), elbows bend more going forward
     const amp = lerp(TUNE.armSwingDeg[0], TUNE.armSwingDeg[1], run) * DEG * this.energy * (1 - carryW) * w;
     for (const side of ["left", "right"] as const) {
@@ -504,22 +578,8 @@ export class Animator {
     }
   }
 
-  /** a pseudo-syllable clock (2-4 Hz, random amplitude and skips) nods the head; gestures now and then; a lean toward the listener */
+  /** the speaker's body: a lean toward the listener, a hand gesture now and then (the head is the dialogue layer's) */
   private talk(dt: number, w: number, carryW: number) {
-    const s = this.syl;
-    s.t += dt;
-    if (s.t >= s.dur) {
-      s.t -= s.dur;
-      s.dur = 1 / lerp(this.syllableHzLo, TUNE.syllableHz[1], this.r());
-      s.amp = this.r() < TUNE.syllableSkip ? 0 : pick(this.r, TUNE.nodDeg) * DEG;
-    }
-    const nod = s.amp * bumpOf(s.t / s.dur);
-    // phrase by phrase (every 1.5-3.5 s) the head settles into a new slight tilt
-    if (this.emphasisEvery.tick(dt)) this.phraseTilt = (this.r() * 2 - 1) * 3 * DEG;
-    const emph = this.emphasis.step(this.phraseTilt, 3, dt);
-    this.add(HEAD, 0, (nod + 1.5 * DEG) * w);
-    this.add(NECK, 0, nod * 0.35 * w);
-    this.add(HEAD, 2, -emph * w);
     this.add(SPINE, 0, TUNE.talkLeanDeg * 0.5 * DEG * w);
     this.add(CHEST, 0, TUNE.talkLeanDeg * 0.5 * DEG * w);
     // a gesture: one forearm comes up 20-40 degrees for ~0.6 s
@@ -542,20 +602,25 @@ export class Animator {
     }
   }
 
-  /** a head tilt toward the speaker, slow nods (~0.5 Hz) with random skips */
-  private listen(dt: number, w: number) {
+  /**
+   * The head in dialogue (talking or listening: one weight, so a line changing hands doesn't tip it
+   * to and fro): a still tilt toward the other one, eyes a touch down, and a small nod (0.6-1.5
+   * degrees, pitch only) every 2.2-3.5 s; listening skips some.
+   */
+  private dialogue(dt: number, w: number, talking: boolean) {
     const tilt = lerp(TUNE.listenTiltDeg[0], TUNE.listenTiltDeg[1], (this.energy - 0.85) / 0.3) * DEG;
     this.add(HEAD, 2, -this.tiltSide * tilt * w);
     this.add(HEAD, 0, 2 * DEG * w);
-    if (this.listenEvery.tick(dt) && this.listenNod.t < 0 && this.r() > TUNE.listenSkip) {
-      this.listenNod.t = 0;
-      this.listenNod.amp = pick(this.r, TUNE.listenNodDeg) * DEG;
+    const n = this.nod;
+    if (this.nodEvery.tick(dt) && n.t < 0 && (talking || this.r() > TUNE.listenSkip)) {
+      n.t = 0;
+      n.amp = pick(this.r, talking ? TUNE.nodDeg : TUNE.listenNodDeg) * DEG;
     }
-    if (this.listenNod.t >= 0) {
-      this.listenNod.t += dt;
-      const u = this.listenNod.t / 0.55;
-      this.add(HEAD, 0, this.listenNod.amp * bumpOf(u) * w);
-      if (u >= 1) this.listenNod.t = -1;
+    if (n.t >= 0) {
+      n.t += dt;
+      const u = n.t / TUNE.nodS;
+      this.add(HEAD, 0, n.amp * bumpOf(u) * w);
+      if (u >= 1) n.t = -1;
     }
   }
 
@@ -627,8 +692,8 @@ export class Animator {
       }
       case "nod": {
         const n = bump(t / d);
-        this.add(HEAD, 0, 9 * DEG * n);
-        this.add(NECK, 0, 3 * DEG * n);
+        this.add(HEAD, 0, 4 * DEG * n);
+        this.add(NECK, 0, 1 * DEG * n);
         break;
       }
       case "reach": {
@@ -676,17 +741,14 @@ export class Animator {
     }
   }
 
-  /** pets: breathing, look-around (quicker), a tail that idles and now and then wags in a burst */
+  /** pets: breathing, the look-around, a tail that rests and now and then wags in a burst */
   private pet(dt: number, walkW: number) {
     const b = Math.sin(2 * Math.PI * this.breathHz * 1.6 * this.t + this.breathPh);
     this.add(SPINE, 0, 1.5 * DEG * b);
-    if (this.lookEvery.tick(dt)) {
-      const home = this.r() < 0.35;
-      this.lookTarget[0] = home ? 0 : (this.r() * 2 - 1) * 35 * DEG;
-      this.lookTarget[1] = home ? 0 : (this.r() * 2 - 1) * 10 * DEG;
-    }
-    this.add(HEAD, 1, this.lookYaw.step(this.lookTarget[0], 7, dt) + this.lead.x);
-    this.add(HEAD, 0, this.lookPitch.step(this.lookTarget[1], 7, dt));
+    // the same look-around rules as people: idle only, one eased glance every 6-12 s, at most 20 degrees
+    const [ly, lp] = this.lookAround(dt, walkW > 0.02);
+    this.add(HEAD, 1, ly + this.lead.x);
+    this.add(HEAD, 0, lp);
     if (this.wagT < 0 && this.wagEvery.tick(dt)) this.wagT = 0;
     let wag = 0;
     if (this.wagT >= 0) {
@@ -694,7 +756,6 @@ export class Animator {
       wag = envelopeOf(this.wagT, 1.4, 0.25, 0.4) * 18 * DEG * Math.sin(2 * Math.PI * 2.4 * this.wagT);
       if (this.wagT >= 1.4) this.wagT = -1;
     }
-    const drift = 6 * DEG * Math.sin(2 * Math.PI * 0.37 * this.t + this.breathPh) * (0.6 + 0.4 * Math.sin(0.23 * this.t));
-    this.add(TAIL, 1, drift + wag + 8 * DEG * walkW);
+    this.add(TAIL, 1, wag + 8 * DEG * walkW); // no idle sway: the tail rests between wags
   }
 }

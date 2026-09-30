@@ -8,8 +8,11 @@ import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.j
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { beforeAll, describe, expect, it } from "vitest";
 import { CharacterActor } from "../src/actor";
-import { Animator, DEFAULT_DIMS, DEG, HUMAN_JOINTS, NJ, TUNE, wrapAngle, type AnimatorInputs, type Reaction } from "../src/animator";
-import { ASSETS, readGlb } from "./helpers";
+import { Animator, DEFAULT_DIMS, DEG, FaceAim, HUMAN_JOINTS, NJ, TUNE, wrapAngle, type AnimatorInputs, type Reaction } from "../src/animator";
+import { AssetCache } from "../src/world";
+import { LAYOUT, LayoutIndex } from "../src/layout";
+import { WALK_SPEED } from "../src/movement";
+import { ASSETS, assetIndex, readGlb } from "./helpers";
 
 const still: AnimatorInputs = { speed: 0, walking: false, talking: false, listening: false, carrying: false, sitting: false };
 const J = (name: (typeof HUMAN_JOINTS)[number]) => HUMAN_JOINTS.indexOf(name);
@@ -324,35 +327,19 @@ describe("animator: turn-to-face", () => {
 });
 
 describe("animator: talk, listen", () => {
-  it("talk: nods on a 2-4 Hz syllable clock with random amplitude, a gesture every few seconds, a lean in", () => {
+  it("talk: a lean in and a gesture every few seconds; the head only nods small and seldom", () => {
     const a = new Animator("talker");
     run(a, 1, { talking: true });
-    const nods: number[] = [];
-    let peaks = 0;
-    let prev = 0;
-    let rising = false;
     let gestures = 0;
     let inGesture = false;
     let foreMax = 0;
     run(a, 30, { talking: true }, 120, () => {
-      const x = rot(a, "Neck", 0);
-      if (x > prev) rising = true;
-      else if (rising && x < prev) {
-        peaks++;
-        nods.push(prev);
-        rising = false;
-      }
-      prev = x;
       const fore = Math.min(rot(a, "RightForeArm", 0), rot(a, "LeftForeArm", 0)) + 6 * DEG; // minus the relaxed bend
       foreMax = Math.max(foreMax, -fore);
       const g = -fore > 10 * DEG;
       if (g && !inGesture) gestures++;
       inGesture = g;
     });
-    expect(peaks / 30).toBeGreaterThan(1.6);
-    expect(peaks / 30).toBeLessThan(4.2);
-    const amps = nods.filter((n) => n > 0.1 * DEG);
-    expect(Math.max(...amps) - Math.min(...amps)).toBeGreaterThan(0.5 * DEG); // not a metronome
     expect(gestures).toBeGreaterThanOrEqual(30 / 5 - 1);
     expect(gestures).toBeLessThanOrEqual(30 / 2 + 1);
     expect(foreMax / DEG).toBeGreaterThan(18);
@@ -360,23 +347,135 @@ describe("animator: talk, listen", () => {
     expect((rot(a, "Spine", 0) + rot(a, "Chest", 0)) / DEG).toBeGreaterThan(1.5); // leaning toward the listener
   });
 
-  it("listen: a 3-5 degree head tilt and slow nods (~0.5 Hz, some skipped)", () => {
+  it("listen: a still 3-5 degree tilt toward the speaker", () => {
     const a = new Animator("listener");
     run(a, 1, { listening: true });
-    let nods = 0;
-    let inNod = false;
-    let tilt = 0;
-    run(a, 40, { listening: true }, 60, () => {
-      tilt = Math.max(tilt, Math.abs(rot(a, "Head", 2)));
-      const p = rot(a, "Head", 0) - 2 * DEG;
-      const n = p > 0.8 * DEG;
-      if (n && !inNod) nods++;
-      inNod = n;
+    let lo = Infinity;
+    let hi = 0;
+    run(a, 20, { listening: true }, 60, () => {
+      const t = Math.abs(["Hips", "Spine", "Chest", "Neck", "Head"].reduce((sum, j) => sum + rot(a, j as (typeof HUMAN_JOINTS)[number], 2), 0));
+      lo = Math.min(lo, t);
+      hi = Math.max(hi, t);
     });
-    expect(tilt / DEG).toBeGreaterThanOrEqual(2.9);
-    expect(tilt / DEG).toBeLessThan(6);
-    expect(nods / 40).toBeGreaterThan(0.2);
-    expect(nods / 40).toBeLessThan(0.5); // ~0.5 Hz less the skips
+    expect(lo / DEG).toBeGreaterThanOrEqual(2.9);
+    expect(hi / DEG).toBeLessThan(5.5);
+    expect((hi - lo) / DEG).toBeLessThan(0.6); // held, not swaying (only the weight shift's hair)
+  });
+});
+
+/**
+ * The head's world yaw (body yaw + the chain's yaws) and pitch (the chain's pitches) each frame:
+ * what a player sees the head do. Reversals: sign changes of the per-frame change (|change| > 1e-4 rad).
+ */
+function headTrace(a: Animator, seconds: number, frame: (t: number) => { yaw?: number; inputs: Partial<AnimatorInputs> }) {
+  const yaws: number[] = [];
+  const pitches: number[] = [];
+  for (let f = 0; f < seconds * 60; f++) {
+    const { yaw = 0, inputs } = frame(f / 60);
+    a.update(1 / 60, { ...still, ...inputs });
+    yaws.push(yaw + ["Hips", "Spine", "Chest", "Neck", "Head"].reduce((s, j) => s + rot(a, j as (typeof HUMAN_JOINTS)[number], 1), 0));
+    pitches.push(["Spine", "Chest", "Neck", "Head"].reduce((s, j) => s + rot(a, j as (typeof HUMAN_JOINTS)[number], 0), 0));
+  }
+  const stat = (v: number[]) => {
+    let maxStep = 0;
+    let reversals = 0;
+    let last = 0;
+    for (let i = 1; i < v.length; i++) {
+      const d = wrapAngle(v[i] - v[i - 1]); // yaw wraps at +-180
+      maxStep = Math.max(maxStep, Math.abs(d));
+      if (Math.abs(d) > 1e-4) {
+        const sgn = Math.sign(d);
+        if (last && sgn !== last) reversals++;
+        last = sgn;
+      }
+    }
+    let acc = 0;
+    let lo = 0;
+    let hi = 0;
+    for (let i = 1; i < v.length; i++) {
+      acc += wrapAngle(v[i] - v[i - 1]);
+      lo = Math.min(lo, acc);
+      hi = Math.max(hi, acc);
+    }
+    return { maxStepDeg: maxStep / DEG, reversals, rangeDeg: (hi - lo) / DEG };
+  };
+  return { yaw: stat(yaws), pitch: stat(pitches) };
+}
+
+describe("animator: no spring in the head (NPCs)", () => {
+  const seeds = Array.from({ length: 12 }, (_, i) => `npc#${i}`);
+
+  it("idle, 4 s windows: at most 1 yaw reversal, small steps; glances every 6-12 s, <= 20 degrees", () => {
+    for (const seed of seeds) {
+      const a = new Animator(seed);
+      run(a, 2, {});
+      for (let w = 0; w < 5; w++) {
+        const t = headTrace(a, 4, () => ({ inputs: {} }));
+        expect(t.yaw.reversals, seed).toBeLessThanOrEqual(1);
+        expect(t.yaw.maxStepDeg, seed).toBeLessThan(0.5);
+        expect(t.yaw.rangeDeg, seed).toBeLessThanOrEqual(2 * TUNE.lookYawDeg + 0.01);
+      }
+      const long = headTrace(a, 120, () => ({ inputs: {} }));
+      expect(long.yaw.reversals, seed).toBeLessThanOrEqual(120 / TUNE.lookEveryS[0] + 1);
+      expect(long.pitch.reversals, seed).toBeLessThanOrEqual(120 / TUNE.lookEveryS[0] + 1); // breathing doesn't reach the head
+    }
+  });
+
+  it("dialogue, the player standing still: yaw doesn't move; pitch only gentle nods (<= 4 reversals in 4 s, <= 1.5 degrees)", () => {
+    for (const seed of seeds)
+      for (const inputs of [{ talking: true }, { listening: true }]) {
+        const a = new Animator(seed);
+        const aim = new FaceAim();
+        let body = 0;
+        const frame = () => {
+          body = a.turn(body, aim.aim(0, 0, 0.4, 1.3), 1 / 60);
+          return { yaw: body, inputs };
+        };
+        headTrace(a, 3, frame); // the scene starts: one turn to the player
+        for (let w = 0; w < 4; w++) {
+          const t = headTrace(a, 4, frame);
+          expect(t.yaw.rangeDeg, seed).toBeLessThan(1e-3);
+          expect(t.yaw.reversals, seed).toBe(0);
+          expect(t.pitch.reversals, seed).toBeLessThanOrEqual(4);
+          expect(t.pitch.rangeDeg, seed).toBeLessThanOrEqual(1.5 + 0.01);
+          expect(t.pitch.maxStepDeg, seed).toBeLessThan(0.15);
+        }
+        expect(aim.aims).toBe(1); // aimed once
+      }
+  });
+
+  it("dialogue, the player walking round the NPC: no yaw reversals, re-aims in steps (dead zone), never a per-frame track", () => {
+    for (const seed of seeds) {
+      const a = new Animator(seed);
+      const aim = new FaceAim();
+      let body = 0;
+      const t = headTrace(a, 8, (s) => {
+        const ang = s * 0.7; // 1.05 m/s on a 1.5 m circle
+        body = a.turn(body, aim.aim(0, 0, Math.sin(ang) * 1.5, Math.cos(ang) * 1.5), 1 / 60);
+        return { yaw: body, inputs: { talking: true } };
+      });
+      expect(t.yaw.reversals, seed).toBe(0);
+      expect(t.yaw.maxStepDeg, seed).toBeLessThan(1.5);
+      expect(aim.aims, seed).toBeGreaterThan(1);
+      expect(aim.aims, seed).toBeLessThan((8 * 0.7) / (TUNE.aimDeadDeg * DEG) + 2); // one per 12 degrees of the player's arc
+    }
+  });
+
+  it("walkers: the head keeps to the body's heading (at most the walk counter-rotation, cancelled)", () => {
+    const a = new Animator("walker#1", "human", DEFAULT_DIMS, true);
+    let body = 0;
+    let worst = 0;
+    run(a, 12, { speed: 1.1, walking: true }, 60, (s) => {
+      body = a.turn(body, s < 4 ? 0 : s < 8 ? 1.5 : -0.5, 1 / 60); // corners in the path
+      const chain = ["Hips", "Spine", "Chest", "Neck", "Head"].reduce((sum, j) => sum + rot(a, j as (typeof HUMAN_JOINTS)[number], 1), 0);
+      worst = Math.max(worst, Math.abs(chain));
+    });
+    expect(worst).toBeLessThan(1e-6);
+    expect(a.headLead).toBe(0);
+    // waiting at the end of the path: no look-around either
+    let idleYaw = 0;
+    run(a, 30, {}, 30, () => (idleYaw = Math.max(idleYaw, Math.abs(["Hips", "Spine", "Chest", "Neck", "Head"].reduce((sum, j) => sum + rot(a, j as (typeof HUMAN_JOINTS)[number], 1), 0)))));
+    expect(idleYaw).toBeLessThan(1e-6);
   });
 });
 
@@ -386,7 +485,7 @@ describe("animator: talk, listen", () => {
 
 const templates = new Map<string, THREE.Object3D>();
 beforeAll(async () => {
-  for (const n of ["player", "kid", "cat", "old_wang"]) {
+  for (const n of ["customer_a", "kid", "cat", "old_wang"]) {
     const g = await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).parseAsync(readGlb(`${ASSETS}/characters/${n}.glb`), "");
     g.scene.animations = g.animations;
     templates.set(n, g.scene);
@@ -398,9 +497,29 @@ const world = (a: CharacterActor, bone: string) => {
   return a.bone(bone)!.getWorldPosition(new THREE.Vector3());
 };
 
+describe("the player keeps its baked clips", () => {
+  it("AssetCache.playerActor: the mixer path, no animator ever constructed; walk / idle clips from speed", async () => {
+    const L = new LayoutIndex(LAYOUT, assetIndex!);
+    const assets = new AssetCache(ASSETS, L, { read: readGlb });
+    const p = await assets.playerActor(LAYOUT.player.character);
+    expect(p.animator).toBeNull();
+    expect(p.mixer).not.toBeNull();
+    expect(p.playing?.getClip().name).toBe("idle");
+    p.update(1 / 60, WALK_SPEED);
+    expect(p.playing?.getClip().name).toBe("walk");
+    p.update(1 / 60, 0);
+    p.talking = true;
+    p.update(1 / 60, 0);
+    expect(p.playing?.getClip().name).toBe("talk");
+    expect(p.animator).toBeNull(); // still: nothing lazily builds one
+    // the same GLB through the NPC path would get the animator: the player path is what keeps it off
+    expect((await assets.actor(LAYOUT.player.character)).animator).not.toBeNull();
+  });
+});
+
 describe("CharacterActor on the real rigs", () => {
   it("humans and pets get the procedural animator; the kid is scaled down", () => {
-    const p = actor("player");
+    const p = actor("customer_a");
     const kid = actor("kid");
     const cat = actor("cat");
     expect(p.animator?.kind).toBe("human");
@@ -409,8 +528,8 @@ describe("CharacterActor on the real rigs", () => {
     expect(p.mixer).toBeNull(); // the baked sway clips aren't played
     expect(p.animated).toBe(true);
     // default seeds differ per instance: two walkers of one GLB aren't in step
-    const w1 = actor("player");
-    const w2 = actor("player");
+    const w1 = actor("customer_a");
+    const w2 = actor("customer_a");
     for (let i = 0; i < 120; i++) {
       w1.update(1 / 60, 0);
       w2.update(1 / 60, 0);
@@ -419,7 +538,7 @@ describe("CharacterActor on the real rigs", () => {
   });
 
   it("the bind is intact: a zero pose is the rest pose", () => {
-    const a = actor("player", "rest");
+    const a = actor("customer_a", "rest");
     const before = HUMAN_JOINTS.map((n) => a.bone(n)!.quaternion.clone());
     a.animator!.rot.fill(0);
     a.animator!.hips.fill(0);
@@ -430,7 +549,7 @@ describe("CharacterActor on the real rigs", () => {
 
   it("walking plants the stance foot: it slips < 3 cm while the body moves over it", () => {
     for (const speed of [1.1, 3.2]) {
-      const a = actor("player", "feet");
+      const a = actor("customer_a", "feet");
       let z = 0;
       let maxSlip = 0;
       let stanceStart: THREE.Vector3 | null = null;
@@ -450,29 +569,29 @@ describe("CharacterActor on the real rigs", () => {
   });
 
   it("reactions and poses land where they should on the rig", () => {
-    const rest = actor("player", "r0");
+    const rest = actor("customer_a", "r0");
     rest.update(1 / 60, 0);
     const hand0 = world(rest, "RightHand");
     const shoulder = world(rest, "RightArm");
     const hips0 = world(rest, "Hips");
 
-    const greet = actor("player", "r1");
+    const greet = actor("customer_a", "r1");
     greet.react("greet");
     for (let i = 0; i < 50; i++) greet.update(1 / 60, 0);
     expect(world(greet, "RightHand").y).toBeGreaterThan(shoulder.y + 0.2); // hand up beside the head
     expect(world(greet, "RightHand").y).toBeGreaterThan(world(greet, "RightForeArm").y + 0.12); // forearm upright
 
-    const reach = actor("player", "r2");
+    const reach = actor("customer_a", "r2");
     reach.react("reach", new THREE.Vector3(-0.5, 0, 2)); // someone in front, to its right
     for (let i = 0; i < 40; i++) reach.update(1 / 60, 0);
     expect(world(reach, "RightHand").z).toBeGreaterThan(hand0.z + 0.25);
 
-    const left = actor("player", "r3");
+    const left = actor("customer_a", "r3");
     left.react("reach", new THREE.Vector3(0.8, 0, 1)); // to its left: the left arm
     for (let i = 0; i < 40; i++) left.update(1 / 60, 0);
     expect(world(left, "LeftHand").z).toBeGreaterThan(world(left, "RightHand").z + 0.2);
 
-    const shrug = actor("player", "r4");
+    const shrug = actor("customer_a", "r4");
     shrug.shrug();
     expect(shrug.shrugging).toBe(true);
     for (let i = 0; i < 30; i++) shrug.update(1 / 60, 0);
@@ -481,14 +600,14 @@ describe("CharacterActor on the real rigs", () => {
     for (let i = 0; i < 60; i++) shrug.update(1 / 60, 0);
     expect(shrug.shrugging).toBe(false);
 
-    const carry = actor("player", "r5");
+    const carry = actor("customer_a", "r5");
     carry.hold(new THREE.Group(), { carry: true });
     for (let i = 0; i < 60; i++) carry.update(1 / 60, 0);
     expect(world(carry, "RightHand").z).toBeGreaterThan(0.18);
     expect(world(carry, "LeftHand").z).toBeGreaterThan(0.18);
     expect(world(carry, "RightHand").y).toBeGreaterThan(hand0.y + 0.15);
 
-    const sit = actor("player", "r6");
+    const sit = actor("customer_a", "r6");
     sit.sitting = true;
     for (let i = 0; i < 90; i++) sit.update(1 / 60, 0);
     const knee = world(sit, "LeftLeg");
@@ -528,7 +647,7 @@ describe("CharacterActor on the real rigs", () => {
   });
 
   it("cost: 10 characters stay under 0.2 ms a frame (1000 updates)", () => {
-    const cast = ["player", "old_wang", "kid", "player", "old_wang", "kid", "player", "old_wang", "kid", "player"].map((n, i) => actor(n, `cost${i}`));
+    const cast = ["customer_a", "old_wang", "kid", "customer_a", "old_wang", "kid", "customer_a", "old_wang", "kid", "customer_a"].map((n, i) => actor(n, `cost${i}`));
     cast.forEach((a, i) => {
       a.talking = i % 3 === 0;
       a.listening = i % 3 === 1;

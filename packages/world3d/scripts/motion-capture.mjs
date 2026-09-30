@@ -1,8 +1,10 @@
 // Character motion contact strips (src/animator.ts): motion needs sequences, not stills. For each
-// shot, 12 frames 80 ms apart, cropped around the characters, composed into one horizontal strip
+// shot, 12 frames of a 4 s window, cropped around the characters, composed into one horizontal strip
 // PNG (the frames laid out in a page and screenshotted by the same headless Chromium: no image
-// library needed). Shots: the player idling, the player walking (WALK_SPEED), a scene with Old Wang
-// (he talks, the player listens), Old Wang's greeting wave and his mix-up shrug.
+// library needed). Shots, NPC motion only (the player keeps its baked clips): Old Wang idle, in
+// dialogue with the player standing still, and in dialogue while the player walks round him; each a
+// 4 s window (12 frames a third of a second apart) with his head's world yaw / pitch / roll traced
+// on every drawn frame (report.json: max change per frame, direction reversals).
 // Same browser setup as scripts/look-capture.mjs (Playwright from PLAYWRIGHT, ANGLE Vulkan).
 // Serves nothing itself: point URL at a served dist/.
 //
@@ -54,9 +56,9 @@ function hold(from, lookAt, seconds) {
  * is a box around these characters' screen boxes (world3d.frameOf), sized on the first frame;
  * `track`: re-centred on them every frame (a moving subject).
  */
-async function frames(name, who, track = false) {
+async function frames(name, who, { track = false, step = STEP_MS, trace = null } = {}) {
   const r = await page.evaluate(
-    ({ who, n, step, track }) =>
+    ({ who, n, step, track, trace }) =>
       new Promise((resolve) => {
         const w3 = window.world3d;
         const boxOf = () => {
@@ -72,9 +74,12 @@ async function frames(name, who, track = false) {
         let size = null;
         const cells = [];
         let t0 = 0;
+        /** every drawn frame: the traced character's head (world yaw / pitch / roll, degrees) */
+        const heads = [];
         w3.afterDraw((canvas) => {
           const now = performance.now();
           if (!t0) t0 = now;
+          if (trace) heads.push({ t: Math.round(now - t0), ...w3.frameOf(trace).head });
           if (cells.length && now - t0 - cells[cells.length - 1].at < step - 4) return;
           const b = boxOf();
           size ??= b;
@@ -91,14 +96,42 @@ async function frames(name, who, track = false) {
           cells.push({ at: Math.round(now - t0), c, anim: cells.length === 0 || cells.length === n - 1 ? w3.anim() : null });
           if (cells.length === n) {
             w3.afterDraw(null);
-            resolve({ size, cells: cells.map((e) => ({ at: e.at, anim: e.anim, url: e.c.toDataURL("image/png") })) });
+            resolve({ size, heads, cells: cells.map((e) => ({ at: e.at, anim: e.anim, url: e.c.toDataURL("image/png") })) });
           }
         });
       }),
-    { who, n: FRAMES, step: STEP_MS, track },
+    { who, n: FRAMES, step, track, trace },
   );
   const shots = r.cells.map((c) => ({ at: c.at, anim: c.anim, buf: Buffer.from(c.url.split(",")[1], "base64") }));
-  return { name, shots, clip: { width: Math.round(r.size.width), height: Math.round(r.size.height) } };
+  return { name, shots, heads: r.heads, clip: { width: Math.round(r.size.width), height: Math.round(r.size.height) } };
+}
+
+/** A head trace's per-frame stats: the largest change in one drawn frame and the direction reversals (changes under `eps` degrees are noise). */
+function headStats(heads, eps = 0.005) {
+  const out = { frames: heads.length };
+  for (const k of ["yaw", "pitch", "roll"]) {
+    let maxStep = 0;
+    let reversals = 0;
+    let last = 0;
+    let acc = 0;
+    let lo = 0;
+    let hi = 0;
+    for (let i = 1; i < heads.length; i++) {
+      let d = heads[i][k] - heads[i - 1][k];
+      if (k === "yaw") d = ((d + 540) % 360) - 180;
+      acc += d;
+      lo = Math.min(lo, acc);
+      hi = Math.max(hi, acc);
+      maxStep = Math.max(maxStep, Math.abs(d));
+      if (Math.abs(d) > eps) {
+        const sg = Math.sign(d);
+        if (last && sg !== last) reversals++;
+        last = sg;
+      }
+    }
+    out[k] = { maxStepDeg: +maxStep.toFixed(3), reversals, rangeDeg: +(hi - lo).toFixed(3) };
+  }
+  return out;
 }
 
 /** The frames side by side on a page of their own, screenshotted: the strip PNG. */
@@ -125,66 +158,62 @@ async function strip({ name, shots, clip }, title) {
 const report = [];
 async function shot(name, title, who, setup, opts = {}) {
   const r = await setup();
-  const f = await frames(name, who, opts.track);
+  const f = await frames(name, who, opts);
   const file = await strip(f, title);
-  report.push({ file, first: f.shots[0].anim, last: f.shots[FRAMES - 1].anim, timesMs: f.shots.map((s) => s.at) });
-  console.log(`${file}: ${f.shots.map((s) => s.at).join(",")} ms`);
+  const head = opts.trace ? headStats(f.heads) : null;
+  report.push({ file, first: f.shots[0].anim, last: f.shots[FRAMES - 1].anim, timesMs: f.shots.map((s) => s.at), head, headTrace: opts.trace ? f.heads : undefined });
+  console.log(`${file}: ${f.shots.map((s) => s.at).join(",")} ms${head ? `\n  head (${opts.trace}, ${head.frames} frames): ${JSON.stringify({ yaw: head.yaw, pitch: head.pitch, roll: head.roll })}` : ""}`);
   await r?.done;
 }
 
-// 1. idle: the player stands; a camera in front of it
-await shot("01-idle-player", "Player idle: breathing, weight shift, look-around (12 frames, 80 ms)", ["player"], async () => {
-  await page.evaluate(([x, z]) => window.world3d.teleport(x, z), SPOT);
-  await sleep(2500);
-  const f = await frameOf("player");
-  const [x, y, z] = f.at;
-  const a = f.yaw + 0.45;
-  console.log(`idle: player at ${f.at.map((v) => v.toFixed(2))} yaw ${f.yaw.toFixed(2)}`);
-  const done = hold([x + Math.sin(a) * 3.4, y + 1.4, z + Math.cos(a) * 3.4], [x, y + 0.9, z], 5);
+/** a camera beside Old Wang's stand (he faces +x, town.json facing [0.986, 0, -0.164]; the talk stand is 1.2 m in front of him): both in profile */
+const wangCam = () => hold([WANG[0] + 0.9, 1.5, WANG[1] + 4.4], [WANG[0] + 0.7, 0.9, WANG[1]], 6);
+/** 4 s windows: 12 frames a third of a second apart; the head traced on every drawn frame */
+const WINDOW = { step: 4000 / FRAMES, trace: "wang" };
+
+// (a) Old Wang idle: the player out of his face range (3 m, kept to 3.5 m)
+await shot("01-wang-idle", "Old Wang idle, 4 s (12 frames, 333 ms): breathing and weight shift; a glance at most every 6-12 s", ["wang"], async () => {
+  await page.evaluate(([x, z]) => window.world3d.teleport(x, z), [WANG[0] + 6, WANG[1] + 5]);
+  await sleep(4000);
+  const done = wangCam();
   await sleep(900);
   return { done };
-});
+}, WINDOW);
 
-// 2. walking: the player walks past a camera beside the path
-await shot("02-walk-player", "Player walking (WALK_SPEED 3.2 m/s): leg swing + knee bend, arm counter-swing, bob, lean, steady head", ["player"], async () => {
-  await page.evaluate(([x, z]) => window.world3d.teleport(x, z), [SPOT[0] - 4, SPOT[1] + 1]);
-  await sleep(1200);
-  const f = await frameOf("player");
-  const [x, y, z] = f.at;
-  const done = hold([x + 4.5, y + 1.3, z + 5.5], [x + 4.5, y + 0.9, z], 5);
-  await sleep(700);
-  await page.evaluate(([x2, z2]) => window.world3d.walkTo(x2, z2), [x + 12, z]);
-  await sleep(1100);
-  return { done };
-}, { track: true });
-
-// 3. a scene with Old Wang: he talks, the player listens
-await shot("03-talk-wang", "Talking to Old Wang: he nods on the syllables and gestures; the player listens (tilt, slow nods)", ["player", "wang"], async () => {
+// (b) in dialogue, the player standing at the talk stand
+await shot("02-wang-dialogue-still", "Old Wang in dialogue, the player standing still, 4 s: aimed once, small nods only", ["wang"], async () => {
   await page.evaluate(([x, z]) => window.world3d.teleport(x, z), [WANG[0] + 2.2, WANG[1] + 0.4]);
   await sleep(1500);
   await page.evaluate(() => window.world3d.talk("wang"));
-  await page.waitForFunction(() => window.world3d.anim().npcs.wang?.state === "talk", null, { timeout: 30000 });
-  await sleep(1200);
-  const done = hold([WANG[0] + 0.6, 1.5, WANG[1] + 4.6], [WANG[0] + 0.6, 0.9, WANG[1]], 4);
-  await sleep(700);
+  await page.waitForFunction(() => !!window.world3d.model()?.scene, null, { timeout: 30000 });
+  await sleep(3500); // the walk to the stand and the scene-start greeting are over
+  const done = wangCam();
+  await sleep(900);
   return { done };
-});
+}, WINDOW);
 
-// 4. reactions (the scene still open: he faces the player): the greeting wave, then the mix-up shrug
-await shot("04-react-greet", "Old Wang greets: hand up, waving (his right hand holds the fan: the left waves; from +250 ms into the 2 s reaction)", ["wang"], async () => {
-  const done = hold([WANG[0] + 1.6, 1.5, WANG[1] - 3.2], [WANG[0], 1.0, WANG[1]], 4);
+// (c) still in the scene, the player walks round him (scripted walks: the scene locks input)
+await shot("03-wang-dialogue-player-walks", "Old Wang in dialogue while the player walks round him, 4 s: re-aims past a 0.6 m / 12 degree dead zone, one smooth turn each", ["wang", "player"], async () => {
+  const done = hold([WANG[0] + 4.2, 2.2, WANG[1] + 3.0], [WANG[0], 0.9, WANG[1]], 7);
   await sleep(900);
-  await page.evaluate(() => window.world3d.react("wang", "greet"));
-  await sleep(250);
+  void page.evaluate(async ([cx, cz]) => {
+    const w3 = window.world3d;
+    for (let k = 0; k < 14; k++) {
+      const a = 0.25 + k * 0.45; // round his front, 1.7 m out
+      w3.walkTo(cx + Math.cos(a) * 1.7, cz + Math.sin(a) * 1.7, true);
+      const t0 = performance.now();
+      await new Promise((r) => setTimeout(r, 80));
+      while (performance.now() - t0 < 1500) {
+        const [x, , z] = w3.player();
+        if (Math.hypot(x - (cx + Math.cos(a) * 1.7), z - (cz + Math.sin(a) * 1.7)) < 0.12) break;
+        await new Promise((r) => setTimeout(r, 40));
+      }
+      await new Promise((r) => setTimeout(r, 250));
+    }
+  }, WANG);
+  await sleep(400);
   return { done };
-});
-await shot("05-react-confused", "Old Wang, a mix-up: shoulders up, palms out, head tilt", ["wang"], async () => {
-  const done = hold([WANG[0] + 1.3, 1.5, WANG[1] + 2.8], [WANG[0], 1.0, WANG[1]], 3.5);
-  await sleep(900);
-  await page.evaluate(() => window.world3d.react("wang", "confused"));
-  await sleep(100);
-  return { done };
-});
+}, WINDOW);
 
 writeFileSync(join(out, "report.json"), JSON.stringify({ url: URL_, errors, shots: report }, null, 2));
 console.log(`${errors.length} console errors${errors.length ? `:\n${errors.join("\n")}` : ""}`);

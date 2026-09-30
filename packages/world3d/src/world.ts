@@ -538,9 +538,14 @@ export class AssetCache {
     await Promise.all(names.map((n) => this.template(n).then(() => onProgress?.(++done, names.length))));
   }
 
-  /** A new animated character. */
-  async actor(name: string): Promise<CharacterActor> {
-    return new CharacterActor(await this.instance(name), this.actorOptions(name));
+  /** A new animated character (NPCs, walkers, pets: the procedural animator). */
+  async actor(name: string, extra: Partial<ActorOptions> = {}): Promise<CharacterActor> {
+    return new CharacterActor(await this.instance(name), { ...this.actorOptions(name), ...extra });
+  }
+
+  /** The player: its baked clips on the mixer, never the procedural animator. */
+  playerActor(name: string): Promise<CharacterActor> {
+    return this.actor(name, { procedural: false });
   }
 }
 
@@ -1094,9 +1099,9 @@ export class SceneSpace {
   }
 
   /** a new actor (as inst) */
-  private async actorOf(name: string): Promise<CharacterActor> {
+  private async actorOf(name: string, extra: Partial<ActorOptions> = {}): Promise<CharacterActor> {
     if (this.gate) await this.gate.wait(this.assets.template(name));
-    return this.assets.actor(name);
+    return this.assets.actor(name, extra);
   }
 
   /**
@@ -1421,7 +1426,7 @@ export class SceneSpace {
       });
     layout.walkers.forEach((w, i) =>
       jobs.push(async () => {
-        const a = await this.actorOf(w.character);
+        const a = await this.actorOf(w.character, { fixedHead: true }); // the head keeps to the heading
         await this.holdProp(a, w.heldProp);
         const motion = new WalkerMotion(w.path, w.speed);
         a.root.position.set(motion.x, L.heightAt(this.id, motion.x, motion.z), motion.z);
@@ -1441,7 +1446,7 @@ export class SceneSpace {
       const id = scatter ? figureId("scatter", scatterSlot++) : figureId("extra", extraSlot++);
       const small = e.kind === "pet";
       jobs.push(async () => {
-        const a = await this.actorOf(d.asset);
+        const a = await this.actorOf(d.asset, scatter ? { fixedHead: true } : {});
         this.place(a.root, d);
         scene.add(a.root);
         if (scatter) {
@@ -1736,8 +1741,9 @@ export class SceneSpace {
       const d = Math.hypot(dx, dz);
       // hysteresis: a player lingering at the edge doesn't flip the NPC to and fro
       v.looking = v.npc === sceneNpc || d <= FACE_RANGE + (v.looking ? FACE_HYSTERESIS : 0);
-      const yaw = v.looking && d > 1e-3 ? Math.atan2(dx, dz) : v.homeYaw;
-      v.actor.face(yaw, dt, NPC_TURN_RATE);
+      // aimed once, re-aimed only past a dead zone (CharacterActor.facePoint): never a continuous track
+      if (v.looking && d > 1e-3) v.actor.facePoint(player.x, player.z, dt, NPC_TURN_RATE);
+      else v.actor.face(v.homeYaw, dt, NPC_TURN_RATE);
       v.actor.update(dt, 0);
     }
     for (const w of this.walkers) {
