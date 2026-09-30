@@ -113,6 +113,20 @@ export interface InteractableSpec {
  * buildings and tiles. Its own places' zones and doors (`places.<p>.space`) go in it like Main
  * Street's; the way out (the open front edge, or `exitBox`) leads back to the space its door is in.
  */
+/** Interior-only scenery. Dimensions are metres; the shell's open front is z=0. */
+export interface InteriorBackdropSpec {
+  ground: string;
+  cut: string;
+  sky: { day: string; horizon: string; night: string };
+  lamp: Vec3;
+  opening: Vec3;
+}
+export interface InteriorBackdropLayout extends InteriorBackdropSpec {
+  size: Vec2;
+  cutSides: string[];
+  silhouettes: { kind: "facade" | "tree" | "lantern"; asset: string; size: Vec3 }[];
+}
+
 export interface InteriorLayout {
   /** the core place this space shows (its default place) */
   place: string;
@@ -143,6 +157,7 @@ export interface InteriorLayout {
   interactables: InteractableSpec[];
   camera?: { distance?: number };
   background?: string;
+  backdrop?: InteriorBackdropSpec;
 }
 export interface WalkerLayout {
   character: string;
@@ -263,6 +278,7 @@ export interface AssetEntry {
   /** rigged characters: metres covered by one loop of the walk clip */
   rig?: { stride_m?: number };
   wall_piece?: boolean;
+  hideable_walls?: { side: string; name: string }[];
   /** the file's size as shipped (build: scripts/used-assets.mjs), for the loading screen */
   bytes?: number;
 }
@@ -332,6 +348,7 @@ export interface SpaceLayout {
   npcs: string[];
   camera: { distance?: number };
   background?: string;
+  backdrop?: InteriorBackdropLayout;
   interior: boolean;
 }
 
@@ -754,7 +771,34 @@ export class LayoutIndex {
       npcs: this.npcsIn(id),
       camera: i.camera ?? {},
       background: i.background,
+      backdrop: i.outdoor ? undefined : this.interiorBackdrop(id, i, [W, D]),
       interior: !i.outdoor,
+    };
+  }
+
+  private interiorBackdrop(id: string, i: InteriorLayout, size: Vec2): InteriorBackdropLayout {
+    // The shells intentionally omit their separate hideable wall GLBs in interiorPieces().
+    // Record those same cuts here; box-built rooms use the same open front / right convention.
+    const cutSides = ["+z", ...(i.shell ? (this.asset(i.shell.asset).hideable_walls ?? []).map((w) => w.side) : ["+x"])];
+    let outer = this.outerSpace(id);
+    while (outer && outer !== STREET && !this.interior(outer).outdoor) outer = this.outerSpace(outer);
+    const source = outer === STREET || !outer
+      ? [...this.layout.town.buildings, ...this.layout.town.dressing]
+      : [...(this.interior(outer).buildings ?? []), ...this.interior(outer).dressing];
+    const kinds = ["facade", "tree", "lantern"] as const;
+    const patterns = [/filler_|tea_house|supermarket|rented_room|noodle_shop/, /tree|willow|bamboo/, /lantern/];
+    const silhouettes = kinds.flatMap((kind, n) => {
+      const candidates = source.filter((p) => patterns[n].test(p.asset));
+      // Prefer a street-sized tree, not the town landmark canopy. Preserve authored metres.
+      if (kind === "tree") candidates.sort((a, b) => this.asset(a.asset).size_m[1] - this.asset(b.asset).size_m[1]);
+      const item = candidates[0];
+      return item ? [{ kind, asset: item.asset, size: this.asset(item.asset).size_m }] : [];
+    });
+    return {
+      ground: "#B8AD98", cut: "#E5D6BA",
+      sky: { day: i.background ?? "#9CBBD0", horizon: "#E3D5BB", night: "#152942" },
+      lamp: [0, 2.3, -size[1] / 2], opening: [0, 2.1, 0],
+      ...i.backdrop, size, cutSides, silhouettes,
     };
   }
 

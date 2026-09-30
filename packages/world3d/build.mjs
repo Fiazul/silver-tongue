@@ -28,7 +28,8 @@
 // Assets come from the vendored packages/world3d/assets (refreshed from the make-it-in-china
 // library by `npm run assets:sync`); WORLD3D_ASSETS overrides it (any library dir with index.json).
 import { build, context } from "esbuild";
-import { execSync } from "node:child_process";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { cpSync, copyFileSync, existsSync, rmSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -53,17 +54,19 @@ const dist = join(here, "dist");
  * __ST_BUILD__, src/version.ts) and into index.html (writeHtml: data-version on <html>, the tag on
  * the static loading card), so a build can be told apart before any JS runs.
  */
-function buildVersion() {
+async function buildVersion() {
   if (dev) return { tag: "dev", full: "dev" };
   const pkg = JSON.parse(readFileSync(join(repo, "packages", "tui-node", "package.json"), "utf8")).version;
-  const sha = execSync("git rev-parse --short=7 HEAD", { cwd: repo, encoding: "utf8" }).trim();
-  const dirty = execSync("git status --porcelain -- packages/world3d", { cwd: repo, encoding: "utf8" }).trim() !== "";
+  const git = async (args) => (await promisify(execFile)("git", args, { cwd: repo, encoding: "utf8" })).stdout.trim();
+  const sha = await git(["rev-parse", "--short=7", "HEAD"]);
+  const dirty = (await git(["status", "--porcelain", "--", "packages/world3d"])) !== "";
   const tag = `v${pkg}${dirty ? "+" : ""}`;
   return { tag, full: `${tag} · ${sha} · ${new Date().toISOString().slice(0, 16).replace("T", " ")}` };
 }
-const version = buildVersion();
+const version = await buildVersion();
 
-const coursesSrc = join(repo, "dist", "courses");
+// Worktrees can reuse an existing course build without writing outside this package.
+const coursesSrc = process.env.WORLD3D_COURSES ?? join(repo, "dist", "courses");
 if (!existsSync(join(coursesSrc, "index.json"))) throw new Error(`no ${join(coursesSrc, "index.json")}: run npm run build:course first`);
 const bundleAudio = dev || process.env.WORLD3D_AUDIO === "bundle";
 const audioRoot = bundleAudio ? "" : "../";

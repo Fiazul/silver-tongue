@@ -735,9 +735,79 @@ never touched.
 ## Real look (`?look=real`; the Full / Lite graphics tiers)
 
 Lighting and post over the scene in place of the toon look. It ships as the default on capable
-devices (see "Graphics tiers" below); the toon look is the Classic tier, unchanged: every change is
+devices (see "Graphics tiers" below); the toon look is the Classic tier. Real-look features are
 gated on `LOOK.real` (`src/look.ts`), and the composer lives in its own chunk (`src/reallook.ts`)
-that is never fetched at Classic.
+that is never fetched at Classic. The shared interior backdrop below also appears in Classic;
+its street rendering is unchanged.
+
+### Interior backdrop
+
+Every indoor `SpaceLayout` uses `src/interior-backdrop.ts`, in Classic, Full and Lite.
+The street and outdoor side streets do not build it. A 160 m ground plane sits just
+below the floor slab; fog starts at 18 m and finishes at 58 m, before the ground edge.
+A shared, deterministic 128² canvas paving texture repeats at human scale, with subtle
+mortar and dirt variation. Contact darkening fades out over roughly half a metre from
+the slab edge in the same ground shader: no extra draw or shadow pass. A 0.82 m planter
+and 0.45 m stool sit outside the open sides, clear of the floor and exit. Each prop's
+coloured parts are merged into one mesh (two additional colour-pass draws total).
+A low cut sill follows the open front (with an entrance gap) and the shell's omitted
+`hideable_walls` footprints. This preserves the existing omission of the separate wall
+GLBs. `shop` and `stairs` use ground boxes, not shell assets; their front/right cuts use
+the same code. Nothing in the backdrop participates in walking, picking or wall fading.
+
+A vertical sky gradient and three coarse silhouettes provide the exterior: facade,
+tree and lantern. The silhouettes use names and dimensions from the outer street's
+assets, with simple geometry rather than additional GLB downloads. Every silhouette's
+complete bounds sit at least 6 m beyond both the back and left shell edges, away from
+the south-east camera. The tree uses the street's smaller willow at authored scale
+(about 4 m tall), not the landmark tree. Bounds tests cover all five rooms, both gameplay
+camera elevations and capture poses, including exclusion from the frame's bottom third.
+Nested rooms find
+the enclosing street through their way out. Full/Lite add a soft, additive opening
+shaft and one warm point light without shadows; Classic uses the existing sun and
+hemisphere lights. The exterior becomes dark blue toward evening while the room stays
+warm. The real-look environment map receives the interior sky palette too.
+Doors remain closed. Opaque `pi_glass` panes on indoor shells and window grille panels
+receive a daylight sky-gradient material, so the steep camera sees blue sky in the room
+window rather than beige ground. This is a stylized sky view on the existing glazing,
+not a portal or a change to wall geometry; frames and grille bars are preserved.
+Street glass materials are unchanged.
+
+Each `interiors.<id>.backdrop` in `src/layout.json` can override:
+
+- `ground`: paving/dirt colour (corridor floor colour for stairs).
+- `cut`: lighter sill colour.
+- `sky`: `day`, `horizon`, `night` colours. Without a `sky` override, `background`
+  supplies the daytime upper sky, rather than a flat background behind the floor.
+- `lamp`: local `[x,y,z]` point-light position.
+- `opening`: local `[x,y,z]` top of the light shaft.
+
+Shell dimensions and omitted wall sides come from the asset index; box rooms use
+`size`. Tests build all five real scenes and check ground, cuts, Classic guards,
+lighting and the geometry budget. The current unculled colour-pass estimate is
+**14 calls / 662 triangles in Classic**, **15 calls / 664 triangles in Full and Lite**
+per room, below the 30-call / 30k-triangle ceiling. No new shadow casters or shadow
+maps are added. Full/Lite's existing AO adds up to 13 calls / 438 triangles (28 / 1102 total);
+the sky and shaft are excluded from AO. Existing postprocessing still applies;
+these counts are not a GPU-time measurement. The Vega 11 targets (Classic ≤0.5 ms,
+Full ≤1.5 ms at 1080p) still require browser measurement.
+
+Capture 15 fixed-camera shots (Classic midday, Full midday, Full evening per room):
+
+```sh
+cd packages/world3d
+# In a worktree without dist/courses, reuse an existing course build:
+WORLD3D_COURSES=/path/to/existing/dist/courses npm run build
+python3 -m http.server 8190 -d dist
+# In another terminal, from packages/world3d:
+SET=interiors CHROME=/usr/bin/google-chrome URL=http://127.0.0.1:8190/ W=1920 H=1080 REPORT=shots/interiors/report.json node scripts/look-capture.mjs shots/interiors
+```
+
+Files are `<interior>-<tier>-<time>.png`. The script waits for the actual rendered
+space and transition to settle, logs scene draw counts, collects console/page errors
+and exits nonzero if errors occurred. Browser validation is separate from the unit
+geometry estimate. `WORLD3D_COURSES` is optional; the default remains the repository's
+`dist/courses`. Build stamping uses asynchronous Git calls without a shell.
 
 ### Graphics tiers
 
@@ -859,7 +929,7 @@ The town's layers build under the loading screen (Graphics tiers above): ~0.4-0.
 textures, leaf sampling; `world3d.look().envTimings`) on a first visit; a repeat visit of the same
 build takes the generated textures, the leaf card and the town's field from IndexedDB
 (`src/envcache.ts`, keyed by the build stamp, other builds' entries dropped; never under `dev`):
-~40-100 ms. An interior's (bloom / grade only) builds on its first render. Shots: `SET=env` in `scripts/look-capture.mjs` (10-14, `see-env-env.png`; per-layer
+~40-100 ms. An interior's postprocessing (bloom / grade only) builds on its first render; its backdrop is built by SceneSpace. Shots: `SET=env` in `scripts/look-capture.mjs` (10-14, `see-env-env.png`; per-layer
 spot checks and frame times via `LAYERS_OUT` / `REPORT`). Frame time (2026-09-30, Vega 11,
 1280x720, rAF mean over 3 s at the noodle shop, midday): none 17.5 ms, all 21.8 ms (20.5 morning,
 19.8 evening); alone: ground 17.9, grass 18.1, leaves 17.1, sky 17.4, bloom 18.3, grade 17.1,

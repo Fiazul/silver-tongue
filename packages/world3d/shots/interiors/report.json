@@ -1,0 +1,94 @@
+{
+ "interiors": [
+  {
+   "file": "noodle_shop-classic-midday.png",
+   "calls": 43,
+   "triangles": 43706,
+   "errors": []
+  },
+  {
+   "file": "noodle_shop-full-midday.png",
+   "calls": 1,
+   "triangles": 1,
+   "errors": []
+  },
+  {
+   "file": "noodle_shop-full-evening.png",
+   "calls": 1,
+   "triangles": 1,
+   "errors": []
+  },
+  {
+   "file": "room-classic-midday.png",
+   "calls": 39,
+   "triangles": 27874,
+   "errors": []
+  },
+  {
+   "file": "room-full-midday.png",
+   "calls": 1,
+   "triangles": 1,
+   "errors": []
+  },
+  {
+   "file": "room-full-evening.png",
+   "calls": 1,
+   "triangles": 1,
+   "errors": []
+  },
+  {
+   "file": "tea_house-classic-midday.png",
+   "calls": 34,
+   "triangles": 38318,
+   "errors": []
+  },
+  {
+   "file": "tea_house-full-midday.png",
+   "calls": 1,
+   "triangles": 1,
+   "errors": []
+  },
+  {
+   "file": "tea_house-full-evening.png",
+   "calls": 1,
+   "triangles": 1,
+   "errors": []
+  },
+  {
+   "file": "shop-classic-midday.png",
+   "calls": 52,
+   "triangles": 43646,
+   "errors": []
+  },
+  {
+   "file": "shop-full-midday.png",
+   "calls": 1,
+   "triangles": 1,
+   "errors": []
+  },
+  {
+   "file": "shop-full-evening.png",
+   "calls": 1,
+   "triangles": 1,
+   "errors": []
+  },
+  {
+   "file": "stairs-classic-midday.png",
+   "calls": 38,
+   "triangles": 25330,
+   "errors": []
+  },
+  {
+   "file": "stairs-full-midday.png",
+   "calls": 1,
+   "triangles": 1,
+   "errors": []
+  },
+  {
+   "file": "stairs-full-evening.png",
+   "calls": 1,
+   "triangles": 1,
+   "errors": []
+  }
+ ]
+}

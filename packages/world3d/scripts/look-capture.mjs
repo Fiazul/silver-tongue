@@ -11,7 +11,7 @@
 //
 // Each shot: `?promo=1` (no start flow, no fly-over), HUD off (world3d.promo("hud", false)),
 // teleport to SPOT, set the daylight, wait for the follow camera to settle, screenshot the page.
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const PW = process.env.PLAYWRIGHT ?? "/home/fiazul/Desktop/chinese_immi/node_modules/playwright/index.mjs";
@@ -96,7 +96,7 @@ const shots =
         { file: "04-toon-evening.png", v: "toon", day: 1 },
         { file: "05-real-evening.png", v: "real", day: 1 },
       ];
-const tiersSet = SET === "tiers" || SET === "timing";
+const tiersSet = SET === "tiers" || SET === "timing" || SET === "interiors";
 const args = (process.env.CHROME_ARGS ?? "--use-angle=vulkan --enable-features=Vulkan --enable-gpu --ignore-gpu-blocklist --disable-gpu-vsync --disable-frame-rate-limit").split(" ").filter(Boolean);
 // CHROME=/usr/bin/google-chrome: a browser of its own when Playwright's download isn't there
 const browser = await chromium.launch({ headless: true, args, ...(process.env.CHROME ? { executablePath: process.env.CHROME } : {}) });
@@ -272,6 +272,41 @@ if (SET === "tiers") {
     await ctx.close();
   }
   report.timing = runs;
+}
+// SET=interiors: fixed dollhouse views, one fresh page per shot so held cameras never leak.
+// These are capture poses only: gameplay cameras and spawn positions are unchanged.
+if (SET === "interiors") {
+  const layout = JSON.parse(readFileSync(new URL("../src/layout.json", import.meta.url), "utf8"));
+  const cameras = {
+    noodle_shop: { from: [9, 7, 10], lookAt: [0, 0.8, -2] },
+    room: { from: [6, 5, 7], lookAt: [0, 0.8, -1.5] },
+    shop: { from: [9, 7, 10], lookAt: [0, 0.8, -2] },
+    stairs: { from: [6, 5, 7], lookAt: [0, 0.8, -1.5] },
+    tea_house: { from: [9, 7, 10], lookAt: [0, 0.8, -2] },
+  };
+  report.interiors = [];
+  for (const [id, interior] of Object.entries(layout.interiors).filter(([, i]) => !i.outdoor)) {
+    if (!cameras[id]) throw new Error(`Missing interior capture camera: ${id}`);
+    for (const [tier, time, day] of [["classic", "midday", 1 / 3], ["full", "midday", 1 / 3], ["full", "evening", 1]]) {
+      const page = await browser.newPage({ viewport: { width: W, height: H } });
+      const errors = errorsOf(page);
+      await page.goto(`${URL_}?promo=1&look=${tier}`);
+      await page.waitForFunction(() => window.world3d?.model?.() && document.querySelector("#loading")?.hidden, null, { timeout: 120000 });
+      await page.evaluate((place) => window.world3d.teleport(place), interior.place);
+      await page.waitForFunction((space) => window.world3d.info().space === space && !window.world3d.info().transitioning && document.querySelector("#loading")?.hidden, id, { timeout: 120000 });
+      await page.waitForTimeout(4000); // asset load / fade-through and streamed characters
+      await page.evaluate((d) => { window.world3d.promo("hud", false); window.world3d.setDaylight(d); }, day);
+      await page.evaluate((c) => { void window.world3d.promo("dolly", { ...c, to: c.from, seconds: 600 }); }, cameras[id]);
+      await page.waitForTimeout(1500);
+      const file = `${id}-${tier}-${time}.png`;
+      await page.screenshot({ path: join(out, file) });
+      const info = await page.evaluate(() => window.world3d.info());
+      report.interiors.push({ file, calls: info.calls, triangles: info.triangles, errors });
+      console.log(`${file}: ${info.calls} calls, ${info.triangles} triangles, ${errors.length} errors`);
+      await page.close();
+    }
+  }
+  if (report.interiors.some((s) => s.errors.length)) process.exitCode = 1;
 }
 for (const v of variants.filter((v) => !tiersSet && (!only || only.includes(v.name)) && shots.some((s) => s.v === v.name))) {
   const page = await browser.newPage({ viewport: { width: W, height: H } });

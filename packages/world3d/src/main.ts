@@ -1604,7 +1604,7 @@ async function main() {
       /** accepted goTo inputs in core's log (a place-trigger thrash shows as a burst here) */
       goToCount: () => game?.core.state.log.filter((l) => l.input.type === "goTo").length ?? 0,
       /** last frame's draw calls (frustum-culled) and the space's static batching: draw calls before / after merging, unculled */
-      info: () => ({ calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, batching: { ...space.batching, now: drawCalls(space.scene) }, pixelRatio: renderer.getPixelRatio(), seeThroughPass: { sampleMs: +seeDetector.lastSampleMs.toFixed(2), readMs: +seeDetector.lastReadMs.toFixed(2), bytesPerFocus: SEE_THROUGH.sampleSize ** 2 * 4 }, cutscene: flyover ? { t: flyover.path.t, duration: flyover.path.duration } : null, cutsceneState: flyoverState }),
+      info: () => ({ space: space.id, transitioning, calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, batching: { ...space.batching, now: drawCalls(space.scene) }, pixelRatio: renderer.getPixelRatio(), seeThroughPass: { sampleMs: +seeDetector.lastSampleMs.toFixed(2), readMs: +seeDetector.lastReadMs.toFixed(2), bytesPerFocus: SEE_THROUGH.sampleSize ** 2 * 4 }, cutscene: flyover ? { t: flyover.path.t, duration: flyover.path.duration } : null, cutsceneState: flyoverState }),
       /** touch input: the last joystick vector, pointers down, whether the stick is out; the layout in use */
       touch: () => ({ ...pointers!.debug(), touchUi: overlay.touch, layout: overlay.screen }),
       /** sound: unlocked, muted, music volume, the switches, the music bed and ambient gains wanted now */

@@ -378,7 +378,18 @@ export function createRealLook(renderer: THREE.WebGLRenderer, seeThrough: (m: TH
   const tStart = performance.now();
   const lerp3 = (out: THREE.Vector3, a: number[], b: number[], t: number) => out.set(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t);
 
+  const interiorAirRegistered = new WeakSet<THREE.Scene>();
   function envFor(scene: THREE.Scene): EnvScene | undefined {
+    // A shaft/sky has no solid surface: exclude it from AO even with &env= (no layers).
+    if (!interiorAirRegistered.has(scene)) {
+      scene.traverse((o) => {
+        const mesh = o as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material])
+          if (material.userData.interiorBackdropAir) aoHidden.push(material);
+      });
+      interiorAirRegistered.add(scene);
+    }
     if (!layers.size || !scene.userData.lookSky) return undefined;
     let e = envScenes.get(scene);
     if (!e) {

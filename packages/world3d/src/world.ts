@@ -3,6 +3,7 @@
 // one anchor helper, with blockers, picking, street life and the time-of-day light. The town adds
 // its landscape (at the origin), the sky dome, the sun from town.json and a far haze.
 import * as THREE from "three";
+import { buildInteriorBackdrop } from "./interior-backdrop";
 import type { GLTF, GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { mergeGeometries, mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
@@ -659,6 +660,7 @@ export class SceneSpace {
   /** the town's sky dome materials and their own colours (tinted through the day), and the haze colour it starts from */
   private sky: { mat: THREE.MeshBasicMaterial; base: THREE.Color }[] = [];
   private horizon?: THREE.Color;
+  private backdrop?: ReturnType<typeof buildInteriorBackdrop>;
   /** static roots that can block a focus, with baked ids */
   readonly occluders: Occluder[] = [];
   /** static batching (mergeStatic): draw calls before / after, meshes merged away */
@@ -713,7 +715,7 @@ export class SceneSpace {
     const { L, scene, layout } = this;
     scene.background = this.background.clone();
     const town = layout.town;
-    // A soft depth fog outdoors only (interiors are enclosed, small; no far plane to fade into):
+    // Outdoor depth fog; the shared interior backdrop supplies its own shorter haze:
     // cheap (no shadow maps, just a colour that lerps with the sky in setDaylight) atmospheric depth.
     // The town's is a far haze (town.json fog): clear over the 140 m plateau, a veil on the mountains.
     if (!layout.interior) scene.fog = town ? new THREE.Fog(this.background.clone(), town.fog.near, town.fog.far) : new THREE.Fog(this.background.clone(), 26, 90);
@@ -745,6 +747,7 @@ export class SceneSpace {
       scene.add(floor);
       statics.push(floor);
     }
+    this.backdrop = buildInteriorBackdrop(scene, layout, LOOK.real, (colour) => this.assets.toon.flat(colour));
     for (const g of layout.ground) {
       const size = [0, 1, 2].map((i) => g.max[i] - g.min[i]);
       const box = new THREE.Mesh(new THREE.BoxGeometry(size[0], size[1], size[2]), this.assets.toon.flat(g.colour));
@@ -768,6 +771,7 @@ export class SceneSpace {
       const o = await this.assets.instance(b.asset);
       this.place(o, b);
       o.name = b.id;
+      this.backdrop?.dressWindows(o);
       o.userData.see = this.seeSpec(o, b.id, b.asset);
       scene.add(o);
       statics.push(o);
@@ -781,6 +785,7 @@ export class SceneSpace {
       if (e.set === "characters" && CHARACTER_KINDS.has(e.kind ?? "")) continue;
       const o = await this.assets.instance(d.asset);
       this.place(o, d);
+      this.backdrop?.dressWindows(o);
       // hung on a building (port-town.mjs HUNG): fades with it, one object, never on its own
       const host = d.mounted ? (scene.getObjectByName(d.mounted)?.userData.see as SeeSpec | undefined) : undefined;
       o.userData.see = host ? { ...host } : this.seeSpec(o, d.asset, d.asset);
@@ -845,7 +850,7 @@ export class SceneSpace {
     // the dome's darker colour is its zenith (hazeColour picked the lighter for the horizon)
     const lum = (c: THREE.Color) => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
     const top = this.sky.reduce<THREE.Color | null>((a, x) => (!a || lum(x.mat.color) < lum(a) ? x.mat.color : a), null);
-    k.zenith.copy(top ?? bg);
+    k.zenith.copy(this.backdrop?.top ?? top ?? bg);
     k.ground.copy(this.hemi.groundColor);
     k.sun.copy(this.sunDir);
     k.sunColor.copy(this.sun.color).multiplyScalar(this.sun.intensity);
@@ -1212,11 +1217,11 @@ export class SceneSpace {
    * Time of day, 0 (morning) .. 1 (evening): steps the hemisphere sky/ground, the sun's colour,
    * intensity and height, and (outdoors) the background and fog through 4 keyframes (morning ->
    * midday -> afternoon -> evening) so each quarter-day slot is a visibly different look, not a
-   * barely-moved 2-colour lerp. Interiors shift less (a window's worth of light) and keep their own
-   * wall colour instead of the sky.
+   * barely-moved 2-colour lerp. Interiors use the full cycle with
+   * their own sky palette; warm lamps take over toward evening.
    */
   setDaylight(f: number) {
-    const k = Math.max(0, Math.min(1, f)) * (this.layout.interior ? 0.45 : 1);
+    const k = Math.max(0, Math.min(1, f));
     lerpStops(DAY.sky, k, this.hemi.color);
     lerpStops(DAY.ground, k, this.hemi.groundColor);
     lerpStops(DAY.sun, k, this.sun.color);
@@ -1239,6 +1244,13 @@ export class SceneSpace {
     } else if (!this.layout.interior) {
       lerpStops(DAY.background, k, this.scene.background as THREE.Color);
       if (this.scene.fog instanceof THREE.Fog) lerpStops(DAY.fog, k, this.scene.fog.color);
+    }
+    if (this.backdrop) {
+      const evening = this.backdrop.update(k);
+      this.hemi.color.set("#FFF1D8").lerp(new THREE.Color("#9AAFD0"), evening);
+      this.hemi.groundColor.set("#98836A").lerp(new THREE.Color("#695575"), evening);
+      this.sun.color.set("#FFE4B6").lerp(new THREE.Color("#FFB66C"), evening);
+      this.sun.intensity = (2.1 - evening * 1.35) * (LOOK.real ? REAL_SUN : 1);
     }
     if (LOOK.real) this.writeLookSky(k);
   }

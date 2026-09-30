@@ -767,27 +767,20 @@ describe.skipIf(!assetIndex)("bug 2: daylight is clearly perceptible at each qua
     }
   }, 20000); // three env builds on the real town (full, lite, a room): ~3 s alone, more under the parallel suite
 
-  it("an interior shifts less than the street, and keeps its own wall colour (background/fog untouched)", async () => {
+  it("an interior follows daylight with a blue evening exterior and warm interior light", async () => {
     const room = await buildSpace(L, "room");
-    const before = (room.scene.background as THREE.Color).clone();
-    const { hemi } = peekLights(room);
-    room.setDaylight(0);
-    const skyAtMorning = hemi.color.clone();
+    const { hemi, sun } = peekLights(room);
+    room.setDaylight(1 / 3);
+    const midday = (room.scene.background as THREE.Color).clone();
+    const noonIntensity = sun.intensity;
     room.setDaylight(1);
-    const skyAtEvening = hemi.color.clone();
-    const roomDelta = skyAtMorning.r - skyAtEvening.r + (skyAtMorning.g - skyAtEvening.g) + (skyAtMorning.b - skyAtEvening.b);
-
-    const street = await buildSpace(L, "street");
-    const { hemi: streetHemi } = peekLights(street);
-    street.setDaylight(0);
-    const streetMorning = streetHemi.color.clone();
-    street.setDaylight(1);
-    const streetEvening = streetHemi.color.clone();
-    const streetDelta = streetMorning.r - streetEvening.r + (streetMorning.g - streetEvening.g) + (streetMorning.b - streetEvening.b);
-
-    expect(Math.abs(roomDelta)).toBeLessThan(Math.abs(streetDelta)); // interiors shift less (0.45x)
-    expect((room.scene.background as THREE.Color).equals(before)).toBe(true); // an interior's wall colour never tints
-    expect(room.scene.fog).toBeNull(); // no depth fog indoors
+    const evening = room.scene.background as THREE.Color;
+    expect(evening.equals(midday)).toBe(false);
+    expect(evening.b).toBeGreaterThan(evening.r);
+    expect(sun.color.r).toBeGreaterThan(sun.color.b);
+    expect(sun.intensity).toBeLessThan(noonIntensity);
+    expect(hemi.color.b).toBeGreaterThan(hemi.color.r);
+    expect((room.scene.fog as THREE.Fog).color.equals(evening)).toBe(true);
   });
 });
 
@@ -1565,6 +1558,7 @@ describe("see-through: whatever blocks a focus fades as a whole object", () => {
     // draw calls: no more than before the see-through (0.13 at 17485a1: street 123, tea house 19; the countryside: 119)
     console.log(`see-through draw calls: street ${street.batching.before} -> ${street.batching.after}, tea_house ${tea.batching.before} -> ${tea.batching.after}`);
     expect(street.batching.after).toBeLessThanOrEqual(123);
-    expect(tea.batching.after).toBeLessThanOrEqual(19);
+    // Preserve the room batching guard separately from its deliberately unbatched backdrop.
+    expect(tea.batching.after - drawCalls(tea.scene.getObjectByName("interior_backdrop")!)).toBeLessThanOrEqual(19);
   }, 60_000);
 });
