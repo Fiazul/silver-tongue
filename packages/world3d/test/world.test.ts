@@ -700,6 +700,30 @@ describe.skipIf(!assetIndex)("bug 2: daylight is clearly perceptible at each qua
       expect(at(-17, 27)).toBe(0);
       expect(at(-24, 5)).toBe(1);
       expect(at(-17.2, 6.3)).toBe(0); // the trunk
+      // the blades' density (envlook.ts grassDensityAt, the shader's keep): none on the street, the plaza or any footprint (every blocker's centre)
+      const macro = env.grassMacro();
+      const density = (x: number, z: number) => env.grassDensityAt(field, macro, x, z);
+      for (const [x, z] of [[-15.5, 31.5], [-17, 27], [-17.2, 6.3], [-10, 31.5], [-20, 31.5], [0, 0]]) expect(density(x, z), `${x},${z}`).toBe(0);
+      let footprints = 0;
+      for (const bl of ground.blockers) {
+        const [x, z] = bl.obb ? bl.obb.centre : [(bl.min[0] + bl.max[0]) / 2, (bl.min[1] + bl.max[1]) / 2];
+        if (Math.abs(x) >= 70 || Math.abs(z) >= 70) continue;
+        expect(density(x, z), `blocker at ${x},${z}`).toBe(0);
+        footprints++;
+      }
+      expect(footprints).toBeGreaterThan(20);
+      // and off the lawn anywhere (a 1 m grid over the field): 0; on it, clumps (dense) and thin or bare patches
+      const lawn: number[] = [];
+      for (let z = -69.5; z < 70; z += 1)
+        for (let x = -69.5; x < 70; x += 1) {
+          const d = density(x, z);
+          if (!at(x, z)) expect(d).toBe(0);
+          else lawn.push(d);
+        }
+      expect(lawn.length).toBeGreaterThan(1000);
+      expect(lawn.filter((d) => d > 0.9).length / lawn.length).toBeGreaterThan(0.15);
+      expect(lawn.filter((d) => d < 0.3).length / lawn.length).toBeGreaterThan(0.1);
+      expect(lawn.filter((d) => d === 0).length).toBeGreaterThan(0); // a bare patch
       const aoHidden: THREE.Material[] = [];
       const material = (re: RegExp) => {
         let found: THREE.MeshStandardMaterial | undefined;
@@ -719,6 +743,15 @@ describe.skipIf(!assetIndex)("bug 2: daylight is clearly perceptible at each qua
       const tree = space.occluders.find((o) => o.asset === "great_tree")!;
       expect(ids.has(tree.id + see.SEE_ID0)).toBe(true);
       expect(leaves.count).toBeGreaterThan(1000);
+      // every tree (the great tree, each willow) has its canopy core, fading with it; the bamboo none
+      const core = scene.getObjectByName("env_canopy_core") as THREE.InstancedMesh;
+      expect(env.CORE_SEE_ID0).toBe(see.SEE_ID0);
+      const coreIds = Array.from((core.geometry.getAttribute("aSeeId") as THREE.BufferAttribute).array);
+      const trees = space.occluders.filter((o) => ["great_tree", "willow", "willow_small"].includes(o.asset));
+      expect(trees.length).toBeGreaterThan(3);
+      for (const t of trees) expect(coreIds, `${t.asset} ${t.id}`).toContain(t.id + see.SEE_ID0);
+      expect(core.count).toBe(trees.length);
+      for (const b of space.occluders.filter((o) => o.asset === "bamboo_grove")) expect(coreIds).not.toContain(b.id + see.SEE_ID0);
       expect(aoHidden.length).toBeGreaterThanOrEqual(5); // grass x2, leaves, sky, particles: never in the AO pass
       e.update(new THREE.PerspectiveCamera(), new THREE.Vector3(-15.5, 0, 31.5), 1);
       expect(e.evening).toBe(0);
@@ -745,7 +778,7 @@ describe.skipIf(!assetIndex)("bug 2: daylight is clearly perceptible at each qua
       const drawn = chunks(scene, "env_grass_far").filter((m) => m.visible).length;
       expect(drawn).toBeGreaterThan(0);
       expect(drawn).toBeLessThan(env.GRASS.far.chunks ** 2 / 2); // behind the camera or past 30 m: not drawn
-      for (const n of ["env_leaves", "env_dust", "env_steam", "env_falling_leaves"]) expect(scene.getObjectByName(n)!.visible, n).toBe(false);
+      for (const n of ["env_leaves", "env_canopy_core", "env_dust", "env_steam", "env_falling_leaves"]) expect(scene.getObjectByName(n)!.visible, n).toBe(false);
       expect(scene.getObjectByName("env_sky")!.visible).toBe(true);
       for (const k of ["r", "g", "b"] as const) expect(crown.color[k]).toBeCloseTo(crownColour[k], 6); // the crown's own colour back
       expect(lantern.emissiveIntensity).toBe(1);
@@ -756,7 +789,7 @@ describe.skipIf(!assetIndex)("bug 2: daylight is clearly perceptible at each qua
       const lite = env.buildEnv(liteSpace.scene, new Set(look.LITE_LAYERS), { seeThrough: see.patchSeeThrough, seeAttr: see.SEE_ATTR, aoHidden: [], grassDensity: look.LITE_GRASS });
       expect([...lite.layers].sort()).toEqual(["grade", "grass", "ground", "sky"]);
       expect(Math.abs(blades(liteSpace.scene, "env_grass_far") - 200 * 200 * look.LITE_GRASS)).toBeLessThanOrEqual(env.GRASS.far.chunks ** 2);
-      for (const n of ["env_leaves", "env_dust", "env_steam", "env_falling_leaves"]) expect(liteSpace.scene.getObjectByName(n), n).toBeUndefined();
+      for (const n of ["env_leaves", "env_canopy_core", "env_dust", "env_steam", "env_falling_leaves"]) expect(liteSpace.scene.getObjectByName(n), n).toBeUndefined();
       // on an interior: no town layers, the renderer's still on
       const room = await world.SceneSpace.create(L2, assets, "room");
       const r = env.buildEnv(room.scene, new Set(["ground", "grass", "leaves", "sky", "bloom", "grade", "particles"]), { seeThrough: see.patchSeeThrough, seeAttr: see.SEE_ATTR, aoHidden: [] });

@@ -937,15 +937,26 @@ Layers (`look.ts ENV_LAYERS`):
   `grassBands`): near 26 m / 40k (dense, fade 9-12.5 m), far 72 m / 40k (an eighth of the density,
   fade 24-30 m, none beyond; unshadowed on Lite), positioned, coloured (ground colour x
   grass texture) and swayed in the vertex shader from the same field; none on path, pavement,
-  footprints, benches, roots. Each tile is cut into chunks (near 4x4, far 6x6, 52 meshes), each
+  footprints, benches, roots. Short blades (near ~0.06-0.23 m, far ~0.07-0.28 m, about half the first pass's: `GRASS` sizes) in
+  clumps (`GRASS_LOOK.clump`: macro noise at 7.3 m; thin patches keep 12 % of their blades, the
+  clumps' blades a little taller), gone on the bare dirt patches the ground shader draws (`envBare`,
+  the same noise), a dark root, a yellow-green tip and a little hue per blade (`GRASS_LOOK.root` /
+  `tip`). `grassDensityAt` mirrors the shader's density on the CPU (the tests: 0 on the street and
+  every footprint). Each tile is cut into chunks (near 4x4, far 6x6, 52 meshes), each
   drawn only when it is in the camera's frustum and within its band's reach of the player
   (`grassChunkVisible`, `wrapIntervals`: where a chunk lands as the tile wraps round the player);
   at the noodle shop ~27 of 52 chunks draw, ~51k of 80k blades. Grass never casts.
 - `leaves`: alpha-cut leaf-cluster cards (up to 14k, instanced, alpha-to-coverage where there is
   MSAA) over every canopy material (great_tree, willows, bamboo; there is no `tree_street` in the
-  town). The solid crown stays as a darker core and casts the tree's shadow; the cards never cast
+  town). The solid crown stays, darker, and casts the tree's shadow; the cards never cast
   (the performance pass: 14k alpha-tested cards in every shadow redraw, for a speckle at the
-  shadow's edge). Each card carries its crown's see-through id, so it fades with its tree.
+  shadow's edge). Each card carries its crown's see-through id, so it fades with its tree. Each
+  tree (the great tree and the willows: a crown with a `canopy_green`, `leaf_pale` or
+  `town_willow` part; the bamboo's tufts take none) gets a canopy core (`CANOPY_CORE`,
+  `env_canopy_core`): a lumpy 80-triangle ball filling its crown's box (72 % / 80 % of its
+  half-size), the crown's colour x 0.55, one instanced draw for all 16, fading with its tree; no
+  sky shows through the gaps between the great tree's blobs or the willows' strands. Lite has no
+  leaf cards, so no cores: its crowns are the solid meshes.
 - `sky`: a gradient sky with sun disc, glow and cloud wisps replaces `sky_dome` (from the day's
   sky colours, so fog still matches); the environment map takes the sun's glow.
 - `bloom`: UnrealBloomPass (threshold 2.4 linear, at half its own resolution), stronger at
@@ -1303,6 +1314,10 @@ that role said last).
   see-through (segment/AABB hits and exclusions, eased whole-root fades and texture uploads, the
   shader patch against three's toon shader, per-vertex ids through mergeStatic, and the real town's
   spawn/tree and never-faded-ground behavior with draw calls unchanged).
+- `test/envlook.test.ts`: the lawn's and the canopy core's constants (`GRASS` sizes,
+  `GRASS_LOOK`, `CANOPY_CORE`) and `grassDensityAt` (0 off the mask; clumps, thin and bare patches
+  on it); the scene-level checks (no blades on the street or any footprint, a core in every tree)
+  are in world.test.ts's real look environment test.
 - `test/perf.test.ts`: the performance pass: each tier's render budget and its URL overrides, the
   render scale's resolution (Lite on a 1080x2400 DPR 2.6 phone under half of Full's 1080p pixels),
   dynamic resolution's thresholds and hysteresis, frame pacing at 60 / 30 on 60-144 Hz displays

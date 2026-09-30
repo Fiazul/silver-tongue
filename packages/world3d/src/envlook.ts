@@ -4,9 +4,11 @@
 //             (grass, packed dirt, a detail normal), dirt worn in along the path edges (a distance
 //             field rasterised from the terrain's own triangles) and in noise patches;
 //   grass     instanced blade cards (2 tris each) on the grass cells round the player, coloured from
-//             the ground under them, swaying in the wind, fading out with distance;
+//             the ground under them (dark root, yellow-green tip), in clumps with thin and bare
+//             patches (GRASS_LOOK), swaying in the wind, fading out with distance;
 //   leaves    alpha-cut leaf-cluster cards over every tree canopy (the solid canopy stays, darker, as
-//             the crown's core, and the one that casts: the cards never do, nor do grass or particles);
+//             the crown's core, and the one that casts: the cards never do, nor do grass or particles),
+//             and a rounded canopy core inside each tree's crown (CANOPY_CORE: no hollow shows);
 //   sky       a gradient sky with a sun disc, glow and drifting cloud wisps in place of the dome,
 //             from the day's sky colours (the environment map takes the sun's glow too: reallook.ts);
 //   particles dust motes round the player, steam off the noodle shop's counter, leaves falling.
@@ -40,8 +42,21 @@ export const FIELD = { min: -70, size: 140, n: 512 };
  * (grassChunkVisible); lite's far blades take no shadow (a cheaper fragment).
  */
 export const GRASS = {
-  near: { tile: 26, n: 200, fade: [9, 12.5], size: [0.065, 0.27], chunks: 4 },
-  far: { tile: 72, n: 200, fade: [24, 30], size: [0.12, 0.34], chunks: 6 },
+  near: { tile: 26, n: 200, fade: [9, 12.5], size: [0.06, 0.14], chunks: 4 },
+  far: { tile: 72, n: 200, fade: [24, 30], size: [0.11, 0.17], chunks: 6 },
+};
+/**
+ * The lawn's look, shared by the blade shader and grassDensityAt (its CPU mirror, for the tests):
+ * clumps (macro noise R at `clump.scale` m: a blade stays where its own random is under the
+ * density, `floor` .. 1, so thin patches keep `floor` of their blades; the clumps' blades a little
+ * taller), bare dirt patches (envBare: the ground shader's dirt patches, the blades gone there) and
+ * the blade's colour (a dark base, the lawn's green, a yellow-green tip).
+ */
+export const GRASS_LOOK = {
+  clump: { scale: 7.3, offset: 0.61, lo: 0.34, hi: 0.62, floor: 0.12 },
+  bare: { patch: [0.6, 0.72], detail: [0.52, 0.62], gone: [0.12, 0.4] },
+  root: [0.34, 0.4, 0.3],
+  tip: [1.34, 1.2, 0.66],
 };
 /** lite's far band fade (m): as full's (18-24 m thinned the lawn visibly at the phone's top edge, for little: the far blades are cheap) */
 export const LITE_FAR_FADE = [24, 30];
@@ -90,6 +105,16 @@ const GROUND_RE = /^land_(path|dirt|plaza|plaza_ring|stone_edge|bank_stone|copin
 const WATER_RE = /^water_/;
 /** seethrough.ts CANOPIES' parts (not imported: the main bundle's) */
 const CANOPY_RE = /^(canopy_green|leaf_green|leaf_dark|leaf_pale|town_willow)$/;
+/** the parts that make a crown a tree's (the great tree's, the willows'): its fade id takes a canopy core; the bamboo's tufts (leaf_green / leaf_dark alone) take none */
+const CORE_RE = /^(canopy_green|leaf_pale|town_willow)$/;
+/** seethrough.ts SEE_ID0: the first occluder's fade id (not imported: the main bundle's) */
+export const CORE_SEE_ID0 = 2;
+/**
+ * The canopy core: one low-poly rounded volume per tree inside its crown (the crown's triangles'
+ * box, `radius` of its half-size each way), the crown's own colour times `shade`, under the leaf
+ * cards (no hollow, no gap between the crown's blobs shows the sky through). One instanced draw.
+ */
+export const CANOPY_CORE = { radius: [0.72, 0.8, 0.72], shade: 0.55, detail: 1 };
 
 // ---------------------------------------------------------------------------------------------
 // Generated textures (tileable value noise; no binary assets)
@@ -572,6 +597,52 @@ const NOISE_GLSL = /* glsl */ `
 float envHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 `;
 
+const f3 = (x: number) => x.toFixed(3);
+const v3 = (c: number[]) => `vec3(${c.map(f3).join(", ")})`;
+/** the bare dirt patches (GRASS_LOOK.bare), from macro R at 1/41 and macro G at 1/6.7 + 0.37: the ground shader's dirt and the blades' gaps */
+const BARE_GLSL = /* glsl */ `
+float envBare(float m, float m2) { return smoothstep(${f3(GRASS_LOOK.bare.patch[0])}, ${f3(GRASS_LOOK.bare.patch[1])}, m) * 0.7 * smoothstep(${f3(GRASS_LOOK.bare.detail[0])}, ${f3(GRASS_LOOK.bare.detail[1])}, m2); }
+`;
+
+const smooth = (a: number, b: number, x: number) => {
+  const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+};
+/** a channel of an RGBA8 repeat texture `n` wide, bilinear at uv (as the GPU samples level 0) */
+function sampleRepeat(data: Uint8Array, n: number, ch: number, u: number, v: number): number {
+  const x = u * n - 0.5;
+  const y = v * n - 0.5;
+  const x0 = Math.floor(x);
+  const y0 = Math.floor(y);
+  const fx = x - x0;
+  const fy = y - y0;
+  const at = (i: number, j: number) => data[((((j % n) + n) % n) * n + (((i % n) + n) % n)) * 4 + ch] / 255;
+  return (at(x0, y0) * (1 - fx) + at(x0 + 1, y0) * fx) * (1 - fy) + (at(x0, y0 + 1) * (1 - fx) + at(x0 + 1, y0 + 1) * fx) * fy;
+}
+
+/** The ground textures' macro noise (RGBA8, 128^2, repeating): what the blades' clumps and bare patches read. */
+export function grassMacro(): Uint8Array {
+  return groundTextureData().macro as Uint8Array;
+}
+
+/**
+ * The share of its blades the lawn keeps at (x, z) (the blade shader's `keep` before the band's fade
+ * and the edge wear): 0 off the lawn (the field's grass mask: path, street, a footprint, a trunk),
+ * the clump density on it, 0 on a bare patch. `macro`: grassMacro().
+ */
+export function grassDensityAt(field: Pick<Field, "grass">, macro: Uint8Array, x: number, z: number): number {
+  const { min, size, n } = FIELD;
+  const i = Math.floor((x - min) / (size / n));
+  const j = Math.floor((z - min) / (size / n));
+  if (i < 0 || j < 0 || i >= n || j >= n || !field.grass[j * n + i]) return 0;
+  const M = 128;
+  const c = GRASS_LOOK.clump;
+  const dens = c.floor + (1 - c.floor) * smooth(c.lo, c.hi, sampleRepeat(macro, M, 0, x / c.scale + c.offset, z / c.scale + c.offset));
+  const b = GRASS_LOOK.bare;
+  const bare = smooth(b.patch[0], b.patch[1], sampleRepeat(macro, M, 0, x / 41, z / 41)) * 0.7 * smooth(b.detail[0], b.detail[1], sampleRepeat(macro, M, 1, x / 6.7 + 0.37, z / 6.7 + 0.37));
+  return dens * (1 - smooth(b.gone[0], b.gone[1], bare));
+}
+
 // ---------------------------------------------------------------------------------------------
 // The layers
 // ---------------------------------------------------------------------------------------------
@@ -668,6 +739,7 @@ uniform sampler2D envGrassTex, envDirtTex, envDetailN, envMacro, envField;
 uniform vec2 envFieldMin;
 uniform float envFieldSize;
 uniform vec3 envDirtColor;
+${BARE_GLSL}
 `,
           "before",
         );
@@ -688,7 +760,7 @@ uniform vec3 envDirtColor;
   float envDist = envIn ? texture2D(envField, envFuv).g : 8.0;
   // worn dirt along the path edges (a ragged line: the noise moves it), and a few bare patches
   float envWear = 1.0 - smoothstep(0.1, 1.25, envDist + (envM2.r - 0.5) * 1.5);
-  float envPatch = smoothstep(0.64, 0.76, envM.r) * 0.7 * smoothstep(0.52, 0.62, envM2.g);
+  float envPatch = envBare(envM.r, envM2.g);
   envMix = clamp(max(envWear, envPatch), 0.0, 1.0);
   vec3 envGrass = diffuseColor.rgb * mix(vec3(1.0), envG, envNear) * mix(vec3(0.84, 0.88, 0.86), vec3(1.14, 1.1, 0.88), envM.g);
   vec3 envDirt = envDirtColor * mix(vec3(1.0), envD, envNear) * mix(0.9, 1.1, envM2.b);
@@ -728,7 +800,7 @@ uniform vec3 envDirtColor;
     const grassUniforms = { ...U, envField: { value: f.tex }, envAlbedo: { value: f.albedo }, envGrassTex: { value: t.grass }, envMacro: { value: t.macro } };
     const rnd = makeRng(99);
     // the blade shape, shared by every chunk: a tapered card, 4 vertices, 2 triangles; y = the height fraction
-    const bladePos = new THREE.Float32BufferAttribute([-0.5, 0, 0, 0.5, 0, 0, 0.12, 1, 0, -0.12, 1, 0], 3);
+    const bladePos = new THREE.Float32BufferAttribute([-0.5, 0, 0, 0.5, 0, 0, 0.06, 1, 0, -0.06, 1, 0], 3);
     const bladeNormal = new THREE.Float32BufferAttribute([0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0], 3);
     const bladeIndex = new THREE.Uint16BufferAttribute([0, 1, 2, 0, 2, 3], 1);
     // the grass cells' height range: the chunks' boxes (+ the tallest blade)
@@ -768,6 +840,8 @@ uniform float envTime, envTile, envFieldSize;
 uniform vec2 envCenter, envFade, envSize, envFieldMin, envWind;
 uniform sampler2D envField, envAlbedo, envGrassTex, envMacro;
 varying vec3 vBlade;
+varying vec2 vBladeY;
+${BARE_GLSL}
 `,
           "before",
         );
@@ -783,9 +857,14 @@ varying vec3 vBlade;
   float inside = step(0.0, fuv.x) * step(fuv.x, 1.0) * step(0.0, fuv.y) * step(fuv.y, 1.0);
   vec4 fld = textureLod(envField, fuv, 0.0);
   float r = aBlade.w;
-  float keep = fld.r * inside * smoothstep(0.12, 0.7, fld.g + r * 0.35) * (1.0 - smoothstep(envFade.x, envFade.y, bd + r * 1.5));
+  // clumps and thin patches (GRASS_LOOK.clump; grassDensityAt mirrors this), none on a bare patch
+  float clump = textureLod(envMacro, bp / ${f3(GRASS_LOOK.clump.scale)} + ${f3(GRASS_LOOK.clump.offset)}, 0.0).r;
+  float dens = ${f3(GRASS_LOOK.clump.floor)} + ${f3(1 - GRASS_LOOK.clump.floor)} * smoothstep(${f3(GRASS_LOOK.clump.lo)}, ${f3(GRASS_LOOK.clump.hi)}, clump);
+  float bare = envBare(textureLod(envMacro, bp / 41.0, 0.0).r, textureLod(envMacro, bp / 6.7 + 0.37, 0.0).g);
+  float keep = fld.r * inside * step(fract(r * 13.37), dens) * (1.0 - smoothstep(${f3(GRASS_LOOK.bare.gone[0])}, ${f3(GRASS_LOOK.bare.gone[1])}, bare));
+  keep *= smoothstep(0.12, 0.7, fld.g + r * 0.35) * (1.0 - smoothstep(envFade.x, envFade.y, bd + r * 1.5));
   keep = keep > 0.08 ? keep : 0.0;
-  float h = envSize.y * (0.55 + 0.9 * r) * keep;
+  float h = envSize.y * (0.55 + 0.9 * r) * mix(0.75, 1.15, dens) * keep;
   float w = envSize.x * (0.7 + 0.6 * fract(r * 7.13)) * step(0.001, keep);
   float ca = cos(aBlade.z), sa = sin(aBlade.z);
   float bend = position.y * position.y;
@@ -797,12 +876,23 @@ varying vec3 vBlade;
   vec3 alb = textureLod(envAlbedo, fuv, 0.0).rgb;
   vec3 gt = textureLod(envGrassTex, bp / 2.3, 0.0).rgb * 2.0;
   float tone = textureLod(envMacro, bp / 41.0, 0.0).g;
-  vBlade = alb * gt * mix(vec3(0.84, 0.88, 0.86), vec3(1.14, 1.1, 0.88), tone) * mix(0.42, 0.94 + 0.2 * fract(r * 3.7), position.y);
+  // the lawn's own colour, a little hue and brightness of its own per blade; the base-to-tip ramp in the fragment
+  float hv = fract(r * 5.31);
+  vBlade = alb * gt * mix(vec3(0.84, 0.88, 0.86), vec3(1.14, 1.1, 0.88), tone) * mix(vec3(0.9, 1.05, 0.86), vec3(1.07, 1.0, 0.78), hv) * (0.92 + 0.2 * fract(r * 3.7));
+  vBladeY = vec2(position.y, 0.45 + 0.55 * fract(r * 9.13));
 `,
           "replace",
         );
-        s.fragmentShader = inject(s.fragmentShader, "void main() {", "varying vec3 vBlade;\n", "before");
-        s.fragmentShader = inject(s.fragmentShader, "#include <color_fragment>", "\n  diffuseColor.rgb *= vBlade;");
+        s.fragmentShader = inject(s.fragmentShader, "void main() {", "varying vec3 vBlade;\nvarying vec2 vBladeY;\n", "before");
+        s.fragmentShader = inject(
+          s.fragmentShader,
+          "#include <color_fragment>",
+          /* glsl */ `
+  // dark at the root, the lawn's green up the blade, yellow-green at the tip (each blade its own share of it)
+  vec3 envBladeC = vBlade * mix(${v3(GRASS_LOOK.root)}, vec3(1.0), smoothstep(0.0, 0.55, vBladeY.x));
+  envBladeC = mix(envBladeC, vBlade * ${v3(GRASS_LOOK.tip)}, smoothstep(0.55, 1.0, vBladeY.x) * vBladeY.y);
+  diffuseColor.rgb *= envBladeC;`,
+        );
         // a blade is lit as the ground under it (its normal is up on both faces)
         s.fragmentShader = inject(s.fragmentShader, "#include <normal_fragment_begin>", "\n#ifdef DOUBLE_SIDED\n  normal *= faceDirection;\n#endif");
       };
@@ -873,6 +963,7 @@ varying vec3 vBlade;
     if (leaves) {
       built.push("leaves");
       hideable.leaves.push(leaves);
+      if (leaves.userData.core) hideable.leaves.push(leaves.userData.core as THREE.Object3D);
     }
   }
 
@@ -951,7 +1042,7 @@ function buildLeaves(scene: THREE.Scene, deps: EnvDeps, U: { envTime: { value: n
   });
   if (!sources.length) return null;
   // area-weighted triangles, upper surfaces of the crowns only (a flower bed's leaf_dark stays low)
-  interface Tri { a: THREE.Vector3; b: THREE.Vector3; c: THREE.Vector3; n: THREE.Vector3; area: number; see: number; colour: THREE.Color }
+  interface Tri { a: THREE.Vector3; b: THREE.Vector3; c: THREE.Vector3; n: THREE.Vector3; area: number; see: number; colour: THREE.Color; core: boolean }
   const tris: Tri[] = [];
   let total = 0;
   for (const mesh of sources) {
@@ -961,6 +1052,7 @@ function buildLeaves(scene: THREE.Scene, deps: EnvDeps, U: { envTime: { value: n
     const index = g.index;
     const count = index ? index.count / 3 : pos.count / 3;
     const colour = ((mesh.material as THREE.MeshStandardMaterial).color ?? new THREE.Color(0.2, 0.4, 0.1)).clone();
+    const core = CORE_RE.test((mesh.material as THREE.Material).name);
     for (let t = 0; t < count; t++) {
       const ids = [0, 1, 2].map((v) => (index ? index.getX(t * 3 + v) : t * 3 + v));
       const [a, b, c] = ids.map((i) => new THREE.Vector3().fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld));
@@ -969,12 +1061,13 @@ function buildLeaves(scene: THREE.Scene, deps: EnvDeps, U: { envTime: { value: n
       const area = n.length() / 2;
       if (area < 1e-5) continue;
       n.normalize();
-      tris.push({ a, b, c, n, area, see: see ? see.getX(ids[0]) : 0, colour });
+      tris.push({ a, b, c, n, area, see: see ? see.getX(ids[0]) : 0, colour, core });
       total += area;
     }
     // the solid crown stays as the core (darker: the shade inside) and casts the shadow (the cards
     // never do: 14000 alpha-tested cards in the shadow map every redraw, for a dapple at the edge)
   }
+  const core = buildCores(tris, deps);
   const crowns = new Set(sources.map((s) => s.material as THREE.MeshStandardMaterial));
   for (const m of crowns) m.color.multiplyScalar(0.62);
   const count = Math.min(LEAVES.max, Math.round(total * LEAVES.perM2));
@@ -1073,10 +1166,75 @@ function buildLeaves(scene: THREE.Scene, deps: EnvDeps, U: { envTime: { value: n
   mesh.computeBoundingSphere();
   scene.add(mesh);
   deps.aoHidden.push(material);
+  if (core) {
+    scene.add(core);
+    mesh.userData.core = core;
+  }
   // EnvScene.restrict without leaves: the crowns as they were (their own colour)
   mesh.userData.restore = () => {
     for (const m of crowns) m.color.multiplyScalar(1 / 0.62);
   };
+  return mesh;
+}
+
+/**
+ * The canopy cores (CANOPY_CORE): the crown triangles grouped by their tree's fade id, each tree
+ * with a CORE_RE part one rounded volume in its crown's box, its crown's colour darker, fading with
+ * its tree (the see-through reads the instance's id). Null when no tree has a fade id.
+ */
+function buildCores(tris: readonly { a: THREE.Vector3; b: THREE.Vector3; c: THREE.Vector3; see: number; colour: THREE.Color; core: boolean }[], deps: EnvDeps): THREE.InstancedMesh | null {
+  const trees = new Map<number, { box: THREE.Box3; colour: THREE.Color | null }>();
+  for (const t of tris) {
+    if (t.see < CORE_SEE_ID0) continue;
+    let tree = trees.get(t.see);
+    if (!tree) trees.set(t.see, (tree = { box: new THREE.Box3(), colour: null }));
+    tree.box.expandByPoint(t.a).expandByPoint(t.b).expandByPoint(t.c);
+    if (t.core && !tree.colour) tree.colour = t.colour;
+  }
+  const cores = [...trees].filter(([, t]) => t.colour);
+  if (!cores.length) return null;
+  // a low-poly ball, a little lumpy (the same lump on a shared corner: no cracks), lit as a sphere
+  const geo = new THREE.IcosahedronGeometry(1, CANOPY_CORE.detail);
+  const pos = geo.getAttribute("position");
+  const normal = geo.getAttribute("normal");
+  const v = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i).normalize();
+    normal.setXYZ(i, v.x, v.y, v.z);
+    const k = 0.9 + 0.2 * hash(Math.round(v.x * 97), Math.round(v.z * 97) + Math.round(v.y * 89) * 131, 3);
+    pos.setXYZ(i, v.x * k, v.y * k, v.z * k);
+  }
+  const material = new THREE.MeshStandardMaterial({ roughness: 0.9, metalness: 0, name: "env_canopy_core" });
+  deps.seeThrough(material);
+  chain(material, "canopy-core", (sh) => {
+    sh.vertexShader = inject(sh.vertexShader, "void main() {", "attribute float aSeeId;\n", "before");
+    sh.vertexShader = sh.vertexShader.replace(`vStId = ${deps.seeAttr};`, "vStId = aSeeId;");
+  });
+  const mesh = new THREE.InstancedMesh(geo, material, cores.length);
+  const seeIds = new Float32Array(cores.length);
+  const m4 = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  const up = new THREE.Vector3(0, 1, 0);
+  const centre = new THREE.Vector3();
+  const size = new THREE.Vector3();
+  const col = new THREE.Color();
+  const [rx, ry, rz] = CANOPY_CORE.radius;
+  cores.forEach(([see, t], i) => {
+    t.box.getCenter(centre);
+    t.box.getSize(size).multiplyScalar(0.5);
+    q.setFromAxisAngle(up, (see * 2.399) % (Math.PI * 2));
+    m4.compose(centre, q, size.set(size.x * rx, size.y * ry, size.z * rz));
+    mesh.setMatrixAt(i, m4);
+    mesh.setColorAt(i, col.copy(t.colour!).multiplyScalar(CANOPY_CORE.shade));
+    seeIds[i] = see;
+  });
+  geo.setAttribute("aSeeId", new THREE.InstancedBufferAttribute(seeIds, 1));
+  mesh.instanceMatrix.needsUpdate = true;
+  if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+  mesh.name = "env_canopy_core";
+  mesh.castShadow = false; // the crown casts
+  mesh.receiveShadow = true;
+  mesh.computeBoundingSphere();
   return mesh;
 }
 
