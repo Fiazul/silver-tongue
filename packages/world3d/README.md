@@ -6,6 +6,8 @@ The 3D front end: a three.js canal town built from the make-it-in-china asset li
 `packages/tui-web`, so a game started in the browser TUI continues here and back (see Courses and
 reading languages).
 
+State of the 2026-09-30 polish push, known bugs and standing decisions: `HANDOFF-2026-09-30.md`.
+
 ## Run
 
 Node 22 or later. System Node is older, so these commands put a local Node 22 first on `PATH`:
