@@ -71,10 +71,15 @@ function hingeWords(ctx: Ctx, ex: Exchange, combo: Combo): WordId[] {
   return [...new Set(concepts.flatMap((c) => ctx.course.concepts[c] ?? []))];
 }
 
-function chooseCombo(ctx: Ctx, ex: Exchange): Combo {
+function chooseCombo(ctx: Ctx, ex: Exchange, pick?: Record<string, string>): Combo {
   const combo: Combo = {};
   for (const slot of Object.keys(ex.slots).sort()) {
     const values = ctx.course.groups[ex.slots[slot]];
+    const pinned = pick?.[slot];
+    if (pinned !== undefined && values.includes(pinned)) {
+      combo[slot] = pinned;
+      continue;
+    }
     combo[slot] = pickPreferred(values, (c) => ctx.course.concepts[c] ?? [], ctx.state.words, ctx.now, ctx.rng);
   }
   return combo;
@@ -179,10 +184,10 @@ export function describeRun(course: Course, state: GameState): GameEvent[] {
   ];
 }
 
-function beginExchange(ctx: Ctx, scene: Scene, index: number): void {
+function beginExchange(ctx: Ctx, scene: Scene, index: number, pick?: Record<string, string>): void {
   const run = ctx.state.run!;
   const ex = scene.exchanges[index];
-  const combo = chooseCombo(ctx, ex);
+  const combo = chooseCombo(ctx, ex, pick);
   const errandSlot = scene.startsErrand?.slice(1);
   if (errandSlot && errandSlot in combo) run.errandTo = combo[errandSlot];
   speak(ctx, scene.npc, ex.variants[comboKey(combo)].npc);
@@ -291,7 +296,7 @@ function resolveOther(ctx: Ctx, scene: Scene, ex: Exchange, said: RenderedLine):
   resolve(ctx, scene, ex, ctx.state.run!.combo, [], false, true, said.tokens.map((t) => t.word));
 }
 
-export function startScene(ctx: Ctx, id: string): void {
+export function startScene(ctx: Ctx, id: string, pick?: Record<string, string>): void {
   const scene = sceneById(ctx, id);
   if (!scene) return reject(ctx, "unknown-scene");
   if (ctx.state.run) return reject(ctx, "in-scene");
@@ -304,7 +309,7 @@ export function startScene(ctx: Ctx, id: string): void {
     scene: id, exchange: 0, combo: {}, mode: "pick", options: [], tiles: [], misses: 0, earned: 0, mixups: 0,
   };
   ctx.ev.push({ type: "sceneStarted", scene: id, npc: scene.npc });
-  beginExchange(ctx, scene, 0);
+  beginExchange(ctx, scene, 0, pick);
 }
 
 /** The running scene and exchange, or undefined if there is none or the save no longer fits the course. */

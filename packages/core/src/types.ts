@@ -264,7 +264,11 @@ export type WalletReason = (typeof WALLET_REASONS)[number];
 /** Replies arrive as `reply` (pick mode) or `replyTiles` (tiles mode); typed replies will add `replyText`. */
 export type Input =
   | { type: "goTo"; place: string }
-  | { type: "startScene"; scene: string }
+  /**
+   * `pick` pins slot values of the scene's first exchange (a front end's "this one": the item taken
+   * off a shelf); a slot the exchange lacks, or a value its slot's group lacks, is ignored.
+   */
+  | { type: "startScene"; scene: string; pick?: Record<string, string> }
   | { type: "reply"; choice: number }
   | { type: "replyTiles"; tiles: number[] }
   | { type: "helpWord"; word: WordId }

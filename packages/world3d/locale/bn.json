@@ -88,6 +88,8 @@
     "prompt-exit": "{place}-এ বেরিয়ে যান",
     "prompt-sleep": "ঘুমান",
     "prompt-notebook": "নোটবুক পড়ুন",
+    "prompt-take": "{item} নিন",
+    "prompt-put-back": "{item} রেখে দিন",
     "tiles-undo": "মুছুন",
     "tiles-say": "বলুন",
     "tiles-give-up": "এটা বাদ দিন",

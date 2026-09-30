@@ -88,6 +88,8 @@
     "prompt-exit": "离开，去{place}",
     "prompt-sleep": "睡觉",
     "prompt-notebook": "看笔记本",
+    "prompt-take": "拿{item}",
+    "prompt-put-back": "把{item}放回去",
     "tiles-undo": "撤销",
     "tiles-say": "说出来",
     "tiles-give-up": "放弃这一句",

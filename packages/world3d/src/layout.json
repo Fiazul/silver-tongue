@@ -99,10 +99,31 @@
     },
     "shopkeeper": {
       "character": "clerk",
-      "building": "shop_counter",
-      "stand": "npc_stand",
-      "playerStand": "player_stand",
-      "heldProp": "barcode_scanner"
+      "space": "shop",
+      "stand": {
+        "pos": [
+          2.9,
+          0.06,
+          -1.03
+        ],
+        "facing": [
+          -1,
+          0,
+          0
+        ]
+      },
+      "playerStand": {
+        "pos": [
+          1.45,
+          0.06,
+          -1.03
+        ],
+        "facing": [
+          1,
+          0,
+          0
+        ]
+      }
     },
     "teaboss": {
       "character": "fruit_seller",
@@ -373,13 +394,13 @@
     "shop": {
       "place": "shop",
       "size": [
-        6,
-        5
+        6.4,
+        5.4
       ],
       "floorY": 0.06,
       "entry": {
         "pos": [
-          1.2,
+          -0.35,
           0.06,
           -0.3
         ],
@@ -391,57 +412,146 @@
         "inset": 0.9,
         "shift": 0
       },
-      "exitDepth": 0.9,
+      "exitBox": {
+        "min": [
+          -0.9,
+          -0.35
+        ],
+        "max": [
+          0.2,
+          0.35
+        ]
+      },
       "pieces": [
         {
-          "id": "shop_counter",
-          "asset": "counter_noodle",
+          "id": "shop_wall_shelf_1",
+          "asset": "shelf_unit",
           "pos": [
-            -1.4,
+            -1.48,
             0.06,
-            -3.6
+            -5.1785
           ],
           "rotY": 0
         },
         {
-          "id": "shop_shelf_1",
+          "id": "shop_wall_shelf_2",
           "asset": "shelf_unit",
           "pos": [
-            0.8,
+            -0.48,
             0.06,
-            -4.5
+            -5.1785
           ],
           "rotY": 0
         },
         {
-          "id": "shop_shelf_2",
+          "id": "shop_wall_shelf_3",
           "asset": "shelf_unit",
           "pos": [
-            1.9,
+            0.52,
             0.06,
-            -4.5
+            -5.1785
           ],
           "rotY": 0
         },
         {
-          "id": "shop_shelf_3",
+          "id": "shop_wall_shelf_4",
           "asset": "shelf_unit",
           "pos": [
-            1.6,
+            1.52,
             0.06,
-            -2.7
+            -5.1785
           ],
           "rotY": 0
+        },
+        {
+          "id": "shop_gondola_a_1w",
+          "asset": "shelf_unit",
+          "pos": [
+            -1.2085,
+            0.06,
+            -3.257
+          ],
+          "rotY": -90
+        },
+        {
+          "id": "shop_gondola_a_1e",
+          "asset": "shelf_unit",
+          "pos": [
+            -0.8015,
+            0.06,
+            -3.257
+          ],
+          "rotY": 90
+        },
+        {
+          "id": "shop_gondola_a_2w",
+          "asset": "shelf_unit",
+          "pos": [
+            -1.2085,
+            0.06,
+            -2.257
+          ],
+          "rotY": -90
+        },
+        {
+          "id": "shop_gondola_a_2e",
+          "asset": "shelf_unit",
+          "pos": [
+            -0.8015,
+            0.06,
+            -2.257
+          ],
+          "rotY": 90
+        },
+        {
+          "id": "shop_gondola_b_1w",
+          "asset": "shelf_unit",
+          "pos": [
+            0.8415,
+            0.06,
+            -3.257
+          ],
+          "rotY": -90
+        },
+        {
+          "id": "shop_gondola_b_1e",
+          "asset": "shelf_unit",
+          "pos": [
+            1.2485,
+            0.06,
+            -3.257
+          ],
+          "rotY": 90
+        },
+        {
+          "id": "shop_table_cups",
+          "asset": "desk_small",
+          "pos": [
+            2.9395,
+            0.06,
+            -3.7
+          ],
+          "rotY": -90
+        },
+        {
+          "id": "shop_table_books",
+          "asset": "desk_small",
+          "pos": [
+            2.9395,
+            0.06,
+            -2.65
+          ],
+          "rotY": -90
         },
         {
           "id": "shop_freezer",
           "asset": "freezer_chest",
           "pos": [
-            -2.3,
+            -2.585,
             0.06,
-            -1.4
+            -5.0525
           ],
-          "rotY": 90
+          "rotY": 0
         }
       ],
       "ground": [
@@ -449,12 +559,12 @@
           "name": "shop_floor",
           "colour": "#D8D2C4",
           "min": [
-            -3,
+            -3.2,
             0,
-            -5
+            -5.4
           ],
           "max": [
-            3,
+            3.2,
             0.06,
             0.2
           ]
@@ -463,193 +573,982 @@
           "name": "shop_back",
           "colour": "#E8E0CC",
           "min": [
-            -3.2,
+            -3.4,
             0,
-            -5.2
+            -5.6
           ],
           "max": [
-            3,
-            3,
-            -5
+            3.2,
+            2.9,
+            -5.4
           ]
         },
         {
           "name": "shop_left",
           "colour": "#DCD2BC",
           "min": [
-            -3.2,
+            -3.4,
             0,
-            -5.2
+            -5.6
           ],
           "max": [
-            -3,
-            3,
+            -3.2,
+            2.9,
             0.2
+          ]
+        },
+        {
+          "name": "shop_fridge_body",
+          "colour": "#EEF1F0",
+          "min": [
+            -3.2,
+            0.06,
+            -4.6
+          ],
+          "max": [
+            -3.14,
+            2.0,
+            -2.5
+          ]
+        },
+        {
+          "name": "shop_fridge_end",
+          "colour": "#E2E6E5",
+          "min": [
+            -3.2,
+            0.06,
+            -4.6
+          ],
+          "max": [
+            -2.65,
+            2.0,
+            -4.55
+          ]
+        },
+        {
+          "name": "shop_fridge_end_near",
+          "colour": "#E2E6E5",
+          "min": [
+            -3.2,
+            0.06,
+            -2.55
+          ],
+          "max": [
+            -2.65,
+            2.0,
+            -2.5
+          ]
+        },
+        {
+          "name": "shop_fridge_divider",
+          "colour": "#E2E6E5",
+          "min": [
+            -3.14,
+            0.06,
+            -3.57
+          ],
+          "max": [
+            -2.69,
+            2.0,
+            -3.53
+          ]
+        },
+        {
+          "name": "shop_fridge_base",
+          "colour": "#8E989B",
+          "min": [
+            -3.14,
+            0.06,
+            -4.55
+          ],
+          "max": [
+            -2.65,
+            0.3,
+            -2.55
+          ]
+        },
+        {
+          "name": "shop_fridge_canopy",
+          "colour": "#EEF1F0",
+          "min": [
+            -3.2,
+            1.9,
+            -4.6
+          ],
+          "max": [
+            -2.65,
+            2.0,
+            -2.5
+          ]
+        },
+        {
+          "name": "shop_fridge_sign",
+          "colour": "#2F6DB5",
+          "min": [
+            -2.68,
+            1.72,
+            -4.6
+          ],
+          "max": [
+            -2.64,
+            2.0,
+            -2.5
+          ]
+        },
+        {
+          "name": "shop_fridge_shelf_1",
+          "colour": "#C3C9CD",
+          "min": [
+            -3.14,
+            0.7,
+            -4.55
+          ],
+          "max": [
+            -2.67,
+            0.72,
+            -2.55
+          ]
+        },
+        {
+          "name": "shop_fridge_shelf_2",
+          "colour": "#C3C9CD",
+          "min": [
+            -3.14,
+            1.12,
+            -4.55
+          ],
+          "max": [
+            -2.67,
+            1.14,
+            -2.55
+          ]
+        },
+        {
+          "name": "shop_fridge_shelf_3",
+          "colour": "#C3C9CD",
+          "min": [
+            -3.14,
+            1.54,
+            -4.55
+          ],
+          "max": [
+            -2.67,
+            1.56,
+            -2.55
+          ]
+        },
+        {
+          "name": "shop_book_0_0",
+          "colour": "#2F6DB5",
+          "min": [
+            2.8495,
+            0.81,
+            -3.09
+          ],
+          "max": [
+            3.0295,
+            0.84,
+            -2.85
+          ]
+        },
+        {
+          "name": "shop_book_0_1",
+          "colour": "#C8342B",
+          "min": [
+            2.8495,
+            0.84,
+            -3.09
+          ],
+          "max": [
+            3.0295,
+            0.87,
+            -2.85
+          ]
+        },
+        {
+          "name": "shop_book_0_2",
+          "colour": "#E3B23C",
+          "min": [
+            2.8495,
+            0.87,
+            -3.09
+          ],
+          "max": [
+            3.0295,
+            0.9,
+            -2.85
+          ]
+        },
+        {
+          "name": "shop_book_0_3",
+          "colour": "#3E8E5E",
+          "min": [
+            2.8495,
+            0.9,
+            -3.09
+          ],
+          "max": [
+            3.0295,
+            0.93,
+            -2.85
+          ]
+        },
+        {
+          "name": "shop_book_1_0",
+          "colour": "#C8342B",
+          "min": [
+            2.8495,
+            0.81,
+            -2.77
+          ],
+          "max": [
+            3.0295,
+            0.84,
+            -2.53
+          ]
+        },
+        {
+          "name": "shop_book_1_1",
+          "colour": "#E3B23C",
+          "min": [
+            2.8495,
+            0.84,
+            -2.77
+          ],
+          "max": [
+            3.0295,
+            0.87,
+            -2.53
+          ]
+        },
+        {
+          "name": "shop_book_1_2",
+          "colour": "#3E8E5E",
+          "min": [
+            2.8495,
+            0.87,
+            -2.77
+          ],
+          "max": [
+            3.0295,
+            0.9,
+            -2.53
+          ]
+        },
+        {
+          "name": "shop_book_1_3",
+          "colour": "#7A4E9C",
+          "min": [
+            2.8495,
+            0.9,
+            -2.77
+          ],
+          "max": [
+            3.0295,
+            0.93,
+            -2.53
+          ]
+        },
+        {
+          "name": "shop_book_2_0",
+          "colour": "#E3B23C",
+          "min": [
+            2.8495,
+            0.81,
+            -2.45
+          ],
+          "max": [
+            3.0295,
+            0.84,
+            -2.21
+          ]
+        },
+        {
+          "name": "shop_book_2_1",
+          "colour": "#3E8E5E",
+          "min": [
+            2.8495,
+            0.84,
+            -2.45
+          ],
+          "max": [
+            3.0295,
+            0.87,
+            -2.21
+          ]
+        },
+        {
+          "name": "shop_book_2_2",
+          "colour": "#7A4E9C",
+          "min": [
+            2.8495,
+            0.87,
+            -2.45
+          ],
+          "max": [
+            3.0295,
+            0.9,
+            -2.21
+          ]
+        },
+        {
+          "name": "shop_book_2_3",
+          "colour": "#2F6DB5",
+          "min": [
+            2.8495,
+            0.9,
+            -2.45
+          ],
+          "max": [
+            3.0295,
+            0.93,
+            -2.21
+          ]
+        },
+        {
+          "name": "shop_counter",
+          "colour": "#A8643A",
+          "min": [
+            2.0,
+            0.06,
+            -1.63
+          ],
+          "max": [
+            2.6,
+            0.92,
+            -0.43
+          ]
+        },
+        {
+          "name": "shop_counter_top",
+          "colour": "#E9E3D3",
+          "min": [
+            1.96,
+            0.92,
+            -1.67
+          ],
+          "max": [
+            2.64,
+            0.97,
+            -0.39
+          ]
+        },
+        {
+          "name": "shop_counter_band",
+          "colour": "#C8342B",
+          "min": [
+            1.985,
+            0.6,
+            -1.63
+          ],
+          "max": [
+            2.0,
+            0.72,
+            -0.43
+          ]
+        },
+        {
+          "name": "shop_stand",
+          "colour": "#5B7A45",
+          "min": [
+            -3.18,
+            0.06,
+            -2.4
+          ],
+          "max": [
+            -2.65,
+            0.24,
+            -0.27
+          ]
+        },
+        {
+          "name": "shop_baskets",
+          "colour": "#C8342B",
+          "min": [
+            0.5,
+            0.06,
+            -0.62
+          ],
+          "max": [
+            0.9,
+            0.4,
+            -0.34
+          ]
+        },
+        {
+          "name": "shop_baskets_rim",
+          "colour": "#A92A22",
+          "min": [
+            0.48,
+            0.4,
+            -0.64
+          ],
+          "max": [
+            0.92,
+            0.44,
+            -0.32
+          ]
+        },
+        {
+          "name": "shop_baskets_handle",
+          "colour": "#3A3A3A",
+          "min": [
+            0.69,
+            0.44,
+            -0.6
+          ],
+          "max": [
+            0.71,
+            0.52,
+            -0.36
           ]
         }
       ],
       "dressing": [
         {
+          "asset": "bottle_water",
+          "pos": [
+            -3.0,
+            0.3,
+            -4.48
+          ],
+          "rotY": 0,
+          "grid": {
+            "count": [
+              2,
+              1,
+              9
+            ],
+            "step": [
+              0.17,
+              0,
+              0.1
+            ]
+          }
+        },
+        {
+          "asset": "tea_box",
+          "pos": [
+            -3.0,
+            0.3,
+            -3.45
+          ],
+          "rotY": 90,
+          "grid": {
+            "count": [
+              2,
+              1,
+              8
+            ],
+            "step": [
+              0.17,
+              0,
+              0.115
+            ]
+          }
+        },
+        {
+          "asset": "bottle_water",
+          "pos": [
+            -3.0,
+            0.72,
+            -4.48
+          ],
+          "rotY": 0,
+          "grid": {
+            "count": [
+              2,
+              1,
+              9
+            ],
+            "step": [
+              0.17,
+              0,
+              0.1
+            ]
+          }
+        },
+        {
+          "asset": "tea_box",
+          "pos": [
+            -3.0,
+            0.72,
+            -3.45
+          ],
+          "rotY": 90,
+          "grid": {
+            "count": [
+              2,
+              1,
+              8
+            ],
+            "step": [
+              0.17,
+              0,
+              0.115
+            ]
+          }
+        },
+        {
+          "asset": "bottle_water",
+          "pos": [
+            -3.0,
+            1.14,
+            -4.48
+          ],
+          "rotY": 0,
+          "grid": {
+            "count": [
+              2,
+              1,
+              9
+            ],
+            "step": [
+              0.17,
+              0,
+              0.1
+            ]
+          }
+        },
+        {
+          "asset": "tea_box",
+          "pos": [
+            -3.0,
+            1.14,
+            -3.45
+          ],
+          "rotY": 90,
+          "grid": {
+            "count": [
+              2,
+              1,
+              8
+            ],
+            "step": [
+              0.17,
+              0,
+              0.115
+            ]
+          }
+        },
+        {
+          "asset": "bottle_water",
+          "pos": [
+            -3.0,
+            1.56,
+            -4.48
+          ],
+          "rotY": 0,
+          "grid": {
+            "count": [
+              2,
+              1,
+              9
+            ],
+            "step": [
+              0.17,
+              0,
+              0.1
+            ]
+          }
+        },
+        {
+          "asset": "tea_box",
+          "pos": [
+            -3.0,
+            1.56,
+            -3.45
+          ],
+          "rotY": 90,
+          "grid": {
+            "count": [
+              2,
+              1,
+              8
+            ],
+            "step": [
+              0.17,
+              0,
+              0.115
+            ]
+          }
+        },
+        {
+          "asset": "cup_glass",
+          "pos": [
+            2.8095,
+            0.81,
+            -4.03
+          ],
+          "rotY": 0,
+          "grid": {
+            "count": [
+              3,
+              1,
+              6
+            ],
+            "step": [
+              0.12,
+              0,
+              0.13
+            ]
+          }
+        },
+        {
+          "asset": "barcode_scanner",
+          "pos": [
+            2.3,
+            1.036,
+            -0.93
+          ],
+          "rotY": -60
+        },
+        {
+          "asset": "takeaway_bag",
+          "pos": [
+            2.3,
+            0.97,
+            -0.61
+          ],
+          "rotY": -90
+        },
+        {
+          "asset": "box_small",
+          "pos": [
+            2.32,
+            0.97,
+            -1.39
+          ],
+          "rotY": -90
+        },
+        {
           "asset": "crate_apples",
           "pos": [
-            0.1,
+            -2.95,
+            0.24,
+            -2.1
+          ],
+          "rotY": 90
+        },
+        {
+          "asset": "crate_oranges",
+          "pos": [
+            -2.95,
+            0.24,
+            -1.57
+          ],
+          "rotY": 90
+        },
+        {
+          "asset": "crate_bananas",
+          "pos": [
+            -2.95,
+            0.24,
+            -1.04
+          ],
+          "rotY": 90
+        },
+        {
+          "asset": "crate_wood",
+          "pos": [
+            -2.95,
+            0.24,
+            -0.51
+          ],
+          "rotY": 90
+        },
+        {
+          "asset": "cabbage",
+          "pos": [
+            -2.95,
+            0.622,
+            -0.63
+          ],
+          "rotY": 0
+        },
+        {
+          "asset": "cabbage",
+          "pos": [
+            -2.95,
+            0.622,
+            -0.39
+          ],
+          "rotY": 0
+        },
+        {
+          "asset": "mat_floor",
+          "pos": [
+            -0.35,
             0.06,
-            -0.7
-          ],
-          "rotY": 10
-        },
-        {
-          "asset": "rice_bag",
-          "pos": [
-            0.62,
-            0.1925,
-            -4.5
+            -0.33
           ],
           "rotY": 0
         },
         {
-          "asset": "rice_bag",
+          "asset": "box_small",
           "pos": [
-            0.98,
-            0.1925,
-            -4.5
+            2.55,
+            0.06,
+            -5.23
+          ],
+          "rotY": 0,
+          "grid": {
+            "count": [
+              2,
+              2,
+              1
+            ],
+            "step": [
+              0.34,
+              0.303,
+              0
+            ]
+          }
+        },
+        {
+          "asset": "clock_wall",
+          "pos": [
+            0.02,
+            2.15,
+            -5.366
           ],
           "rotY": 0
         },
         {
-          "asset": "tea_box",
+          "asset": "poster_blank",
           "pos": [
-            0.55,
-            0.6325,
-            -4.5
+            -2.6,
+            1.15,
+            -5.395
           ],
           "rotY": 0
         },
         {
-          "asset": "tea_box",
+          "asset": "menu_board_wall",
           "pos": [
-            0.75,
-            0.6325,
-            -4.5
-          ],
-          "rotY": 0
-        },
-        {
-          "asset": "tea_box",
-          "pos": [
-            0.95,
-            0.6325,
-            -4.5
-          ],
-          "rotY": 0
-        },
-        {
-          "asset": "bottle_water",
-          "pos": [
-            0.5,
-            1.0725,
-            -4.5
-          ],
-          "rotY": 0
-        },
-        {
-          "asset": "bottle_water",
-          "pos": [
-            0.65,
-            1.0725,
-            -4.5
-          ],
-          "rotY": 0
-        },
-        {
-          "asset": "bottle_water",
-          "pos": [
-            0.8,
-            1.0725,
-            -4.5
-          ],
-          "rotY": 0
-        },
-        {
-          "asset": "bottle_water",
-          "pos": [
-            0.95,
-            1.0725,
-            -4.5
-          ],
-          "rotY": 0
-        },
-        {
-          "asset": "egg_tray",
-          "pos": [
-            1.9,
-            0.1925,
-            -4.5
-          ],
-          "rotY": 0
-        },
-        {
-          "asset": "milk_carton",
-          "pos": [
-            1.7,
-            0.6325,
-            -4.5
-          ],
-          "rotY": 0
-        },
-        {
-          "asset": "milk_carton",
-          "pos": [
-            1.85,
-            0.6325,
-            -4.5
-          ],
-          "rotY": 0
-        },
-        {
-          "asset": "milk_carton",
-          "pos": [
-            2,
-            0.6325,
-            -4.5
-          ],
-          "rotY": 0
-        },
-        {
-          "asset": "tea_box",
-          "pos": [
-            1.6,
-            1.0725,
-            -2.7
-          ],
-          "rotY": 0
-        },
-        {
-          "asset": "bottle_water",
-          "pos": [
-            1.4,
-            0.6325,
-            -2.7
-          ],
-          "rotY": 0
-        },
-        {
-          "asset": "bottle_water",
-          "pos": [
-            1.8,
-            0.6325,
-            -2.7
-          ],
-          "rotY": 0
-        },
-        {
-          "asset": "tea_box",
-          "pos": [
-            -1,
+            3.18,
             1.5,
-            -3.6
+            -1.03
           ],
-          "rotY": 0
+          "rotY": -90
+        },
+        {
+          "asset": "calendar_wall",
+          "pos": [
+            -3.1905,
+            1.35,
+            -1.3
+          ],
+          "rotY": 90
+        }
+      ],
+      "blockers": [
+        {
+          "min": [
+            -3.2,
+            -4.6
+          ],
+          "max": [
+            -2.64,
+            -2.5
+          ]
+        },
+        {
+          "min": [
+            1.96,
+            -1.67
+          ],
+          "max": [
+            2.64,
+            -0.39
+          ]
+        },
+        {
+          "min": [
+            -3.18,
+            -2.4
+          ],
+          "max": [
+            -2.65,
+            -0.27
+          ]
+        },
+        {
+          "min": [
+            0.48,
+            -0.64
+          ],
+          "max": [
+            0.92,
+            -0.32
+          ]
+        },
+        {
+          "min": [
+            2.38,
+            -5.38
+          ],
+          "max": [
+            3.06,
+            -5.08
+          ]
+        }
+      ],
+      "goods": [
+        {
+          "id": "apple",
+          "concept": "apple",
+          "npc": "shopkeeper",
+          "at": [
+            -2.95,
+            0.64,
+            -2.1
+          ],
+          "stand": {
+            "pos": [
+              -2.2,
+              0.06,
+              -2.1
+            ],
+            "facing": [
+              -1,
+              0,
+              0
+            ]
+          },
+          "hand": {
+            "asset": "apple"
+          }
+        },
+        {
+          "id": "vegetables",
+          "concept": "vegetables",
+          "npc": "shopkeeper",
+          "at": [
+            -2.95,
+            0.8,
+            -0.51
+          ],
+          "stand": {
+            "pos": [
+              -2.2,
+              0.06,
+              -0.51
+            ],
+            "facing": [
+              -1,
+              0,
+              0
+            ]
+          },
+          "hand": {
+            "asset": "cabbage"
+          }
+        },
+        {
+          "id": "water",
+          "concept": "water",
+          "npc": "shopkeeper",
+          "at": [
+            -2.9,
+            1.2,
+            -4.1
+          ],
+          "stand": {
+            "pos": [
+              -2.2,
+              0.06,
+              -4.1
+            ],
+            "facing": [
+              -1,
+              0,
+              0
+            ]
+          },
+          "hand": {
+            "asset": "bottle_water"
+          }
+        },
+        {
+          "id": "tea",
+          "concept": "tea",
+          "npc": "shopkeeper",
+          "at": [
+            -2.9,
+            1.2,
+            -3.0
+          ],
+          "stand": {
+            "pos": [
+              -2.2,
+              0.06,
+              -3.0
+            ],
+            "facing": [
+              -1,
+              0,
+              0
+            ]
+          },
+          "hand": {
+            "asset": "tea_box"
+          }
+        },
+        {
+          "id": "cup",
+          "concept": "cup",
+          "npc": "shopkeeper",
+          "at": [
+            2.9395,
+            0.95,
+            -3.7
+          ],
+          "stand": {
+            "pos": [
+              2.15,
+              0.06,
+              -3.7
+            ],
+            "facing": [
+              1,
+              0,
+              0
+            ]
+          },
+          "hand": {
+            "asset": "cup_glass"
+          }
+        },
+        {
+          "id": "book",
+          "concept": "book",
+          "npc": "shopkeeper",
+          "at": [
+            2.9395,
+            0.95,
+            -2.65
+          ],
+          "stand": {
+            "pos": [
+              2.15,
+              0.06,
+              -2.65
+            ],
+            "facing": [
+              1,
+              0,
+              0
+            ]
+          },
+          "hand": {
+            "box": [
+              0.17,
+              0.24,
+              0.03
+            ],
+            "colour": "#2F6DB5"
+          }
         }
       ],
       "interactables": [],
@@ -666,8 +1565,8 @@
         },
         "lamp": [
           0,
-          2.3,
-          -2.8
+          2.5,
+          -2.9
         ],
         "opening": [
           0,

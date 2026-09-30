@@ -23,6 +23,7 @@ import {
   type GameState,
   type Input,
   type RenderedLine,
+  type Scene,
   type WalletReason,
   type Word,
   type WordId,
@@ -151,6 +152,21 @@ export interface UiModel {
   events: GameEvent[];
 }
 
+/**
+ * What taking a product off a shelf leads to (Game.shopItem): `buy`, the seller has a scene here
+ * whose first exchange takes the item as a slot value (`input`: that scene started with the item
+ * picked); `ask`, they have a scene here about no item in particular (talking to them opens it); `look`, no
+ * scene with them now, or only scenes about other items: the item's word only (`note`: a scene
+ * here waits for money, as talkTo says).
+ */
+export interface ShopPlan {
+  kind: "buy" | "ask" | "look";
+  /** the item's word (the prompt's name, the word card) */
+  word?: WordId;
+  input?: Input;
+  note?: string;
+}
+
 export interface Gloss {
   text: string;
   /** how to say it (Word.readings), as the TUI shows it: every reading of a word, the sentence-help one of each word of a line */
@@ -205,8 +221,14 @@ export interface Game {
   enterPlace(place: string): void;
   /** the travel list: every other place (the TUI's "Go to" items, routed) */
   travel(): void;
-  /** tapped / pressed E at an NPC: start their scene, or list them if there are several (none: they bark, when barks are on) */
-  talkTo(npc: string): void;
+  /**
+   * tapped / pressed E at an NPC: start their scene, or list them if there are several (none: they
+   * bark, when barks are on). `about`: an item in hand (a concept, shop goods): the scenes that
+   * take it as a slot value start with it picked (core startScene `pick`), and only those.
+   */
+  talkTo(npc: string, about?: string): void;
+  /** what taking `concept` off a shelf leads to with its seller `npc` (no input sent) */
+  shopItem(npc: string, concept: string): ShopPlan;
   /**
    * Someone outside the course says a line (a walker, a pet, a stall keeper): the bubble with its
    * reading, the meaning in the UI language under the hint chip, its clip, and a "…" reply that
@@ -247,7 +269,7 @@ export interface Game {
  */
 export const INPUT_AFFORDANCES: Record<Input["type"], { tui: string; world3d: string; api: keyof Game }> = {
   goTo: { tui: "menu: Go to <place>", world3d: "walk into a zone, a door or an interior's open front; the Go to… list", api: "enterPlace" },
-  startScene: { tui: "menu: Talk to <npc>: <scene>", world3d: "tap an NPC or E next to them (a list when there are several)", api: "talkTo" },
+  startScene: { tui: "menu: Talk to <npc>: <scene>", world3d: "tap an NPC or E next to them (a list when there are several); a shop item taken to the counter (with pick)", api: "talkTo" },
   reply: { tui: "number keys in a scene", world3d: "tap a reply (or 1-4)", api: "reply" },
   replyTiles: { tui: "tile numbers, backspace, enter", world3d: "tap tiles in order, Undo, Say it (or Give up: an empty reply)", api: "replyTiles" },
   helpWord: { tui: "[w] word help, number", world3d: "tap a word in the bubble, or ? then a word in a reply", api: "helpWord" },
@@ -621,19 +643,51 @@ export function createGame(opts: GameOptions): Game {
    * app.ts's menu, narrowed to one NPC: the scenes available here with them, plus the mentor's
    * notes when they are the mentor. One item starts at once; several become a list.
    */
-  function talkTo(npc: string) {
+  /** The scenes available here with `npc`. */
+  function scenesWith(npc: string): Scene[] {
+    const st = core.state;
+    return availableSceneIds(course, st)
+      .map((id) => course.scenes.find((x) => x.id === id)!)
+      .filter((scene) => scene.place === st.place && scene.npc === npc);
+  }
+
+  /** The slot of the scene's first exchange whose group holds `concept` (an item a shelf holds), if any. */
+  function slotFor(scene: Scene, concept: string): string | undefined {
+    const ex = scene.exchanges[0];
+    return ex ? Object.keys(ex.slots).sort().find((k) => course.groups[ex.slots[k]]?.includes(concept)) : undefined;
+  }
+
+  /** startScene for `scene`, with `about` picked when its first exchange takes it. */
+  function startInput(scene: Scene, about?: string): Input {
+    const slot = about ? slotFor(scene, about) : undefined;
+    return slot ? { type: "startScene", scene: scene.id, pick: { [slot]: about! } } : { type: "startScene", scene: scene.id };
+  }
+
+  function shopItem(npc: string, concept: string): ShopPlan {
+    const st = core.state;
+    const word = course.concepts[concept]?.[0];
+    const here = st.run || course.world.npcs[npc]?.place !== st.place ? [] : scenesWith(npc);
+    const buy = here.find((x) => slotFor(x, concept));
+    if (buy) return { kind: "buy", word, input: startInput(buy, concept) };
+    // A scene about no item in particular (the clerk's first chat): taken to them, it opens that.
+    // One about other items (the sale of an apple) is no place for this one: its word only.
+    if (here.some((x) => !Object.keys(x.exchanges[0]?.slots ?? {}).length)) return { kind: "ask", word };
+    const waiting = st.run ? [] : course.scenes.filter((x) => x.place === st.place && x.npc === npc && moneyBlocked(x, st));
+    const note = waiting.map((x) => t("menu-needs-money", { npc: npcName(npc), scene: t(`scene-${x.id}`), currency: course.world.currency, cost: sceneCost(x) }))[0];
+    return { kind: "look", word, ...(note ? { note } : {}) };
+  }
+
+  function talkTo(npc: string, about?: string) {
     const st = core.state;
     if (model.mode === "name") return;
     if (model.bark) closeBark();
     if (st.run) return dispatch([{ type: "inputRejected", reason: "in-scene" }]);
     if (course.world.npcs[npc]?.place !== st.place) return dispatch([{ type: "inputRejected", reason: "wrong-place" }]);
-    const items: Choice[] = [];
-    for (const id of availableSceneIds(course, st)) {
-      const scene = course.scenes.find((x) => x.id === id)!;
-      if (scene.place !== st.place || scene.npc !== npc) continue;
-      items.push({ label: t(`scene-${id}`) + t("cost-slot"), input: { type: "startScene", scene: id } });
-    }
-    if (course.world.mentor?.npc === npc && model.mentor) items.push(model.mentor);
+    let scenes = scenesWith(npc);
+    // An item in hand: the scenes about it (the clerk's sale of that very item), when there are any.
+    if (about && scenes.some((x) => slotFor(x, about))) scenes = scenes.filter((x) => slotFor(x, about));
+    const items: Choice[] = scenes.map((scene) => ({ label: t(`scene-${scene.id}`) + t("cost-slot"), input: startInput(scene, about) }));
+    if (course.world.mentor?.npc === npc && model.mentor && !(about && items.some((c) => c.input?.type === "startScene" && c.input.pick))) items.push(model.mentor);
     if (!items.length) {
       // As app.ts's menu: a scene here that waits only for money says what it needs.
       const waiting = course.scenes.filter((x) => x.place === st.place && x.npc === npc && moneyBlocked(x, st));
@@ -798,6 +852,7 @@ export function createGame(opts: GameOptions): Game {
     enterPlace,
     travel,
     talkTo,
+    shopItem,
     bark,
     endBark,
     choose,

@@ -30,7 +30,7 @@ function buildAll() {
 
 describe.skipIf(!assetIndex)("scene spaces from the real GLBs", () => {
   it("builds the town and every interior; NPCs, walkers, pigeons and props are where the layout says", async () => {
-    const { spaces } = await buildAll();
+    const { L, spaces } = await buildAll();
     const street = spaces.get("street")!;
     // Draw calls, unculled (what renderer.info.render.calls reads with everything in view): static
     // meshes batched per material (the town's 191 placements and its landscape among them), and
@@ -97,7 +97,9 @@ describe.skipIf(!assetIndex)("scene spaces from the real GLBs", () => {
     expect(street.scene.getObjectByName("noodle_shop")).toBeDefined();
     expect(street.scene.getObjectByName("pier")).toBeDefined();
     expect(street.blockers.length).toBe(LAYOUT.town.blockers.length + street.npcs.size);
-    expect(spaces.get("shop")!.scene.getObjectByName("shop_counter")).toBeDefined();
+    // the shop's checkout counter is box-built (layout ground, batched away): its blocker is there
+    const counter = L.space("shop").ground.find((g) => g.name === "shop_counter")!;
+    expect(spaces.get("shop")!.blockers.some((b) => b.min[0] <= counter.min[0] && b.max[0] >= counter.max[0] && b.min[1] <= counter.min[2] && b.max[1] >= counter.max[2])).toBe(true);
     expect(spaces.get("tea_house")!.scene.getObjectByName("tea_interior:table_round")).toBeDefined();
     // hand props: no carry pose; Wang holds the fan on the grip bone
     for (const s of spaces.values())

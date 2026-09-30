@@ -40,6 +40,7 @@ import {
 import { JsonFetcher, LateLoad, ModuleLoadError, retrying, StartWatch, WebGLError } from "./boot";
 import { CAMERA, CameraRig, outlineScale } from "./camera";
 import { PlayerCarry } from "./carry";
+import { aisleRoute, handProp, ShopHand } from "./shop";
 import { applyStart, loadCatalog, rememberedStart, resumePick, type Picked } from "./courses";
 import { CameraPathPlayer, DollyPath, Letterbox, OrbitPath } from "./cutscene";
 import { openSession, type Game, type UiModel } from "./game";
@@ -726,6 +727,8 @@ async function main() {
   let transitioning = false;
   let mixupSeq = 0;
   let prompt: PromptTarget | null = null;
+  /** the shop item the player took off a shelf (shop.ts), until the sale at the counter ends or it goes back */
+  const hand = new ShopHand(player.actor, (h) => handProp(L, assets, h));
   // Barks (src/barks.ts): everyone outside the course says a line in the course's language.
   const barkBook = (c: Course) => {
     const book = BARKS[c.language.code];
@@ -847,6 +850,7 @@ async function main() {
     // Through a door: it opens going in, and closes behind you coming out.
     if (door && next !== space && next.layout.interior !== space.layout.interior) sfx(next.layout.interior ? "door_open" : "door_close");
     releaseBark(); // the bark itself ends next frame (updateBark: its speaker isn't in this space)
+    hand.putBack(); // nothing leaves a shop unpaid
     space.scene.remove(player.root, marker, guideMarker.root, trail.mesh);
     space = next;
     space.scene.add(player.root, marker, guideMarker.root, trail.mesh);
@@ -1052,6 +1056,10 @@ async function main() {
     if (barking && m.bark?.id !== barking.fig.id) releaseBark();
     const npc = m.scene?.npc ?? null;
     if (npc === sceneNpc) return;
+    // The item in hand goes with its seller's scene (not one selling another item); that scene's
+    // end (bought or not) ends the sale.
+    const combo = Object.values(game.core.state.run?.combo ?? {});
+    if (hand.spot && (npc !== hand.spot.npc || (combo.length && !combo.includes(hand.spot.concept)))) hand.putBack();
     sceneNpc = npc;
     pendingTalk = null;
     player.locked = !!npc;
@@ -1181,7 +1189,7 @@ async function main() {
     if (!game) return;
     const home = course.world.npcs[npc]?.place;
     if (home && home !== game.core.state.place && L.travelOnly(home)) game.enterPlace(home);
-    game.talkTo(npc);
+    game.talkTo(npc, hand.spot?.npc === npc ? hand.spot.concept : undefined);
   }
 
   /** Uses a prompt target: talk, go through a door, leave, sleep, read the notebook. */
@@ -1191,8 +1199,39 @@ async function main() {
     if (t.kind === "talk") return requestTalk(t.ref);
     if (t.kind === "bark") return startBark(t.ref);
     if (t.kind === "enter" || t.kind === "exit") return game.enterPlace(t.ref);
+    if (t.kind === "goods") return useGoods(t.ref);
     if (t.kind === "sleep") return game.sleep();
     if (t.kind === "notebook") return overlay.openNotebook();
+  }
+
+  /**
+   * A product on a shelf: take it (again: put it back). Its seller has a scene for it here (or
+   * any scene): walk it to the counter through the aisles and talk there, the item picked (talkHere).
+   * Otherwise its word card, and why nothing more (a scene waiting for money).
+   */
+  function useGoods(id: string) {
+    const spot = space.layout.goods.find((g) => g.id === id);
+    if (!game || !spot) return;
+    if (hand.spot?.id === id) return hand.putBack();
+    void hand.take(spot);
+    const plan = game.shopItem(spot.npc, spot.concept);
+    if (plan.kind === "look") {
+      if (plan.word) overlay.lookUpWord(plan.word);
+      if (plan.note) overlay.notify(plan.note, "info");
+      return;
+    }
+    if (!space.npcs.has(spot.npc)) return;
+    const stand = L.talkStand(spot.npc);
+    const at = L.npcStand(spot.npc).pos;
+    const face = new THREE.Vector3(at[0] - stand.pos[0], 0, at[2] - stand.pos[2]);
+    const route = aisleRoute(space.area.bounds, space.area.blockers, [player.position.x, player.position.z], [stand.pos[0], stand.pos[2]]) ?? [[stand.pos[0], stand.pos[2]]];
+    const leg = (i: number) => {
+      const [x, z] = route[i];
+      if (i === route.length - 1) player.walkTo(x, z, { face, arrive: () => (pendingTalk = spot.npc) });
+      else player.walkTo(x, z, { arrive: () => leg(i + 1) });
+    };
+    leg(0);
+    showMarker(stand.pos[0], stand.pos[2]);
   }
 
   function targets(): PromptTarget[] {
@@ -1266,6 +1305,11 @@ async function main() {
     if (t.kind === "enter") return s(L.space(L.spaceOf(t.ref)).interior ? "prompt-enter" : "prompt-go", { place: placeName(t.ref) });
     if (t.kind === "exit") return s("prompt-exit", { place: placeName(t.ref) });
     if (t.kind === "sleep") return s("prompt-sleep");
+    if (t.kind === "goods") {
+      const g = space.layout.goods.find((x) => x.id === t.ref);
+      const item = (g && course.words[course.concepts[g.concept]?.[0] ?? ""]?.w) ?? t.ref;
+      return s(hand.spot?.id === t.ref ? "prompt-put-back" : "prompt-take", { item });
+    }
     return s("prompt-notebook");
   }
 
@@ -1293,8 +1337,9 @@ async function main() {
       const near = nearestPrompt(L, nav.space, [t], player.position.x, player.position.z);
       if (near) return use(near);
       pendingUse = t.id;
-      player.walkTo(t.at[0], t.at[2]);
-      showMarker(t.at[0], t.at[2]);
+      const [wx, wz] = t.from ?? [t.at[0], t.at[2]]; // goods: the spot in front of the shelf
+      player.walkTo(wx, wz);
+      showMarker(wx, wz);
       return;
     }
     pendingUse = null;
@@ -1772,6 +1817,8 @@ async function main() {
       objective: () => game?.model.objective,
       prompt: () => (prompt ? { id: prompt.id, kind: prompt.kind, label: promptLabel(prompt) } : null),
       use: () => prompt && use(prompt),
+      /** the shop item taken (its goods id) and whether it is on the grip bone yet */
+      shop: () => ({ holding: hand.spot?.id ?? null, inHand: hand.inHand }),
       anim: () => ({
         player: player.actor.state,
         npcs: Object.fromEntries([...space.npcs].map(([n, v]) => [n, { state: v.actor.state, clips: v.actor.animated, clip: v.actor.playing?.getClip().name ?? null, carrying: v.actor.carrying, shrugging: v.actor.shrugging }])),

@@ -51,6 +51,9 @@ const FALLBACK: Record<string, string> = {
   "prompt-exit": "Leave for {place}",
   "prompt-sleep": "Sleep",
   "prompt-notebook": "Read your notebook",
+  // a product on a shop shelf ({item}: its word in the course's language)
+  "prompt-take": "Take {item}",
+  "prompt-put-back": "Put {item} back",
   "prompt-key": "E",
   // objective line
   "obj-name": "Tell them your name",

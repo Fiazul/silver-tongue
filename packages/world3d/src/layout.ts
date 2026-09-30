@@ -25,6 +25,8 @@ export interface Placement {
   role?: string;
   /** dressing hung on a building's anchors (scripts/port-town.mjs HUNG): the building's id */
   mounted?: string;
+  /** interior dressing: a block of copies (bottles in a fridge, cups on a table), `count` along x, y, z, `step` m apart (world axes) from `pos` */
+  grid?: { count: [number, number, number]; step: Vec3 };
 }
 export interface BuildingPlacement extends Placement {
   id: string;
@@ -101,6 +103,25 @@ export interface GroundBox {
   min: Vec3;
   max: Vec3;
 }
+/** What a shelf item looks like in the player's hand: a props/ asset (feet origin: held by its middle), or a plain box (a book). */
+export type HandSpec = { asset: string } | { box: Vec3; colour: string };
+/**
+ * A product on a shelf, in a fridge or on a stand (`interiors.<id>.goods`): walking up to its
+ * `stand` shows the item's name in the course's language; using it picks the item up and takes
+ * it to `npc` (the clerk) to buy or ask about (game.ts shopItem, main.ts).
+ */
+export interface GoodsSpec {
+  id: string;
+  /** the course concept it is (a slot value: `apple`, `water`); the prompt shows its word */
+  concept: string;
+  /** who sells it (their scenes here take it as the item) */
+  npc: string;
+  /** the product itself (the prompt floats above it; the tap box is on it) */
+  at: Vec3;
+  /** where the player stands to take it, facing it */
+  stand: FixedStand;
+  hand: HandSpec;
+}
 export interface InteractableSpec {
   kind: "sleep" | "notebook";
   /** a piece (and optionally one of its anchors), or a fixed point */
@@ -157,6 +178,10 @@ export interface InteriorLayout {
   ground: GroundBox[];
   dressing: Placement[];
   interactables: InteractableSpec[];
+  /** fixtures that aren't pieces (the box-built counter, fridge, stands) and small dressing that must still block: x/z boxes */
+  blockers?: Box2[];
+  /** products the player can pick up (a shop's shelves) */
+  goods?: GoodsSpec[];
   camera?: { distance?: number };
   background?: string;
   backdrop?: InteriorBackdropSpec;
@@ -319,6 +344,16 @@ export interface Interactable {
   range: number;
 }
 
+/** A product in a space (GoodsSpec with its stand normalised). */
+export interface GoodsSpot {
+  id: string;
+  concept: string;
+  npc: string;
+  at: Vec3;
+  stand: Stand;
+  hand: HandSpec;
+}
+
 /** The town's outdoor look: landscape GLBs at the origin, the sky dome, the sun, the fog. */
 export interface TownLook {
   landscape: string[];
@@ -361,6 +396,8 @@ export interface SpaceLayout {
   walkers: WalkerLayout[];
   triggers: Trigger[];
   interactables: Interactable[];
+  /** products to pick up (interiors' `goods`) */
+  goods: GoodsSpot[];
   npcs: string[];
   camera: { distance?: number };
   background?: string;
@@ -459,6 +496,18 @@ export const inBox = (b: Box2, x: number, z: number, margin = 0) =>
 export const boxesOverlap = (a: Box2, b: Box2) => a.min[0] < b.max[0] && b.min[0] < a.max[0] && a.min[1] < b.max[1] && b.min[1] < a.max[1];
 
 /** Axis-aligned x/z box around points. */
+/** A placement's copies (its `grid`), each a plain placement; one without a grid is itself. */
+export function expandGrid(p: Placement): Placement[] {
+  if (!p.grid) return [p];
+  const { count, step } = p.grid;
+  const { grid: _grid, ...base } = p;
+  const out: Placement[] = [];
+  for (let i = 0; i < count[0]; i++)
+    for (let j = 0; j < count[1]; j++)
+      for (let k = 0; k < count[2]; k++) out.push({ ...base, pos: [p.pos[0] + i * step[0], p.pos[1] + j * step[1], p.pos[2] + k * step[2]] });
+  return out;
+}
+
 function aabb(points: Vec3[]): Box2 {
   const xs = points.map((p) => p[0]);
   const zs = points.map((p) => p[2]);
@@ -733,6 +782,7 @@ export class LayoutIndex {
       walkers: t.walkers,
       triggers: this.placeTriggers(STREET),
       interactables: [],
+      goods: [],
       npcs: this.npcsIn(STREET),
       camera: {},
       interior: false,
@@ -773,11 +823,11 @@ export class LayoutIndex {
       defaultPlace: i.place,
       bounds,
       surfaces,
-      blockers: [],
+      blockers: i.blockers ?? [],
       pieces,
       tiles: i.tiles ?? [],
       ground: i.ground,
-      dressing: i.dressing,
+      dressing: i.dressing.flatMap(expandGrid),
       walkers: i.walkers ?? [],
       triggers: [exit, ...this.placeTriggers(id)],
       interactables: i.interactables.map((x) => ({
@@ -785,6 +835,7 @@ export class LayoutIndex {
         range: x.range ?? 1.5,
         pos: "pos" in x.at ? x.at.pos : x.at.anchor ? this.point(x.at.building, x.at.anchor) : this.building(x.at.building).pos,
       })),
+      goods: (i.goods ?? []).map((g) => ({ id: g.id, concept: g.concept, npc: g.npc, at: g.at, stand: { pos: g.stand.pos, facing: vec3(g.stand.facing) }, hand: g.hand })),
       npcs: this.npcsIn(id),
       camera: i.camera ?? {},
       background: i.background,

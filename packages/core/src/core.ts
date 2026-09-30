@@ -30,7 +30,7 @@ function handle(ctx: Ctx, input: Input): void {
       ctx.ev.push({ type: "placeEntered", place: input.place });
       return;
     case "startScene":
-      return startScene(ctx, input.scene);
+      return startScene(ctx, input.scene, input.pick);
     case "reply":
       return reply(ctx, input.choice);
     case "replyTiles":

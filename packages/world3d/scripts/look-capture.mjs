@@ -279,7 +279,9 @@ if (SET === "interiors") {
   const layout = JSON.parse(readFileSync(new URL("../src/layout.json", import.meta.url), "utf8"));
   const portrait = process.env.PORTRAIT === "1";
   report.interiors = [];
-  for (const [id, interior] of Object.entries(layout.interiors).filter(([, i]) => !i.outdoor)) {
+  // ROOMS=shop: those rooms only
+  const rooms = process.env.ROOMS?.split(",");
+  for (const [id, interior] of Object.entries(layout.interiors).filter(([k, i]) => !i.outdoor && (!rooms || rooms.includes(k)))) {
     for (const [tier, time, day] of [["classic", "midday", 1 / 3], ["full", "midday", 1 / 3], ["full", "evening", 1]]) {
       const page = await browser.newPage({ viewport: portrait ? { width: 390, height: 844 } : { width: W, height: H }, ...(portrait ? { isMobile: true, hasTouch: true, deviceScaleFactor: 1 } : {}) });
       const errors = errorsOf(page);
@@ -295,6 +297,26 @@ if (SET === "interiors") {
       const info = await page.evaluate(() => window.world3d.info());
       report.interiors.push({ file, portrait, camera: "gameplay", calls: info.calls, triangles: info.triangles, errors });
       console.log(`${file}: ${info.calls} calls, ${info.triangles} triangles, ${errors.length} errors`);
+      // The shop's goods (classic midday, the HUD on): next to a product with its prompt, then holding it.
+      if (id === "shop" && tier === "classic" && interior.goods?.length) {
+        const goods = interior.goods.find((g) => g.id === (process.env.SHOP_ITEM ?? "vegetables")) ?? interior.goods[0];
+        await page.evaluate(() => window.world3d.promo("hud", true));
+        await page.evaluate(([x, z]) => window.world3d.teleport(x, z), [goods.stand.pos[0], goods.stand.pos[2]]);
+        await page.waitForFunction((want) => window.world3d.prompt()?.id === want, `goods:${goods.id}`, { timeout: 10000 });
+        await page.waitForTimeout(800);
+        const near = await page.evaluate(() => window.world3d.prompt());
+        await page.screenshot({ path: join(out, "shop-item-prompt.png") });
+        await page.evaluate(() => window.world3d.use());
+        await page.waitForFunction(() => window.world3d.shop().inHand, null, { timeout: 10000 });
+        // a step into the room (facing +x: the right hand, with the item, toward the camera)
+        await page.evaluate(([x, z]) => window.world3d.walkTo(x, z), [goods.stand.pos[0] + 0.7, goods.stand.pos[2] - 0.1]);
+        await page.waitForTimeout(1500);
+        const held = await page.evaluate(() => ({ shop: window.world3d.shop(), prompt: window.world3d.prompt(), anim: window.world3d.anim().player }));
+        await page.screenshot({ path: join(out, "shop-item-held.png") });
+        for (const f of ["shop-item-prompt.png", "shop-item-held.png"]) report.interiors.push({ file: f, portrait, camera: "gameplay", errors });
+        report.shopItem = { goods: goods.id, near, held };
+        console.log(`shop item: ${JSON.stringify(report.shopItem)}; ${errors.length} errors`);
+      }
       await page.close();
     }
   }

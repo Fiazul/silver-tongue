@@ -480,6 +480,11 @@ export class Overlay {
     this.gloss.style.transform = "none";
   }
 
+  /** A word's card (readings, gloss, ▶) by the prompt: the name of a shop item just taken (logged as help, as a tap on it in a bubble). */
+  lookUpWord(word: WordId) {
+    this.lookUp(word, this.promptBtn.classList.contains("hidden") ? this.actionBtn : this.promptBtn);
+  }
+
   private lookUp(word: WordId, at: HTMLElement) {
     const g = this.game.helpWord(word);
     if (g) this.showGloss(g, at);

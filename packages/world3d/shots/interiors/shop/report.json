@@ -1,0 +1,60 @@
+{
+ "interiors": [
+  {
+   "file": "shop-classic-midday.png",
+   "portrait": false,
+   "camera": "gameplay",
+   "calls": 147,
+   "triangles": 134534,
+   "errors": []
+  },
+  {
+   "file": "shop-item-prompt.png",
+   "portrait": false,
+   "camera": "gameplay",
+   "errors": []
+  },
+  {
+   "file": "shop-item-held.png",
+   "portrait": false,
+   "camera": "gameplay",
+   "errors": []
+  },
+  {
+   "file": "shop-full-midday.png",
+   "portrait": false,
+   "camera": "gameplay",
+   "calls": 1,
+   "triangles": 1,
+   "errors": []
+  },
+  {
+   "file": "shop-full-evening.png",
+   "portrait": false,
+   "camera": "gameplay",
+   "calls": 1,
+   "triangles": 1,
+   "errors": []
+  }
+ ],
+ "shopItem": {
+  "goods": "vegetables",
+  "near": {
+   "id": "goods:vegetables",
+   "kind": "goods",
+   "label": "Take 菜"
+  },
+  "held": {
+   "shop": {
+    "holding": "vegetables",
+    "inHand": true
+   },
+   "prompt": {
+    "id": "goods:vegetables",
+    "kind": "goods",
+    "label": "Put 菜 back"
+   },
+   "anim": "idle"
+  }
+ }
+}

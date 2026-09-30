@@ -129,7 +129,8 @@ export class SpaceNav {
 }
 
 /** `bark`: someone outside the course (a walker, a pet, a stall keeper; src/barks.ts), `at` their live position (main.ts). */
-export type PromptKind = "talk" | "bark" | "enter" | "exit" | "sleep" | "notebook";
+/** `goods`: a product on a shelf (layout `goods`), `ref` its id. */
+export type PromptKind = "talk" | "bark" | "enter" | "exit" | "sleep" | "notebook" | "goods";
 
 export interface PromptTarget {
   /** stable id: `talk:wang`, `bark:walker:0`, `enter:noodle_shop`, `exit:street`, `sleep:0` */
@@ -141,6 +142,8 @@ export interface PromptTarget {
   at: Vec3;
   /** how close (m) the player must be */
   range: number;
+  /** measured from here (x, z) instead of `at` (goods: the spot in the aisle in front of the product) */
+  from?: [number, number];
   /** distance of the player to the thing (m); filled by nearestPrompt */
   dist?: number;
 }
@@ -149,6 +152,8 @@ export interface PromptTarget {
 export const TALK_RANGE = 2.3;
 const DOOR_RANGE = 1.6;
 const EXIT_RANGE = 1.3;
+/** Take a product from within this range (m) of its stand. */
+export const GOODS_RANGE = 0.9;
 
 const distToBox = (b: { min: number[]; max: number[] }, x: number, z: number) =>
   Math.hypot(Math.max(b.min[0] - x, 0, x - b.max[0]), Math.max(b.min[1] - z, 0, z - b.max[1]));
@@ -169,6 +174,8 @@ export function promptTargets(L: LayoutIndex, space: string, canSleep: boolean):
     if (x.kind === "sleep" && !canSleep) return;
     out.push({ id: `${x.kind}:${i}`, kind: x.kind, ref: String(i), at: [x.pos[0], x.pos[1] + 0.6, x.pos[2]], range: x.range });
   });
+  for (const g of s.goods)
+    out.push({ id: `goods:${g.id}`, kind: "goods", ref: g.id, at: [g.at[0], g.at[1] + 0.35, g.at[2]], range: GOODS_RANGE, from: [g.stand.pos[0], g.stand.pos[2]] });
   return out;
 }
 
@@ -184,7 +191,8 @@ export function nearestPrompt(L: LayoutIndex, space: string, targets: PromptTarg
     } else if (t.kind === "talk") {
       const p = L.npcStand(t.ref).pos;
       d = Math.hypot(p[0] - x, p[2] - z);
-    } else d = Math.hypot(t.at[0] - x, t.at[2] - z);
+    } else if (t.from) d = Math.hypot(t.from[0] - x, t.from[1] - z);
+    else d = Math.hypot(t.at[0] - x, t.at[2] - z);
     if (d <= t.range && (!best || d < best.dist!)) best = { ...t, dist: d };
   }
   return best;

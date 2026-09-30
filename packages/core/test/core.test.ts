@@ -81,6 +81,32 @@ describe("core", () => {
     expect(core.state.run).toBeNull();
   });
 
+  it("startScene's pick pins the first exchange's slot values; a slot or value it can't take is ignored", () => {
+    for (const item of ["tea", "water"]) for (const count of ["three", "four"]) for (const seed of [1, 2, 3]) {
+      const core = setup(seed);
+      playIntro(core);
+      const ev = core.send({ type: "startScene", scene: "shift", pick: { item, count } });
+      expect(find(ev, "sceneStarted")).toEqual({ type: "sceneStarted", scene: "shift", npc: "cook" });
+      expect(core.state.run!.combo).toEqual({ item, count });
+      // the pinned combination plays as any other: its right reply is accepted
+      expect(find(answerRight(core), "actionPerformed").matched).toBe(true);
+    }
+    // only item pinned: count is core's own choice
+    const one = setup();
+    playIntro(one);
+    one.send({ type: "startScene", scene: "shift", pick: { item: "water" } });
+    expect(one.state.run!.combo.item).toBe("water");
+    expect(["three", "four"]).toContain(one.state.run!.combo.count);
+    // a value the group lacks and a slot the exchange lacks: the same start as without a pick
+    const plain = setup(7), odd = setup(7);
+    playIntro(plain);
+    playIntro(odd);
+    const a = plain.send({ type: "startScene", scene: "shift" });
+    const b = odd.send({ type: "startScene", scene: "shift", pick: { item: "apple", colour: "red" } });
+    expect(b).toEqual(a);
+    expect(odd.state.run).toEqual(plain.state.run);
+  });
+
   it("a wrong reply costs money, triggers a reaction, and rephrases after two misses", () => {
     const core = setup();
     playIntro(core);

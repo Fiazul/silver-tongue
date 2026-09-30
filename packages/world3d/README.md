@@ -431,7 +431,7 @@ courses/<id>/<learner>.json (courses.ts) ─► core ◄─ inputs ── game.t
     `travelOnly` with a `stay` box (no building in this town: the Go to list only, see Outdoors).
   - `interiors.<id>`: every scene space other than the town, entered through its place's door.
     A room: `shell` (an interiors/ shell: its `furniture_slots` become pieces, ids
-    `<shell id>:<asset>[:n]`), or `size` + `ground` boxes (the shop, the stairwell). `outdoor: true`
+    `<shell id>:<asset>[:n]`), or `size` + `ground` boxes (the shop, the stairwell); `blockers` (x/z boxes: fixtures built from ground boxes, small dressing that must still block), `goods` (products to pick up: see Shop), and a dressing entry's `grid` (`count` x/y/z copies `step` apart: bottles in a fridge). `outdoor: true`
     makes it a side street instead (none now; the town has every outdoor place): `buildings`
     (blocked by footprint), `tiles`, `walkers`, `surfaces` (kerbs), sky and fog, the full day's
     light. `entry` (a shell anchor or a fixed stand, moved `inset` in and `shift` across) is where
@@ -475,6 +475,7 @@ courses/<id>/<learner>.json (courses.ts) ─► core ◄─ inputs ── game.t
   to deliver ("Deliver the parcel: go to Hospital and find Doctor"); a story scene here, else the
   nearest one elsewhere ("Go to Noodle Shop and find Cook"); the mentor's notes; paid shifts;
   practice; "go home and sleep". The sub-line is the rent timer.
+- `src/shop.ts`: the shop's goods (see Shop): `ShopHand` (the item taken, on the player's right grip, one at a time; put back / the sale over / leaving: gone), `handProp` (held by its middle; a plain box for the book), `aisleRoute` (A* on a 0.1 m grid, pulled tight: the walk from the shelf to the counter).
 - `src/carry.ts`: `PlayerCarry` puts `player.errandProp` in the player's hand while the model has an
   errand (synced after every change, so a restored save has it too) and takes it away after.
 - `src/streetlife.ts` (pure): `WalkerMotion` (waypoints there and back, stop and wait while the
@@ -615,7 +616,7 @@ case).
 | menu "Go to Warehouse" | the "Go to…" list only: no warehouse in this town (travel-only); it puts you on the pier with Big Liu, where the place holds while you stay; tapping him there takes you there too | `goTo` (hop by hop) |
 | menu "Go to School" | the "Go to…" list only: no school building (travel-only); the teacher and David stand west of the pavilion | `goTo` (hop by hop) |
 | menu "Go to Hospital" | the "Go to…" list only: no hospital building (travel-only); the doctor stands east of the pavilion | `goTo` (hop by hop) |
-| menu "Talk to <npc>: <scene>" | tap the NPC, or E / the "Talk to" prompt within 2.3 m; a list when there are several | `startScene` |
+| menu "Talk to <npc>: <scene>" | tap the NPC, or E / the "Talk to" prompt within 2.3 m; a list when there are several; or take a shop item off its shelf (E · Take <item>): walked to the counter, the clerk's sale starts with that item (`pick`, see Shop) | `startScene` |
 | number keys in a scene (pick) | tap a reply, or 1-4 | `reply` |
 | tile numbers, backspace, enter (tiles) | tap tiles in order, Undo (Backspace), Say it (Enter); Give up sends an empty reply | `replyTiles` |
 | [w] word help, then a number | tap a word in the bubble; "?" then a word in a reply | `helpWord` |
@@ -652,6 +653,70 @@ soundSet (Settings' Voice from `state.sound`, or the ♪ chip without the mixer;
 queued per call as app.ts does (lineSpoken, lineRephrased slow or not, npcReacted's
 `reactionAudio[reaction][npc]`, actionPerformed on right tiles) and played once the batch is in.
 
+## Shop
+
+The Corner Shop (`interiors.shop`, a box room: `size` 6.4 x 5.4 m, walls 2.9 m) is a small
+Chinese convenience store. The camera zooms out on its own (interior-camera.ts): fov 39°, pitch
+40°, eye 6.3 m up and 3.6 m in front at 16:9, the whole floor and back wall in view; portrait
+pans (52 % of the floor from the centre). The solver's limit: a 5.8 m deep room only frames at
+fov 70° (player 27.4 % at the centre) or at fov 40° with the player at 26.0 % (under the tests'
+27 %); wider than ~6.5 m drops portrait floor below 50 %. So 6.4 x 5.4 x 2.9 m.
+
+Layout (x right, z toward the open front at 0; walk bounds 0.15 m inside the walls):
+
+- back wall: a run of 4 `shelf_unit`s (z -5.18), a wall clock above, a poster; `freezer_chest`
+  in the back-left corner, stock boxes (`box_small` x 4) in the back-right one.
+- left wall: the drinks fridge (an open chiller of ground boxes: body, shelves, blue sign;
+  `bottle_water` and `tea_box` on 4 shelves, `grid` dressing), then the fruit and veg stand in
+  line with it by the entrance (a green platform, `crate_apples`, `crate_oranges`,
+  `crate_bananas`, a `crate_wood` with two `cabbage`s), a calendar above.
+- middle: gondola A (2 units long, back-to-back shelves) and gondola B (1 unit, so the till
+  stays clear of its aisle); aisles 1.24 / 1.24 / 1.23 m, back corridor 1.22 m.
+- right wall: two display tables (`desk_small`): glasses (`cup_glass` x 18) and books (stacks
+  of ground boxes); then the checkout counter by the entrance (ground boxes, red band), the
+  clerk behind it against the wall (fixed stands (2.9, -1.03) / talk from (1.45, -1.03)),
+  `barcode_scanner`, `takeaway_bag` and a till box on it; a price board on the wall.
+- front: the door is `exitBox` x -0.9..0.2 (so the counter's prompt is the clerk, not the way
+  out), a door mat, a basket stack beside it.
+
+`test/shop.test.ts` checks it: no two blockers overlap, all inside the walls, nothing floats
+(every dressing on the floor, a fixture, a shelf or a prop; wall pieces on a wall), props of one
+layer don't overlap, a 1.2 m wide body gets from the door to every product and the counter, and
+the player walks every door → product → counter route.
+
+Goods (`interiors.shop.goods`: `id`, `concept`, `npc`, `at` the product, `stand` in front of it,
+`hand`): walking to a stand shows "E · Take <word>" (the concept's word in the course's
+language, from the course: no Han in src/); tapping the product walks there. Using it takes the
+item into the right hand and asks core what it leads to (`Game.shopItem`, no new rules):
+
+| goods (where) | concept (word) | hand | shop-buy open | shop-intro open | nothing open / no money |
+| --- | --- | --- | --- | --- | --- |
+| apple (fruit stand) | apple (苹果) | `apple` | walk to the counter → `startScene shop-buy pick {item: apple}` | walk → `startScene shop-intro` | word card (+ "needs ¥5") |
+| cup (glasses table) | cup (杯子) | `cup_glass` | → `startScene shop-buy pick {item: cup}` | → `startScene shop-intro` | word card |
+| book (books table) | book (书) | blue box | → `startScene shop-buy pick {item: book}` | → `startScene shop-intro` | word card |
+| water (fridge) | water (水) | `bottle_water` | word card (shop-buy sells goods only) | → `startScene shop-intro` | word card |
+| tea (fridge) | tea (茶) | `tea_box` | word card | → `startScene shop-intro` | word card |
+| vegetables (veg crate) | vegetables (菜) | `cabbage` | word card | → `startScene shop-intro` | word card |
+
+The rule: a scene of the seller here whose first exchange has a slot whose group holds the item
+(shop-buy's `item: goods`) starts with it picked; else a scene with no slot (shop-intro's chat)
+opens; else only the word card (`helpWord`, as a tap on a bubble word). At the counter, talking
+with an item in hand sends the same (`talkTo(npc, about)`), so walking there by hand works too.
+The item goes back when its sale ends (bought or not), when a scene about another item starts,
+when used again ("E · Put <word> back"), or on leaving the shop. With a parcel in hand nothing
+goes on the grip (the item is still the one being bought).
+
+Core: `startScene` takes an optional `pick` (slot → value) that pins the first exchange's slot
+values; a slot or value it can't take is ignored (packages/core, tested there). The price stays
+core's choice. The first-steps guide never names the shop: it is over (a story scene away from
+the start place done) before any shop scene unlocks; the objective's shop scene is done through
+the hotspot route (test/shop.test.ts).
+
+Captures: `SET=interiors ROOMS=shop` (ROOMS filters rooms) also writes `shop-item-prompt.png`
+(next to a product, its prompt) and `shop-item-held.png` (the item in hand, its word card), from
+`SHOP_ITEM` (default `vegetables`: big enough to see in the hand). Word clips need
+`dist/courses/<course>/audio/` served (else the card's clip 404s).
+
 ## Places and people
 
 The town is the outdoor space (`street`); every building place with a building in it has its door
@@ -667,7 +732,7 @@ stands of the rooms are their pieces' anchors.
 | noodle_shop | noodle_shop (shell) | door of `noodle_shop` (south bank) | cook: `cook` behind the counter, `ladle` |
 | room | room (shell) | door of `rented_room` (pad_ne) | landlord (Mr Li): `landlord`, `key_ring` |
 | stairs (Stairwell) | stairs (size + ground) | the room's own door (back wall) | neighbour (Mrs Lin): `customer_a_khaki` at her red door; a dog |
-| shop (Corner Shop) | shop (size + ground) | door of `supermarket` (pad_ne) | shopkeeper: `clerk` behind a counter, `barcode_scanner` |
+| shop (Corner Shop) | shop (size + ground, 6.4 x 5.4 m) | door of `supermarket` (pad_ne) | shopkeeper: `clerk` behind the checkout counter (fixed stands, see Shop), the scanner on the counter |
 | tea_house | tea_house (shell) | door of `tea_house` (pad_nw) | teaboss (Old Chen): `fruit_seller` behind the counter |
 | warehouse | street | travel-only (no building in the town): the Go to list, onto the pier | foreman (Big Liu): `warehouse_boss` out on the pier (-39.27, 4.64), `clipboard` |
 | school | street | travel-only: the Go to list, west of the pavilion | teacher: `customer_a_green` (15.3, 7.6); classmate (David): `customer_a_blue` (15.3, 6.0) |
@@ -896,8 +961,8 @@ ceiling is single-sided, so it is invisible from above. `rayLanding` checks ever
 against that volume; tests raycast the built rooms.
 
 Measured (1920x1080 / 390x844), player size on arrival and at the centre:
-tea house 31/29 and 32/28 %, noodle shop 31/29 and 34/29 %, shop 30/28 and 32/28 %,
-room 41/40 and 37/36 %, stairs 35/34 and 32/30 %. Pitch is 40° for the 6 x 5 m rooms, 42° for the
+tea house 31/29 and 32/28 %, noodle shop 31/29 and 34/29 %, shop (6.4 x 5.4 m, 2.9 m high) 30/28 and 33/28 %,
+room 41/40 and 37/36 %, stairs 35/34 and 32/30 %. Pitch is 40° for the 6 x 5 m rooms and the shop (fov 39° at 16:9), 42° for the
 room (45° portrait) and 42° for the stairs. At 16:9 all the floor and the whole back wall are in
 view. Portrait shows about half of each and pans. The player is whole over the whole floor in
 every room.
@@ -1465,6 +1530,7 @@ that role said last).
 
 ## Tests (DOM-free, `npm test`)
 
+- `test/shop.test.ts`: the shop's layout (overlaps, walls, floating, 1.2 m aisles, walked routes, prompts), goods → core inputs in every shop state, the guide / objective via the hotspot route, the item on the hand.
 - `test/game.test.ts`: the game model against the real course; layout checks (every NPC in its
   place's space, no overlapping triggers, interiors' entries / exits / furniture / reach, held props).
 - `test/detail.test.ts`: the detail maps' family table covers every textured material in the

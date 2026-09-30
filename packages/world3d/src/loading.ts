@@ -54,6 +54,8 @@ export function spaceAssets(L: LayoutIndex, s: SpaceLayout): { statics: string[]
     if (p.prop) characters.add(p.prop);
   }
   for (const n of pets) characters.add(n); // pets and pigeons after the people
+  // shop goods: what they look like in the hand (loaded with the room's characters, before any is taken)
+  for (const g of s.goods) if ("asset" in g.hand) characters.add(g.hand.asset);
   for (const n of characters) statics.delete(n);
   return { statics: [...statics], characters: [...characters].filter((n) => !statics.has(n)) };
 }

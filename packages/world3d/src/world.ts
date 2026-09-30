@@ -1241,6 +1241,14 @@ export class SceneSpace {
       scene.add(proxy);
       this.pickables.push(proxy);
     });
+    // Shop goods (layout `goods`): a smaller tap box on each product, its prompt's id.
+    for (const g of layout.goods) {
+      const proxy = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), pickMaterial);
+      proxy.position.set(g.at[0], g.at[1], g.at[2]);
+      proxy.userData.target = `goods:${g.id}`;
+      scene.add(proxy);
+      this.pickables.push(proxy);
+    }
     bandWalls(enclosure, layout, statics, (colour) => this.assets.toon.flat(colour));
     // Real look: the enclosure takes the room's shadows like the authored walls it continues.
     if (LOOK.real) enclosure?.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.receiveShadow = true; });
