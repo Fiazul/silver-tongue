@@ -179,6 +179,14 @@ export interface RealLook {
    * composer's passes compile too. The first frame on screen then has every layer and no hitch.
    */
   prepare(scene: THREE.Scene, camera: THREE.Camera, focus?: THREE.Vector3): Promise<void>;
+  /**
+   * prepare() without its frame (prefetch.ts: a space built ahead, its frames drawn later by
+   * warmFrame inside an animation frame, so the canvas never shows them). `compile: false`: the
+   * environment map and layers only (the caller compiles the materials a few at a time).
+   */
+  prewarm(scene: THREE.Scene, camera: THREE.Camera, opts?: { compile?: boolean }): Promise<void>;
+  /** prepare()'s frame alone: every pass over `scene` with nothing culled (the driver's pipelines); the frame after it draws over it */
+  warmFrame(scene: THREE.Scene, camera: THREE.Camera, focus?: THREE.Vector3): void;
   /** Down to `layers` (a subset of the ones on: the safety valve's full -> lite), the grass at `grassDensity`; every space built so far and every one after. */
   restrict(layers: readonly string[], grassDensity: number): void;
   /** ms per composer frame, a running mean (window.world3d.lookInfo) */
@@ -491,6 +499,15 @@ export function createRealLook(renderer: THREE.WebGLRenderer, seeThrough: (m: TH
       stats.frameMs += (ms - stats.frameMs) / Math.min(stats.frames, 120);
     },
     async prepare(scene, camera, focus) {
+      await this.prewarm(scene, camera);
+      // the passes' own programs, and one frame with nothing culled: the driver's pipelines for every
+      // mesh in every pass (ANGLE builds a Vulkan / D3D pipeline per program, vertex layout and
+      // target at its first draw: 100-1500 ms stalls the first time the fly-over or a turn showed
+      // a mesh); under the loading screen
+      if (opts.warm === false) draw(scene, camera, focus);
+      else warm(scene, () => draw(scene, camera, focus));
+    },
+    async prewarm(scene, camera, o = {}) {
       environment(scene);
       // the generated textures and the field from the last visit of this build (envcache.ts)
       const cache = opts.cacheStamp && layers.size && !envScenes.has(scene) ? await openEnvCache(opts.cacheStamp) : undefined;
@@ -502,13 +519,10 @@ export function createRealLook(renderer: THREE.WebGLRenderer, seeThrough: (m: TH
         envDeps.cache = undefined;
       }
       // every material's program, frustum or not (compileAsync: in parallel where KHR_parallel_shader_compile is there)
-      await renderer.compileAsync(scene, camera);
-      // the passes' own programs, and one frame with nothing culled: the driver's pipelines for every
-      // mesh in every pass (ANGLE builds a Vulkan / D3D pipeline per program, vertex layout and
-      // target at its first draw: 100-1500 ms stalls the first time the fly-over or a turn showed
-      // a mesh); under the loading screen
-      if (opts.warm === false) draw(scene, camera, focus);
-      else warm(scene, () => draw(scene, camera, focus));
+      if (o.compile !== false) await renderer.compileAsync(scene, camera);
+    },
+    warmFrame(scene, camera, focus) {
+      warm(scene, () => draw(scene, camera, focus));
     },
     restrict(want, grassDensity) {
       const keep = new Set(want);

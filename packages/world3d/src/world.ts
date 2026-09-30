@@ -20,6 +20,8 @@ import { CHARACTER_KINDS, type LoadEvent } from "./loading";
 import { anchorToWorld, heldProp, yawFor, type Blocker, type Box2, type HeldPropSpec, type LayoutIndex, type Placement, type SpaceLayout, type Vec3 } from "./layout";
 import type { WalkArea } from "./player";
 import { ScatterMotion, WalkerMotion } from "./streetlife";
+import { markSince } from "./perf";
+import type { Gate } from "./prefetch";
 import { LOOK, REAL_HEMI, REAL_SHADOW, REAL_SUN, SHADOW_CELL, ShadowScheduler, type LookGround, type LookSky } from "./look";
 
 const DEG = Math.PI / 180;
@@ -237,7 +239,15 @@ class Toon {
     return m;
   }
 
-  flat(hex: string): THREE.MeshToonMaterial {
+  /** Drops the family materials drawing from an atlas page (its space evicted: AssetCache.dropAtlas). */
+  forgetFamilies(page: THREE.Texture) {
+    for (const [k, m] of this.materials) if (k.startsWith(`family|${page.uuid}|`)) {
+      m.dispose();
+      this.materials.delete(k);
+    }
+  }
+
+    flat(hex: string): THREE.MeshToonMaterial {
     let toon = this.materials.get(hex);
     if (!toon && LOOK.real && !LOOK.ramp) {
       toon = patchSeeThrough(new THREE.MeshStandardMaterial({ color: new THREE.Color(hex), roughness: 0.8, metalness: 0 })) as unknown as THREE.MeshToonMaterial;
@@ -372,6 +382,7 @@ export class AssetCache {
   readonly toon = new Toon();
   /** the templates loaded so far */
   readonly loaded = new Set<string>();
+  private roots = new Map<string, THREE.Object3D>();
   /** every file's progress (the loading screen's reducer, loading.ts) */
   onLoad?: (e: LoadEvent) => void;
 
@@ -419,16 +430,21 @@ export class AssetCache {
       const entry = this.L.asset(name);
       this.onLoad?.({ type: "start", name, bytes: entry.bytes });
       const url = `${this.base}/${entry.path}`;
+      const t0 = performance.now();
       const loaded = this.fetchGltf(url, name);
       p = loaded.then(
         (gltf) => {
+          markSince(`glb:${name}`, t0); // fetch + meshopt decode (wall time)
+          const p0 = performance.now();
           const root = gltf.scene;
           root.name = name;
           root.animations = gltf.animations; // kept through clone(): the actor's clips
           // Characters and what they hold move, so they can't be batched: one mesh each instead.
           if (entry.set === "characters") mergePrimitives(root);
           this.toon.apply(root, !NO_OUTLINE_SETS.has(entry.set) && !isFlat(name), entry.set === "characters", { set: entry.set, asset: name });
+          markSince(`glb-process:${name}`, p0);
           this.loaded.add(name);
+          this.roots.set(name, root);
           this.onLoad?.({ type: "done", name });
           return root;
         },
@@ -444,17 +460,38 @@ export class AssetCache {
     return p;
   }
 
-  /** each space's packed atlas (packSpaceAtlas), packed once: a space built again reuses it */
+  /** each space's packed atlas (packSpaceAtlas), packed once: a space built again reuses it (until it's evicted: dropAtlas) */
   private atlases = new Map<string, Promise<SpaceAtlas | null>>();
 
-  /** The space's atlas pages, packed on first ask (sliced), the same pages after. */
-  spaceAtlas(space: string, roots: THREE.Object3D[]): Promise<SpaceAtlas | null> {
+  /**
+   * The space's atlas pages, packed on first ask, the same pages after. `gate`: a prefetched
+   * build (prefetch.ts) packs one step per gate turn; else in <= 4 ms slices (atlas.ts sliced).
+   */
+  spaceAtlas(space: string, roots: THREE.Object3D[], gate?: Gate): Promise<SpaceAtlas | null> {
     let p = this.atlases.get(space);
     if (!p) {
-      p = packSpaceAtlas(roots);
+      p = packSpaceAtlas(roots, undefined, gate && (() => gate.step()));
       this.atlases.set(space, p);
+      p.catch(() => this.atlases.get(space) === p && this.atlases.delete(space));
     }
     return p;
+  }
+
+  /**
+   * A space evicted (SceneSpace.dispose): its atlas pages off the GPU and out of the cache (the
+   * CPU copies go with them), their family materials forgotten; every other space's stay.
+   */
+  async dropAtlas(space: string) {
+    const p = this.atlases.get(space);
+    if (!p) return;
+    this.atlases.delete(space);
+    const atlas = await p.catch(() => null);
+    if (!atlas) return;
+    for (const page of atlas.pages) {
+      this.toon.forgetFamilies(page.base);
+      page.base.dispose();
+      page.orm.dispose();
+    }
   }
 
   /**
@@ -470,6 +507,11 @@ export class AssetCache {
       for (const m of (Array.isArray(mats) ? mats : [mats]) as THREE.MeshStandardMaterial[]) for (const t of [m.map, m.aoMap, m.roughnessMap, m.metalnessMap]) if (t) inUse.add(t);
     });
     for (const t of atlas.sources) if (!inUse.has(t)) t.dispose();
+  }
+
+  /** the loaded templates (their geometry, materials and textures are shared by every instance: SceneSpace.dispose keeps them) */
+  templateRoots(): THREE.Object3D[] {
+    return [...this.roots.values()];
   }
 
   /** Whether an asset's template is loaded (or loading). */
@@ -655,9 +697,10 @@ function pageTexture(data: Uint8Array, w: number, h: number, like: THREE.Texture
  * Packs the textured static surfaces under `roots` into atlas pages (atlas.ts): once per space,
  * in slices of <= 4 ms (the loading screen and the street keep drawing). Null when there is
  * nothing to pack or nothing can read the images (node: the tests' GLBs carry none). `read`: an
- * image's RGBA at a size (default: a 2D canvas, atlas.ts readImage).
+ * image's RGBA at a size (default: a 2D canvas, atlas.ts readImage). `step`: awaited after each
+ * read / blit instead (a prefetched build's gate, prefetch.ts), no slicer of its own.
  */
-export async function packSpaceAtlas(roots: THREE.Object3D[], read?: (t: THREE.Texture, w: number, h: number) => Uint8Array | Uint8ClampedArray): Promise<SpaceAtlas | null> {
+export async function packSpaceAtlas(roots: THREE.Object3D[], read?: (t: THREE.Texture, w: number, h: number) => Uint8Array | Uint8ClampedArray, step?: () => Promise<void>): Promise<SpaceAtlas | null> {
   const sources = new Map<string, AtlasSource<THREE.Texture>>();
   const textures = new Set<THREE.Texture>();
   const bases: THREE.Texture[] = [];
@@ -680,7 +723,9 @@ export async function packSpaceAtlas(roots: THREE.Object3D[], read?: (t: THREE.T
   if (!sources.size || (!read && !canReadImages())) return null;
   const out: PackedAtlas = { pages: [], rects: new Map() };
   read ??= (t, w, h) => readImage(t.image as CanvasImageSource & { width: number; height: number }, w, h);
-  await sliced(packSources([...sources.values()], read, out), 4);
+  const steps = packSources([...sources.values()], read, out);
+  if (step) for (const _ of steps) await step(); // a prefetched build: its gate's slicer only
+  else await sliced(steps, 4);
   if (!out.rects.size) return null;
   const pages = out.pages.map((p) => ({ w: p.w, h: p.h, base: pageTexture(p.base, p.w, p.h, bases), orm: pageTexture(p.orm, p.ow, p.oh, orms) }));
   pages.forEach((p, i) => {
@@ -786,6 +831,15 @@ export class StaticFamilies {
  * vertex count).
  */
 export function mergeStatic(scene: THREE.Object3D, roots: THREE.Object3D[], families?: StaticFamilies): number {
+  const it = mergeStaticSteps(scene, roots, families);
+  for (;;) {
+    const r = it.next();
+    if (r.done) return r.value;
+  }
+}
+
+/** mergeStatic one batch at a time (a prefetched build awaits its gate between them); returns the meshes merged away */
+export function* mergeStaticSteps(scene: THREE.Object3D, roots: THREE.Object3D[], families?: StaticFamilies): Generator<void, number> {
   scene.updateMatrixWorld(true);
   const batches = new Map<string, THREE.Mesh[]>();
   const rootOf = new Map<THREE.Mesh, THREE.Object3D>();
@@ -846,6 +900,7 @@ export function mergeStatic(scene: THREE.Object3D, roots: THREE.Object3D[], fami
     }
     scene.add(batch);
     for (const m of meshes) gone.add(m);
+    yield;
   }
   // not batched: its own copy of the geometry (templates share theirs), tagged in place
   for (const m of loose) if (!m.geometry.hasAttribute(SEE_ATTR)) m.geometry = tag(m.geometry.clone(), m, false);
@@ -1008,10 +1063,17 @@ export class SceneSpace {
    * hold), each added as it lands. `stream`: resolve after the first part, the characters keep
    * coming (`ready` resolves when they are all in); else resolve with everything in.
    */
-  static async create(L: LayoutIndex, assets: AssetCache, id: string, opts: { stream?: boolean } = {}): Promise<SceneSpace> {
+  static async create(L: LayoutIndex, assets: AssetCache, id: string, opts: { stream?: boolean; gate?: Gate } = {}): Promise<SceneSpace> {
     const w = new SceneSpace(L, assets, id);
+    w.gate = opts.gate;
+    const t0 = performance.now();
     await w.buildStatic();
-    w.ready = w.populate();
+    markSince(`space:${id}:static`, t0);
+    const p0 = performance.now();
+    w.ready = w.populate().then(() => {
+      markSince(`space:${id}:populate`, p0);
+      w.gate = undefined;
+    });
     if (!opts.stream) await w.ready;
     else w.ready.catch((e: unknown) => console.error(`${id}: a character didn't load`, e));
     return w;
@@ -1019,6 +1081,56 @@ export class SceneSpace {
 
   /** resolves once every character of the space is in the scene */
   ready: Promise<void> = Promise.resolve();
+  /** a prefetched build (prefetch.ts): awaited between its steps, so each frame gives it a few ms */
+  private gate?: Gate;
+
+  /** an instance of an asset: the template's load off the gate's budget, the clone on it */
+  private async inst(name: string): Promise<THREE.Object3D> {
+    if (this.gate) await this.gate.wait(this.assets.template(name));
+    return this.assets.instance(name);
+  }
+
+  /** a new actor (as inst) */
+  private async actorOf(name: string): Promise<CharacterActor> {
+    if (this.gate) await this.gate.wait(this.assets.template(name));
+    return this.assets.actor(name);
+  }
+
+  /**
+   * Drops the space's GPU resources: its geometry, materials and textures that nothing in `keep`
+   * (the other spaces' scenes, the player, the asset templates) uses, its lights' shadow maps, its
+   * environment map and its packed atlas pages (AssetCache.dropAtlas; the other spaces' stay). The
+   * space is not drawn again (a prefetched space evicted: prefetch.ts).
+   */
+  dispose(keep: readonly THREE.Object3D[]) {
+    const collect = (root: THREE.Object3D, into: Set<{ dispose(): void }>) =>
+      root.traverse((o) => {
+        const mesh = o as THREE.Mesh;
+        if (mesh.geometry) into.add(mesh.geometry);
+        const mats = mesh.material ? (Array.isArray(mesh.material) ? mesh.material : [mesh.material]) : [];
+        for (const m of mats) {
+          into.add(m);
+          for (const v of Object.values(m)) if ((v as THREE.Texture | null)?.isTexture) into.add(v as THREE.Texture);
+          const u = (m as THREE.ShaderMaterial).uniforms;
+          if (u) for (const x of Object.values(u)) if ((x?.value as THREE.Texture | null)?.isTexture) into.add(x.value as THREE.Texture);
+        }
+      });
+    const shared = new Set<{ dispose(): void }>();
+    for (const r of keep) if (r !== this.scene) collect(r, shared);
+    const mine = new Set<{ dispose(): void }>();
+    collect(this.scene, mine);
+    for (const x of mine) if (!shared.has(x)) x.dispose();
+    this.scene.traverse((o) => {
+      const light = o as THREE.DirectionalLight;
+      if (light.isLight) light.dispose(); // its shadow map
+    });
+    this.scene.environment?.dispose();
+    this.scene.environment = null;
+    this.scene.clear();
+    // its packed atlas pages (and their CPU copies) go too; a later build of the space packs again
+    this.atlas = null;
+    void this.assets.dropAtlas(this.id);
+  }
 
   /** The walking area for the player (player.ts). */
   get area(): WalkArea {
@@ -1053,7 +1165,7 @@ export class SceneSpace {
     if (town) {
       // The landscape GLBs share the world origin; the sky dome is drawn unlit and unfogged, behind everything.
       for (const name of town.landscape) {
-        const o = await this.assets.instance(name);
+        const o = await this.inst(name);
         o.name = name;
         if (name === "clouds") this.placeClouds(o);
         o.userData.see = seeSpecFor(L.asset(name).set, name);
@@ -1073,7 +1185,9 @@ export class SceneSpace {
       statics.push(floor);
     }
     const enclosure = buildInteriorEnclosure(scene, layout, (colour) => this.assets.toon.flat(colour));
+    const b0 = performance.now();
     this.backdrop = buildInteriorBackdrop(scene, layout, LOOK.real, (colour) => this.assets.toon.flat(colour));
+    markSince(`space:${this.id}:backdrop`, b0);
     for (const g of layout.ground) {
       const size = [0, 1, 2].map((i) => g.max[i] - g.min[i]);
       const box = new THREE.Mesh(new THREE.BoxGeometry(size[0], size[1], size[2]), this.assets.toon.flat(g.colour));
@@ -1087,14 +1201,14 @@ export class SceneSpace {
     }
 
     for (const t of layout.tiles) {
-      const o = await this.assets.instance(t.asset);
+      const o = await this.inst(t.asset);
       this.place(o, t);
       o.userData.see = seeSpecFor(L.asset(t.asset).set, t.asset);
       scene.add(o);
       statics.push(o);
     }
     for (const b of layout.pieces) {
-      const o = await this.assets.instance(b.asset);
+      const o = await this.inst(b.asset);
       this.place(o, b);
       o.name = b.id;
       if (layout.interior && L.asset(b.asset).origin === "shell") { interiorFaces(o); o.userData.shell = true; }
@@ -1110,7 +1224,7 @@ export class SceneSpace {
     for (const d of layout.dressing) {
       const e = L.asset(d.asset);
       if (e.set === "characters" && CHARACTER_KINDS.has(e.kind ?? "")) continue;
-      const o = await this.assets.instance(d.asset);
+      const o = await this.inst(d.asset);
       this.place(o, d);
       this.backdrop?.dressWindows(o);
       // hung on a building (port-town.mjs HUNG): fades with it, one object, never on its own
@@ -1131,9 +1245,23 @@ export class SceneSpace {
     // Real look: the enclosure takes the room's shadows like the authored walls it continues.
     if (LOOK.real) enclosure?.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.receiveShadow = true; });
     this.batching.before = drawCalls(scene);
-    // textured statics: their atlases packed into this space's pages (sliced), then one draw per family
-    this.atlas = await this.assets.spaceAtlas(this.id, statics);
-    this.batching.merged = mergeStatic(scene, statics, new StaticFamilies(this.assets.toon, this.atlas));
+    // textured statics: their atlases packed into this space's pages (gated steps or sliced), then one draw per family
+    const a0 = performance.now();
+    this.atlas = await this.assets.spaceAtlas(this.id, statics, this.gate);
+    markSince(`space:${this.id}:atlas`, a0);
+    const families = new StaticFamilies(this.assets.toon, this.atlas);
+    const m0 = performance.now();
+    if (this.gate) {
+      const it = mergeStaticSteps(scene, statics, families);
+      for (let r = it.next(); ; r = it.next()) {
+        if (r.done) {
+          this.batching.merged = r.value;
+          break;
+        }
+        await this.gate.step();
+      }
+    } else this.batching.merged = mergeStatic(scene, statics, families);
+    markSince(`space:${this.id}:merge`, m0);
     this.batching.after = drawCalls(scene);
     if (this.atlas) this.assets.releaseSources(this.atlas, scene);
     this.staticCalls = { before: this.batching.before, after: this.batching.after };
@@ -1260,41 +1388,37 @@ export class SceneSpace {
     const spawn = layout.town ? L.spawn(layout.defaultPlace).pos : null;
     const near = (p: Vec3) => (spawn ? Math.hypot(p[0] - spawn[0], p[2] - spawn[2]) : 0);
     const npcs = [...layout.npcs].sort((a, b) => near(L.npcStand(a).pos) - near(L.npcStand(b).pos));
-    const jobs: Promise<void>[] = [];
+    const jobs: (() => Promise<void>)[] = [];
     for (const npc of npcs)
-      jobs.push(
-        (async () => {
-          const n = L.npc(npc);
-          const stand = L.npcStand(npc);
-          const actor = await this.assets.actor(n.character);
-          const o = actor.root;
-          o.position.set(...stand.pos);
-          o.rotation.y = yawFor(stand.facing);
-          await this.holdProp(actor, n.heldProp);
-          // A generous invisible cylinder to tap, so a thumb doesn't have to hit the thin model.
-          const proxy = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 2.1, 8), pickMaterial);
-          proxy.position.y = 1.05;
-          o.add(proxy);
-          o.traverse((c) => (c.userData.npc = npc));
-          scene.add(o);
-          this.pickables.push(proxy);
-          this.npcs.set(npc, { npc, actor, homeYaw: o.rotation.y });
-          this.blockers.push({ min: [stand.pos[0] - 0.25, stand.pos[2] - 0.25], max: [stand.pos[0] + 0.25, stand.pos[2] + 0.25] });
-        })(),
-      );
+      jobs.push(async () => {
+        const n = L.npc(npc);
+        const stand = L.npcStand(npc);
+        const actor = await this.actorOf(n.character);
+        const o = actor.root;
+        o.position.set(...stand.pos);
+        o.rotation.y = yawFor(stand.facing);
+        await this.holdProp(actor, n.heldProp);
+        // A generous invisible cylinder to tap, so a thumb doesn't have to hit the thin model.
+        const proxy = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 2.1, 8), pickMaterial);
+        proxy.position.y = 1.05;
+        o.add(proxy);
+        o.traverse((c) => (c.userData.npc = npc));
+        scene.add(o);
+        this.pickables.push(proxy);
+        this.npcs.set(npc, { npc, actor, homeYaw: o.rotation.y });
+        this.blockers.push({ min: [stand.pos[0] - 0.25, stand.pos[2] - 0.25], max: [stand.pos[0] + 0.25, stand.pos[2] + 0.25] });
+      });
     layout.walkers.forEach((w, i) =>
-      jobs.push(
-        (async () => {
-          const a = await this.assets.actor(w.character);
-          await this.holdProp(a, w.heldProp);
-          const motion = new WalkerMotion(w.path, w.speed);
-          a.root.position.set(motion.x, L.heightAt(this.id, motion.x, motion.z), motion.z);
-          a.root.rotation.y = motion.yaw;
-          scene.add(a.root);
-          this.walkers.push({ actor: a, motion });
-          this.addFigure(figureId("walker", i), { actor: a, motion }, false);
-        })(),
-      ),
+      jobs.push(async () => {
+        const a = await this.actorOf(w.character);
+        await this.holdProp(a, w.heldProp);
+        const motion = new WalkerMotion(w.path, w.speed);
+        a.root.position.set(motion.x, L.heightAt(this.id, motion.x, motion.z), motion.z);
+        a.root.rotation.y = motion.yaw;
+        scene.add(a.root);
+        this.walkers.push({ actor: a, motion });
+        this.addFigure(figureId("walker", i), { actor: a, motion }, false);
+      }),
     );
     // Slots counted here, in layout order (as barks.ts spaceFigures counts them), before any load finishes.
     let extraSlot = 0;
@@ -1305,23 +1429,23 @@ export class SceneSpace {
       const scatter = d.behaviour === "scatter";
       const id = scatter ? figureId("scatter", scatterSlot++) : figureId("extra", extraSlot++);
       const small = e.kind === "pet";
-      jobs.push(
-        (async () => {
-          const a = await this.assets.actor(d.asset);
-          this.place(a.root, d);
-          scene.add(a.root);
-          if (scatter) {
-            const view = { actor: a, motion: new ScatterMotion([d.pos[0], d.pos[2]], d.rotY * DEG) };
-            this.scatterers.push(view);
-            this.addFigure(id, view, small);
-          } else {
-            this.extras.push(a);
-            this.addFigure(id, { actor: a }, small);
-          }
-        })(),
-      );
+      jobs.push(async () => {
+        const a = await this.actorOf(d.asset);
+        this.place(a.root, d);
+        scene.add(a.root);
+        if (scatter) {
+          const view = { actor: a, motion: new ScatterMotion([d.pos[0], d.pos[2]], d.rotY * DEG) };
+          this.scatterers.push(view);
+          this.addFigure(id, view, small);
+        } else {
+          this.extras.push(a);
+          this.addFigure(id, { actor: a }, small);
+        }
+      });
     }
-    await Promise.all(jobs);
+    // a prefetched build: one at a time, each step on the gate; else all at once (their fetches in this order)
+    if (this.gate) for (const j of jobs) await j();
+    else await Promise.all(jobs.map((j) => j()));
     // Characters (NPCs, walkers, extras, pigeons) and what they hold stay separate: they animate.
     const chars = drawCalls(scene) - this.staticCalls.after;
     this.batching.before = this.staticCalls.before + chars;

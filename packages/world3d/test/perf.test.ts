@@ -2,7 +2,8 @@
 // the render scale's resolution (lite's pixels against full's), dynamic resolution's hysteresis,
 // frame pacing and dt at 60 and 30, the shadow map's redraw triggers, the grass LOD bands and their
 // chunk culling, the long-frame causes the ?perf=1 probe gives, and that no synchronous GPU
-// read-back is left in the frame loop's code.
+// read-back is left in the frame loop's code; the prefetcher's time slices (prefetch.ts TimeSlicer)
+// keep their main-thread work per frame within PREFETCH_SLICE_MS, on a fake clock.
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import * as THREE from "three";
@@ -10,6 +11,7 @@ import { describe, expect, it } from "vitest";
 import { GRASS, grassBands, grassChunkVisible, LITE_FAR_FADE, wrapIntervals } from "../src/envlook";
 import { BUDGETS, budgetFor, DynamicScale, FramePacer, lookFor, renderPixelRatio, resolveLook, SHADOW_CELL, ShadowScheduler } from "../src/look";
 import { longFrameCause } from "../src/perf";
+import { PREFETCH_SLICE_MS, TimeSlicer } from "../src/prefetch";
 import { loadPrefs, PREFS_KEY, savePrefs } from "../src/prefs";
 
 describe("render budget and render scale", () => {
@@ -273,5 +275,108 @@ describe("no synchronous GPU read-back in the frame loop", () => {
       expect(read(f), f).not.toMatch(/\bgl\.finish\(|renderer\.getContext\(\)\.finish\(/);
       expect(read(f), f).not.toMatch(/clientWaitSync\([^)]*,\s*[1-9]/);
     }
+  });
+});
+
+describe("the prefetcher's time slices (prefetch.ts TimeSlicer, fake clock)", () => {
+  /**
+   * A job of `steps` synchronous steps (each `ms(i)` on the clock) on a slicer, run one slice per
+   * "frame" (beginSlice, then every continuation runs); the work of each slice, in ms.
+   */
+  async function slices(ms: (i: number) => number, steps: number, budget = PREFETCH_SLICE_MS) {
+    const clock = { t: 0 };
+    const s = new TimeSlicer(() => clock.t, budget);
+    let done = 0;
+    void (async () => {
+      await s.step();
+      for (let i = 0; i < steps; i++) {
+        clock.t += ms(i);
+        done++;
+        await s.step();
+      }
+    })();
+    const work: number[] = [];
+    for (let f = 0; f < 10 * steps && done < steps; f++) {
+      const before = s.spent;
+      s.beginSlice();
+      for (let k = 0; k < 50; k++) await Promise.resolve();
+      clock.t += 16; // the rest of the frame: not the prefetcher's
+      work.push(s.spent - before);
+    }
+    return { work: work.filter((w) => w > 0), done, slicer: s };
+  }
+
+  it(`steps of 0.3-2 ms: every slice's work stays within ${PREFETCH_SLICE_MS} ms, and the job finishes`, async () => {
+    for (const stepMs of [0.3, 1, 1.5, 2]) {
+      const r = await slices(() => stepMs, 60);
+      expect(r.done, `${stepMs} ms`).toBe(60);
+      for (const w of r.work) expect(w, `${stepMs} ms steps`).toBeLessThanOrEqual(PREFETCH_SLICE_MS + 1e-9);
+      // and it uses the slice: more than one step a slice when they fit
+      if (stepMs <= 1) expect(Math.max(...r.work), `${stepMs} ms`).toBeGreaterThanOrEqual(PREFETCH_SLICE_MS - stepMs - 1e-9);
+    }
+  });
+
+  it("uneven steps (a 3 ms one among 0.5 ms ones): a slice of short steps stays within the slice; one with a long step overruns by that step at most", async () => {
+    const clock = { t: 0 };
+    const s = new TimeSlicer(() => clock.t);
+    const long = (i: number) => i % 7 === 3;
+    let frame = 0;
+    const ran: { frame: number; ms: number }[] = [];
+    let done = 0;
+    void (async () => {
+      await s.step();
+      for (let i = 0; i < 70; i++) {
+        const ms = long(i) ? 3 : 0.5;
+        clock.t += ms;
+        ran.push({ frame, ms });
+        done++;
+        await s.step();
+      }
+    })();
+    for (; frame < 400 && done < 70; frame++) {
+      s.beginSlice();
+      for (let k = 0; k < 50; k++) await Promise.resolve();
+      clock.t += 16;
+    }
+    expect(done).toBe(70);
+    const byFrame = new Map<number, number[]>();
+    for (const r of ran) byFrame.set(r.frame, [...(byFrame.get(r.frame) ?? []), r.ms]);
+    for (const [, steps] of byFrame) {
+      const work = steps.reduce((a, b) => a + b, 0);
+      if (steps.every((x) => x < 3)) expect(work).toBeLessThanOrEqual(PREFETCH_SLICE_MS);
+      else expect(work).toBeLessThanOrEqual(PREFETCH_SLICE_MS + 3);
+    }
+  });
+
+  it("a step alone over the slice (one driver compile) still runs, one a slice: the job makes progress", async () => {
+    const r = await slices(() => 10, 5);
+    expect(r.done).toBe(5);
+    expect(r.work).toEqual([10, 10, 10, 10, 10]);
+    expect(r.slicer.maxStep).toBe(10);
+  });
+
+  it("an async wait is off the budget: a 100 ms fetch between steps isn't counted as work", async () => {
+    const clock = { t: 0 };
+    const s = new TimeSlicer(() => clock.t);
+    let resolveFetch!: () => void;
+    const fetched = new Promise<void>((r) => (resolveFetch = r));
+    let finished = false;
+    void (async () => {
+      await s.step();
+      clock.t += 1;
+      await s.wait(fetched);
+      clock.t += 1;
+      await s.step();
+      finished = true;
+    })();
+    s.beginSlice();
+    for (let k = 0; k < 20; k++) await Promise.resolve();
+    clock.t += 100; // the fetch
+    resolveFetch();
+    for (let k = 0; k < 20; k++) await Promise.resolve();
+    s.beginSlice();
+    for (let k = 0; k < 20; k++) await Promise.resolve();
+    expect(finished).toBe(true);
+    expect(s.spent).toBe(2);
   });
 });

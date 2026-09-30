@@ -232,9 +232,11 @@ A door whose room hasn't landed is tracked the same way (the slow line on its lo
 - **Streamed after it** (`SceneSpace.create(..., { stream: true })`, `space.ready`): the town's
   people, NPCs nearest the spawn first, walkers, pets and what they hold; each appears as it
   lands. Input is never blocked; an NPC not in yet can't be talked to until it is.
-- **Interiors**: built on first need (`ensureSpace`) and prefetched when idle after the town's
-  people are in, nearest door first. A door whose room hasn't landed waits behind the loading
-  screen, shown only after 300 ms; a save made inside a room goes in once it lands.
+- **Interiors**: their GLBs fetched and decoded when idle after the town's people are in, nearest
+  door first; the rooms themselves built and warmed while the player is busy ("Prefetch" below),
+  else on first need (`ensureSpace`). A door whose room hasn't landed waits behind the loading
+  screen, shown only after 300 ms; a save made inside a room goes in once it lands. `?prefetch=0`:
+  every room built when idle after the first frame, as before the prefetcher.
 - **Audio** never waits: the mixer fetches nothing before the first gesture (audio.ts); its
   manifest is fetched after the town load has started and never awaited (see Loading).
 - **Screen**: title, a bar with percent and MB (bytes from `index.json`, the loader's progress per
@@ -252,6 +254,69 @@ course uses into `dist/courses/<course>/audio/` and load from there (a self-cont
 alone). Clips missing (dist/
 served on its own without them): three failed loads in a row and the game plays silently, the
 HUD saying "no audio".
+
+## Prefetch
+
+`src/prefetch.ts` (pure: `PrefetchScheduler`, `TimeSlicer`), wired in `main.ts`. The first time
+the player went into a room it stalled 0.4-1.0 s (Full, Vega 11, 1280x720, `?promo=1`): its
+materials' programs compiled for the room's lights, fog and environment map (13 new programs, ~170
+ms of link in that frame), then the driver's pipelines (ANGLE: one per program, vertex layout and
+target) for every pass, the shadow pass's too, in the frames after; later rooms 20-250 ms. The GLB
+fetch + decode (0.1-1 s wall each, off the main thread except three's processing, up to 95 ms for
+the largest) and the room's build (`SceneSpace.create`: 150-780 ms wall, its static batching one
+22-125 ms block) ran at idle after the first frame, while the player walked. The interior backdrop
+(0-4 ms), the env layers for a room (under 1 ms) and texture uploads (under 2 ms) are small; the
+composer is never resized on a space change. Measured with `?perf=1`'s stall marks
+(`performance.measure` `world3d:glb:<asset>`, `world3d:space:<id>:static|merge|backdrop|populate`,
+`world3d:first-draw:<id>[:compile|:upload|:env]`, `world3d:prefetch:<id>[:build|:compile]`,
+`world3d:prefetch:warm:<id>:<material>`).
+
+- **When**: while the player is busy: a dialogue (the game's mode isn't `explore`: a scene, the
+  name form), the fly-over, the notebook, a menu, the sleep's day card or the reply list
+  (`overlay.blocking`), the start flow, the loading screen; never on the way through a door. Only
+  frames not already late get a slice (`frameSlack`: the last interval under 2x the frame's budget).
+  Behind the title and the loading screen it runs on a pump of its own until the game's frame loop
+  starts, and the player's programs (and the markers') are compiled for the town's lights there (3
+  programs the town's first frame used to compile).
+- **What**: the spaces most wanted first (`rankCandidates`): the one the guide's step points at
+  (its place's space, or its NPC's), then the ones the doors and ways out of the current space lead
+  to, nearest to the player first (`reachableFrom`); behind the title, the doors nearest the spawn.
+  Spaces already entered are never built again.
+- **How**, one space at a time: the room built on the gate (`SceneSpace.create(..., { gate })`:
+  each instance, each static batch, each character a step; a GLB's fetch is waited for off the
+  budget), its textures uploaded one a step (`initTexture`), the real look's environment map and
+  layers built (`RealLook.prewarm`), each material's program compiled for the room's lights a step
+  at a time (`compileAsync(mesh, camera, room)`, and the player and markers for its lights), then
+  warm frames: one material at a time on its own layer with nothing culled, through the real look's
+  whole composer (`RealLook.warmFrame`) or the plain render, drawn at the start of an animation
+  frame and drawn over by the frame itself (the canvas never shows them; behind the title the town
+  is drawn again after one).
+- **Caps**: 4 ms of steps a frame (`PREFETCH_SLICE_MS`; a step starts only if the time so far plus
+  the longest recent step fits; the first of a slice always runs, so a step longer than the slice
+  alone, one driver compile or one material's warm frame, still makes progress: 20-170 ms on this
+  GPU without `KHR_parallel_shader_compile`, inside the busy moment). Paused at its next step as
+  soon as the player stops being busy, resumed from there later. At most 2 rooms built ahead and
+  not yet entered (`PREFETCH_MAX`); a newly wanted one drops the least recently wanted
+  (`SceneSpace.dispose`: its geometry, materials and textures nothing else uses, its shadow map,
+  its environment map). A room the player has been in stays built, as before. A door into a room
+  being prefetched finishes its build at once (`rush`), its warm frames skipped (the first frame
+  does them).
+- **After** (same machine and settings, 3-4 s of held busy near each door, 2 runs): the first room
+  0.42-1.02 s -> 32-65 ms (the worst frame in the 2.5 s after the door; 4 runs), every other room and the
+  way back 18-34 ms, no long tasks. Lite (1 run): the first room 242 -> 81 ms. Classic: 20-480 ms
+  spikes before and after alike on this shared machine (load 4-7), no difference measured.
+  A room never prefetched (no busy moment first) costs what it did.
+- **Flags**: `?prefetch=0` turns it off (the old path, for A/B). `?perf=1` shows a line bottom left:
+  `prefetch: idle | working <space> | paused <space> · <ms> ms (longest step <ms>) · ahead: <spaces>`.
+  `world3d.prefetch()`: the state, the space, ms spent, the longest step, the rooms built ahead,
+  builds done / evicted / failed, busy now, the spaces built and entered;
+  `world3d.prefetchBusy(true | false)` holds the busy state (scripted A/B timing).
+- Not done: the GLB decode's own processing (three's parse, the toon materials, up to 95 ms for the
+  largest) isn't sliced (the idle fetch runs it as before); an evicted room's environment layers
+  stay referenced by the real look's `restrict` list until the page closes (small: a room has no
+  grass or leaves); other tiers' composer passes aren't compiled ahead (a tier change needs a
+  reload; the safety valve's live drop to Lite only turns passes off and changes uniforms: no new
+  programs).
 
 ## Deploy (GitHub Pages)
 
@@ -1425,7 +1490,16 @@ that role said last).
   dynamic resolution's thresholds and hysteresis, frame pacing at 60 / 30 on 60-144 Hz displays
   with dt-correct game time, the shadow map's redraw triggers, the grass LOD bands, chunk wrap and
   culling, the probe's long-frame causes, the saved frame rate, and a source grep: no synchronous
-  GPU read-back (`readRenderTargetPixels`, a waiting `clientWaitSync`, `finish()`) in the frame loop.
+  GPU read-back (`readRenderTargetPixels`, a waiting `clientWaitSync`, `finish()`) in the frame
+  loop; the prefetcher's time slices on a fake clock (steps of 0.3-2 ms: every slice within 4 ms;
+  uneven steps: a slice overruns by its one unforeseen long step at most; a step alone over the
+  slice still runs, one a slice; an async wait off the budget).
+- `test/prefetch.test.ts`: the prefetcher: rankCandidates / reachableFrom (and the town's layout:
+  every door reachable, the way out from every room), one space at a time in order and at most 2,
+  skipped when built, a failed build not retried, nothing unless busy with slack, paused and
+  resumed where it stopped, a door rushing the build in flight, the least recently wanted evicted,
+  `?prefetch=0`; a room built on the gate equal to one built at once (batching, draw calls, NPCs,
+  blockers), and its dispose freeing only its own resources.
 - `test/parity.test.ts`: the Input / GameEvent unions from core's source against
   `INPUT_AFFORDANCES`, this README's table and the dispatcher, and each Input sent through the
   Game API.

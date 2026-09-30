@@ -65,7 +65,8 @@ import { AssetCache, drawCalls, OUTLINE_MATERIALS, SceneSpace, setOutlineScale }
 import { patchSeeThrough, SEE_ATTR, SEE_THROUGH, SeeThroughControl, SeeThroughDetector } from "./seethrough";
 import { DynamicScale, FramePacer, IDLE_FPS, IDLE_S, LITE_GRASS, LITE_LAYERS, LOOK, LookValve, lookFor, renderPixelRatio, setLook, type Tier } from "./look";
 import { GuideMarker } from "./marker";
-import { FrameGpuTimer, Perf, textureBytes } from "./perf";
+import { FrameGpuTimer, markMs, markSince, Perf, PerfOverlay, stallMarks, textureBytes } from "./perf";
+import { frameSlack, PREFETCH_SLICE_MS, prefetchEnabled, PrefetchScheduler, rankCandidates, reachableFrom, type PrefetchHost, type TimeSlicer } from "./prefetch";
 import { daySteps, edgeArrow, findPath, LostTimer, nextSteps, resolveTarget, type PathGrid, type WayTarget } from "./wayfind";
 import { EdgeArrowView, PathTrail, spaceGrid } from "./wayview";
 import type { WebSessions } from "@silver-tongue/web-common";
@@ -158,6 +159,9 @@ function askRetry(e: unknown, action: RetryAction): Promise<void> {
 const promoMode = new URLSearchParams(location.search).get("promo") === "1";
 /** `?perf=1` (perf.ts): the per-frame profile, read through world3d.perf() */
 const perfMode = new URLSearchParams(location.search).get("perf") === "1";
+stallMarks.on = perfMode;
+/** `?prefetch=0` (README "Prefetch"): no prefetcher, every interior built at idle after the first frame as before */
+const prefetchOn = prefetchEnabled(location.search);
 let perf: Perf | null = null;
 const prefs = loadPrefs(kv);
 
@@ -270,6 +274,203 @@ async function main() {
   };
   /** the town, tried until it loads (never rejects: each failure waits on the loading screen's button) */
   const worldReady = retrying(() => startWatch.track(loadWorld()), askRetry);
+
+  // Prefetch (prefetch.ts, README "Prefetch"): the next spaces built, their textures uploaded and
+  // their shaders compiled while the player is busy (a dialogue, the fly-over, the notebook or a
+  // menu, the sleep's day card, the title and loading screens), a few ms of each frame. Declared
+  // here: it starts behind the title, before the rest of main() has the world.
+  type World = Awaited<ReturnType<typeof loadWorld>>;
+  /** Each interior's build, started once: by the prefetcher, a door, or (`?prefetch=0`) the idle pass after the first frame. */
+  const building = new Map<string, Promise<SceneSpace>>();
+  let prefetcher: PrefetchScheduler | null = null;
+  // a stall: the rooms on their way are forgotten (a hung one would hold every later door), the prefetcher's too
+  onStall.push(() => {
+    building.clear();
+    prefetcher?.reset();
+  });
+  /** the spaces the player has been in (never evicted), and the one they are in */
+  const entered = new Set<string>([STREET]);
+  let currentSpace = STREET;
+  /** the in-game wanted spaces (set once the game runs); before it: the doors nearest the spawn */
+  let wantedSpaces: (() => string[]) | null = null;
+  /** what else is drawn in every space (the player, the markers): compiled for a space's lights too */
+  const warmExtras: THREE.Object3D[] = [];
+  /** the game's frame loop runs (the title's pump stops) */
+  let loopRunning = false;
+  /**
+   * Warm frames a build asked for (one per material: its pipelines in every pass): drawn at the
+   * start of an animation frame while the player is busy, as many as fit the slice (at least one),
+   * the frame itself drawn over them. Dropped (resolved undrawn) once the build is rushed: the
+   * player is on the way in, their first frame does it.
+   */
+  let warmAsk: { id: string; gate: TimeSlicer; scene: THREE.Scene; camera: THREE.Camera; focus: THREE.Vector3; chunks: readonly (readonly THREE.Object3D[])[]; next: number; done: () => void } | null = null;
+  /** A space's build (at once, or on `gate`: a prefetched one) into `w.spaces`; one per space. */
+  const ensureSpaceIn = (w: World, id: string, gate?: TimeSlicer): Promise<SceneSpace> => {
+    const have = w.spaces.get(id);
+    if (have) return Promise.resolve(have);
+    if (!gate) prefetcher?.rush(id); // the door needs it now: a prefetch of it in flight finishes at once
+    let p = building.get(id);
+    if (!p) {
+      p = SceneSpace.create(w.L, w.assets, id, { gate }).then((s) => {
+        w.spaces.set(id, s);
+        return s;
+      });
+      p.catch(() => building.delete(id)); // a failed room is tried again at the next door
+      building.set(id, p);
+    }
+    return p;
+  };
+  /** Draws warm frames asked for (warmAsk) when `allowed` (busy, slack), within the slice; `after` draws over them. */
+  const serveWarm = (w: World, allowed: boolean, after?: () => void) => {
+    const ask = warmAsk;
+    if (!ask) return;
+    if (ask.gate.isRushed || currentSpace === ask.id) {
+      warmAsk = null;
+      return ask.done();
+    }
+    if (!allowed) return;
+    // each chunk alone on the warm layer with the lights (the same programs), the camera on it alone
+    // (an object off the camera's layers isn't drawn, its children still are)
+    const lit: THREE.Object3D[] = [];
+    ask.scene.traverse((o) => {
+      if ((o as THREE.Light).isLight) lit.push(o);
+    });
+    const mask = ask.camera.layers.mask;
+    ask.camera.layers.set(WARM_LAYER);
+    const t0 = performance.now();
+    try {
+      do {
+        const only = ask.chunks[ask.next++];
+        const c0 = performance.now();
+        const on = [...only, ...lit].filter((o) => !o.layers.isEnabled(WARM_LAYER));
+        for (const o of on) o.layers.enable(WARM_LAYER);
+        for (const o of lit) if ((o as THREE.DirectionalLight).shadow) (o as THREE.DirectionalLight).shadow.needsUpdate = true; // the shadow pass's programs too
+        try {
+          if (w.real) w.real.warmFrame(ask.scene, ask.camera, ask.focus);
+          else {
+            const culled: THREE.Object3D[] = [];
+            ask.scene.traverse((o) => {
+              if (o.frustumCulled) {
+                culled.push(o);
+                o.frustumCulled = false;
+              }
+            });
+            try {
+              w.renderer.render(ask.scene, ask.camera);
+            } finally {
+              for (const o of culled) o.frustumCulled = true;
+            }
+          }
+        } finally {
+          for (const o of on) o.layers.disable(WARM_LAYER);
+        }
+        if (stallMarks.on) markSince(`prefetch:warm:${ask.id}:${[...new Set(only.map((o) => ((o as THREE.Mesh).material as THREE.Material).name || ((o as THREE.Mesh).material as THREE.Material).type))].join("+")}`, c0);
+      } while (ask.next < ask.chunks.length && performance.now() - t0 < PREFETCH_SLICE_MS);
+    } finally {
+      ask.camera.layers.mask = mask;
+      ask.gate.spent += performance.now() - t0; // the prefetcher's work, on its account
+      ask.gate.maxStep = Math.max(ask.gate.maxStep, performance.now() - t0);
+    }
+    after?.();
+    if (ask.next >= ask.chunks.length) {
+      warmAsk = null;
+      ask.done();
+    }
+  };
+  /** the warm frames' layer (the camera sees only what a warm frame draws) */
+  const WARM_LAYER = 31;
+  /** a space's drawables grouped by material (a material's program is compiled, and its pipelines made, one group at a time) */
+  const byMaterial = (scene: THREE.Scene): THREE.Object3D[][] => {
+    const groups = new Map<THREE.Material, THREE.Object3D[]>();
+    scene.traverse((o) => {
+      const m = (o as THREE.Mesh).material;
+      if (!m) return;
+      const key = Array.isArray(m) ? m[0] : m;
+      if (!key) return;
+      const g = groups.get(key) ?? [];
+      g.push(o);
+      groups.set(key, g);
+    });
+    return [...groups.values()];
+  };
+  /** A camera over a space's arrival point (the warm-up's compile and frame: nothing is culled, so the view only has to be plausible). */
+  const warmCamera = (w: World, id: string) => {
+    const at = id === STREET ? w.L.spawn(LAYOUT.defaultPlace).pos : w.L.entrySpawn(id).pos;
+    const cam = new THREE.PerspectiveCamera(CAMERA.fovDeg, window.innerWidth / Math.max(1, window.innerHeight), CAMERA.near, CAMERA.far);
+    cam.position.set(at[0] + 4, at[1] + 5, at[2] + 4);
+    cam.lookAt(at[0], at[1] + 1, at[2]);
+    cam.updateMatrixWorld();
+    return { cam, focus: new THREE.Vector3(...at) };
+  };
+  const prefetchHost = (w: World): PrefetchHost => ({
+    candidates: () => (wantedSpaces?.() ?? w.plan.spaces.map((x) => x.id)).filter((id) => !entered.has(id)),
+    built: (id) => w.spaces.has(id),
+    async build(id, gate) {
+      const t0 = performance.now();
+      const s = await ensureSpaceIn(w, id, gate);
+      markSince(`prefetch:${id}:build`, t0);
+      // textures: uploaded one a step
+      const textures = new Set<THREE.Texture>();
+      s.scene.traverse((o) => {
+        const mesh = o as THREE.Mesh;
+        for (const m of mesh.material ? (Array.isArray(mesh.material) ? mesh.material : [mesh.material]) : [])
+          for (const v of Object.values(m)) if ((v as THREE.Texture | null)?.isTexture) textures.add(v as THREE.Texture);
+      });
+      for (const t of textures) {
+        w.renderer.initTexture(t);
+        await gate.step();
+      }
+      // shaders: the space's environment map and layers first (the real look: its materials' programs
+      // depend on them), then its materials one at a time for its lights and fog, then what every
+      // space also draws (the player, the markers) for its lights
+      const { cam, focus } = warmCamera(w, id);
+      const c0 = performance.now();
+      if (w.real) await gate.wait(w.real.prewarm(s.scene, cam, { compile: false }));
+      const groups = byMaterial(s.scene);
+      // each material's compile issued in a step of its own (the driver's work, async where
+      // KHR_parallel_shader_compile is there), then all of them waited for at once
+      const compiled: Promise<unknown>[] = [];
+      for (const o of [...groups.map((g) => g[0]), ...warmExtras]) {
+        compiled.push(w.renderer.compileAsync(o, cam, s.scene));
+        await gate.step();
+      }
+      await gate.wait(Promise.all(compiled));
+      markSince(`prefetch:${id}:compile`, c0);
+      // frames over it, nothing culled, a few materials each (the driver's pipelines for every pass,
+      // the shadow pass's too), inside an animation frame (drawn over by the frame itself); not when
+      // the player is on the way in already (their first frame does it)
+      if (!gate.isRushed && currentSpace !== id) await gate.wait(new Promise<void>((done) => (warmAsk = { id, gate, scene: s.scene, camera: cam, focus, chunks: groups, next: 0, done })));
+      markSince(`prefetch:${id}`, t0);
+    },
+    evict(id) {
+      const s = w.spaces.get(id);
+      if (!s || entered.has(id) || currentSpace === id) return;
+      const keep = [...[...w.spaces.values()].filter((x) => x !== s).map((x) => x.scene), ...warmExtras, ...w.assets.templateRoots()];
+      s.dispose(keep);
+      w.spaces.delete(id);
+      building.delete(id);
+    },
+  });
+  // Behind the title and the loading screen: the player compiled for the town's lights, then the
+  // nearest doors' rooms built and warmed, on a pump of its own until the game's frame loop runs.
+  void worldReady.then((w) => {
+    if (!prefetchOn) return;
+    warmExtras.push(w.player.root);
+    const street0 = w.spaces.get(STREET)!;
+    // the town's first frame draws the player: its programs for the town's lights, now (3 programs, 80-170 ms in that frame before)
+    void w.renderer.compileAsync(w.player.root, warmCamera(w, STREET).cam, street0.scene);
+    prefetcher = new PrefetchScheduler(prefetchHost(w), { enabled: true, now: () => performance.now() });
+    const { cam, focus } = warmCamera(w, STREET);
+    const pump = () => {
+      if (loopRunning || !prefetcher) return;
+      // the town drawn again over a warm frame: the canvas never keeps a room behind the title
+      serveWarm(w, true, () => (w.real ? w.real.render(street0.scene, cam, focus) : w.renderer.render(street0.scene, cam)));
+      prefetcher.setBusy(true);
+      prefetcher.frame(true);
+      requestAnimationFrame(pump);
+    };
+    requestAnimationFrame(pump);
+  });
   // Music, ambience and effects never hold the start up: their manifest comes in behind
   // (setManifest), on a fetcher of its own (a startup stall doesn't abort it), tried again when the
   // connection comes back and at each gesture until it is in.
@@ -567,23 +768,9 @@ async function main() {
   let promoCam: OrbitPath | DollyPath | null = null;
   let resolvePromoCam: (() => void) | null = null;
 
-  /** Each interior's build, started once: prefetched after the first frame, or when a door needs it first. */
-  const building = new Map<string, Promise<SceneSpace>>();
-  // a stall: the rooms on their way are forgotten (a hung one would hold every later door)
-  onStall.push(() => building.clear());
+  /** A space built now (or its build in flight, rushed): ensureSpaceIn. */
   function ensureSpace(id: string): Promise<SceneSpace> {
-    const have = spaces.get(id);
-    if (have) return Promise.resolve(have);
-    let p = building.get(id);
-    if (!p) {
-      p = SceneSpace.create(L, assets, id).then((s) => {
-        spaces.set(id, s);
-        return s;
-      });
-      p.catch(() => building.delete(id)); // a failed room is tried again at the next door
-      building.set(id, p);
-    }
-    return p;
+    return ensureSpaceIn(world, id);
   }
   /** A space ready to go into: at once if it is built, else behind the loading screen (shown after 300 ms). */
   async function openSpace(id: string): Promise<SceneSpace> {
@@ -601,16 +788,32 @@ async function main() {
       release();
     }
   }
-  /** After the first frame, idle: the town's people are streaming in; then every interior, nearest door first. */
+  /**
+   * After the first frame, idle: the town's people are streaming in; then every interior, nearest
+   * door first: its GLBs fetched and decoded (the prefetcher builds and warms the rooms while the
+   * player is busy); `?prefetch=0`: each room built, as before the prefetcher.
+   */
   function prefetch() {
     const idle = (f: () => void) => ((window as { requestIdleCallback?: (f: () => void) => void }).requestIdleCallback ?? ((g: () => void) => setTimeout(g, 200)))(f);
     void (async () => {
       await street.ready.catch(() => {});
       for (const s of plan.spaces) {
         await new Promise<void>((r) => idle(r));
-        await ensureSpace(s.id).catch((e: unknown) => console.error(`${s.id}: didn't load`, e));
+        if (prefetchOn) await assets.preload(s.assets).catch((e: unknown) => console.error(`${s.id}: didn't load`, e));
+        else await ensureSpace(s.id).catch((e: unknown) => console.error(`${s.id}: didn't load`, e));
       }
     })();
+  }
+  /** the spaces to build ahead in the game: the guide's, then the doors from here, nearest first */
+  wantedSpaces = () => {
+    const t = guideStep?.target;
+    const guided = t ? (t.kind === "place" ? L.spaceOf(t.place) : L.npcSpace(t.npc)) : null;
+    return rankCandidates(nav.space, guided, reachableFrom(L.space(nav.space).triggers, (p) => L.spaceOf(p), nav.space, player.position.x, player.position.z));
+  };
+  if (prefetchOn) {
+    warmExtras.push(marker, guideMarker.root, trail.mesh);
+    // the markers for the town's lights, behind the loading screen (the player's: behind the title)
+    for (const o of [marker, guideMarker.root, trail.mesh]) void renderer.compileAsync(o, warmCamera(world, STREET).cam, street.scene);
   }
   /** Goes into a space at a stand once it is built (a fade when `door`). */
   function goInto(id: string, stand: Stand, door: boolean) {
@@ -638,6 +841,9 @@ async function main() {
   /** Puts the player (and the markers) into a built space at a stand; `door`: walked there (a door's sound). */
   function enterSpace(id: string, stand: Stand, door = false) {
     const next = spaces.get(id)!;
+    entered.add(id);
+    currentSpace = id;
+    prefetcher?.entered(id);
     // Through a door: it opens going in, and closes behind you coming out.
     if (door && next !== space && next.layout.interior !== space.layout.interior) sfx(next.layout.interior ? "door_open" : "door_close");
     releaseBark(); // the bark itself ends next frame (updateBark: its speaker isn't in this space)
@@ -1324,8 +1530,11 @@ async function main() {
   }
 
   let firstFrame = false;
+  /** `?perf=1`: the scenes drawn so far (a scene's first draw gets stall marks: its compile, upload, env build) */
+  const drawnScenes = new WeakSet<THREE.Scene>();
   /** the frame's draw: the composer (real look) or the plain render */
   const drawFrame = () => {
+    const first = stallMarks.on && !drawnScenes.has(space.scene) ? { t0: performance.now(), gl: perf?.glNow() ?? {}, env: real?.stats.envBuildMs ?? 0, programs: renderer.info.programs?.length ?? 0 } : null;
     perf?.cpuBegin("render");
     try {
       if (real) real.render(space.scene, rig.camera, player.position);
@@ -1333,6 +1542,16 @@ async function main() {
       else renderer.render(space.scene, rig.camera);
     } finally {
       perf?.cpuEnd();
+    }
+    if (first) {
+      drawnScenes.add(space.scene);
+      const gl = perf?.glNow() ?? {};
+      const id = `first-draw:${space.id}`;
+      markSince(id, first.t0);
+      markMs(`${id}:compile`, (gl.compile ?? 0) - (first.gl.compile ?? 0));
+      markMs(`${id}:upload`, (gl.upload ?? 0) - (first.gl.upload ?? 0));
+      if (real && real.stats.envBuildMs !== first.env) markMs(`${id}:env`, real.stats.envBuildMs);
+      markMs(`${id}:programs+${(renderer.info.programs?.length ?? 0) - first.programs}`, 0.001);
     }
   };
   const frame = () => {
@@ -1494,13 +1713,28 @@ async function main() {
       resize();
     }
   };
+  // Prefetch (prefetch.ts): while the player is busy (a dialogue, the fly-over, the notebook or a
+  // menu, the name form, the sleep's day card, the start flow, the loading screen; never on the way
+  // through a door) and the last frame wasn't late, a slice of the next space's build after the frame.
+  /** scripted checks only (world3d.prefetchBusy): held busy, as a dialogue would */
+  let heldBusy = false;
+  const playerBusy = () => !transitioning && (heldBusy || startOpen || loading.visible || !!flyover || !game || game.model.mode !== "explore" || overlay.blocking);
+  let lastInterval = 0;
+  /** the last frame: busy with room for a slice (the next frame's warm frames may draw) */
+  let prefetchSlack = false;
+  const perfOverlay = perf && prefetcher ? new PerfOverlay(document) : null;
+  let overlayClock = 0;
   renderer.setAnimationLoop(() => {
     const now = performance.now();
     if (LOOK.real) {
       pacer.fps = pacedFps(now);
       if (!pacer.tick(now)) return;
     }
+    loopRunning = true;
     perf?.frameStart();
+    // a warm frame a build asked for (the prefetcher's): first, the frame itself drawn over it;
+    // outside the dynamic resolution's GPU timer (not the game's cost)
+    serveWarm(world, prefetchSlack);
     if (dynScale) gpuTimer?.begin();
     try {
       frame();
@@ -1508,8 +1742,21 @@ async function main() {
       if (dynScale) gpuTimer?.end();
       perf?.frameEnd();
     }
+    lastInterval = lastDrawn ? now - lastDrawn : 0;
     feedScale(now);
     lastDrawn = now;
+    if (prefetcher) {
+      // after the frame's own work: the slice's steps run right after this callback, within its budget
+      const busy = playerBusy();
+      prefetchSlack = busy && frameSlack(lastInterval, 1000 / (pacer.fps || 60));
+      prefetcher.setBusy(busy);
+      prefetcher.frame(prefetchSlack);
+      if (perfOverlay && now - overlayClock > 250) {
+        overlayClock = now;
+        const st = prefetcher.stats;
+        perfOverlay.set(`prefetch: ${st.state}${st.space ? ` ${st.space}` : ""} · ${st.ms} ms (longest step ${st.maxStep}) · ahead: ${st.prebuilt.join(", ") || "none"}${st.evicted ? ` · evicted ${st.evicted}` : ""}`);
+      }
+    }
   });
 
   // For scripted browser checks: read the model, drive the game without pixel-hunting.
@@ -1579,6 +1826,10 @@ async function main() {
         if (p) game?.enterPlace(p);
       },
       sleep: () => game?.sleep(),
+      /** scripted checks (A/B timing): hold the prefetcher's busy state on (as a dialogue would) or let it go */
+      prefetchBusy: (on: boolean) => void (heldBusy = on),
+      /** the prefetcher (prefetch.ts): state, the space being built, ms spent, the spaces built ahead; null with `?prefetch=0` */
+      prefetch: () => (prefetcher ? { ...prefetcher.stats, busy: playerBusy(), built: [...spaces.keys()], entered: [...entered] } : null),
       travel: () => game?.travel(),
       triggers: () => L.space(nav.space).triggers,
       walkers: () => space.walkers.map((w) => ({ x: w.motion.x, z: w.motion.z, waiting: w.motion.waiting })),

@@ -30,6 +30,41 @@ export interface PerfFrame {
   drawn: boolean;
 }
 
+/**
+ * `?perf=1` only (main.ts turns it on): stall marks on the space-change path (performance.measure,
+ * `world3d:<name>`): a GLB's fetch + decode, a SceneSpace's build, a scene's first draw and the
+ * prefetcher's steps. Off (the default) nothing is measured.
+ */
+export const stallMarks = { on: false };
+/** performance.measure(`world3d:${name}`) from `start` to now, when stallMarks is on */
+export function markSince(name: string, start: number) {
+  if (stallMarks.on) performance.measure(`world3d:${name}`, { start, end: performance.now() });
+}
+
+/** a measure of `ms` ending now (a part of a step timed elsewhere), when stallMarks is on */
+export function markMs(name: string, ms: number) {
+  if (!stallMarks.on || !(ms > 0)) return;
+  const end = performance.now();
+  performance.measure(`world3d:${name}`, { start: end - ms, end });
+}
+
+/** `?perf=1`: a line of text over the game, bottom left (the prefetcher's state: main.ts) */
+export class PerfOverlay {
+  readonly node: HTMLElement;
+  private text = "";
+  constructor(doc: Document) {
+    this.node = doc.createElement("div");
+    this.node.className = "perf-overlay";
+    this.node.style.cssText = "position:fixed;left:6px;bottom:6px;z-index:70;pointer-events:none;font:11px/1.3 ui-monospace,monospace;color:#fff;background:rgba(0,0,0,0.55);padding:2px 6px;border-radius:3px;white-space:pre";
+    doc.body.append(this.node);
+  }
+  set(text: string) {
+    if (text === this.text) return;
+    this.text = text;
+    this.node.textContent = text;
+  }
+}
+
 /** ms: a frame over this is a long frame */
 export const LONG_FRAME_MS = 50;
 
@@ -117,6 +152,11 @@ export class Perf {
     const sm = renderer.shadowMap as unknown as { render: (...a: unknown[]) => void };
     const shadow = sm.render.bind(sm);
     sm.render = (...a: unknown[]) => this.time("shadow", () => shadow(...a));
+  }
+
+  /** the GL ms of the frame being recorded so far (compile / upload), a copy; {} outside a frame */
+  glNow(): Record<string, number> {
+    return { ...(this.cur?.gl ?? {}) };
   }
 
   /** DynamicScale's signal under `?perf=1`: a newly landed frame's GPU ms, once; null: none since the last take */
