@@ -143,7 +143,7 @@ function outdoorNpcs(town) {
     // street: by the benches round the great tree, facing the plaza and the spawn
     wang: { space: "street", ...pair([-13.2, 9.8], [-12.0, 9.6]) },
     // market: behind the fruit stall's counter (its npc_stand), talked to across it
-    dispatcher: { building: "fruit_stall", stand: "npc_stand", playerStand: fixed(13.5, 28.9, 0, -1) },
+    dispatcher: { building: "fruit_stall", stand: "npc_stand", playerStand: fixed(13.5, 29.3, 0, -1) }, // clear of the stall's crates (front at z 28.98) by the player's radius
     // warehouse (travel-only): out on the pier
     foreman: { space: "street", ...pair(foreman.pos.map(r3), foremanTalk.pos.map(r3)) },
     // school and hospital (travel-only): either side of the pavilion
@@ -174,7 +174,7 @@ const WALKERS = [
   { character: "kid", role: "kid", path: [[0.6, -11], [0.6, -26], [-6, -27.4]], speed: 1.4 },
   { character: "customer_b", role: "granny", path: [[-24, -27.4], [24, -27.4]], speed: 0.9 },
   { character: "customer_a_khaki", role: "tourist", path: [[-27.4, -22], [-27.4, 12], [-27.6, 24], [-20, 24.6]], speed: 1 },
-  { character: "courier", role: "courier", path: [[-12, 36.2], [0.4, 36.2], [0.4, 46]], speed: 1.2 },
+  { character: "courier", role: "courier", path: [[-12, 36.2], [-6.2, 36.2], [-5.6, 35.3], [-3.6, 35.3], [-3.2, 36.2], [0.4, 36.2], [0.4, 46]], speed: 1.2 }, // round flower_bed_8 (x -5.3..-4.3, z 35.6..37.6), clear of bollard_3
 ];
 
 /** Pets: the cat by the noodle shop, a dog on the lake shore, pigeons on the plaza (they scatter). Their role is their asset (cat, dog, pigeon). */

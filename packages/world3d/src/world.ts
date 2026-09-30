@@ -16,7 +16,9 @@ import { ModuleLoadError } from "./boot";
 import { applyDetail, detailFor, type DetailSpec } from "./detail";
 import { figureId } from "./barks";
 import { CHARACTER_KINDS, type LoadEvent } from "./loading";
-import { anchorToWorld, heldProp, yawFor, type Blocker, type Box2, type HeldPropSpec, type LayoutIndex, type Placement, type SpaceLayout, type Vec3 } from "./layout";
+import { heldProp, yawFor, type Blocker, type HeldPropSpec, type LayoutIndex, type Placement, type SpaceLayout, type Vec3 } from "./layout";
+import { derive, spaceBlockers, npcBlocker, type Derived, type DeriveCache, type Part as BodyPart } from "./collision";
+import { COLLIDE_VIEW, colliderLines } from "./collide-view";
 import type { WalkArea } from "./player";
 import { ScatterMotion, WalkerMotion } from "./streetlife";
 import { markSince } from "./perf";
@@ -1022,7 +1024,12 @@ export interface FigureView {
 
 export class SceneSpace {
   readonly scene = new THREE.Scene();
+  /** what stops walking (collision.ts): colliders derived from every static piece's geometry, the town's authored rects where a piece has none, NPC stands */
   readonly blockers: Blocker[] = [];
+  /** each static piece's derivation (its colliders and real footprint): the audit and the tests read it */
+  readonly collision: Derived[] = [];
+  /** the grass mask's footprints (envlook.ts): the town's authored rects and NPC stands, as before the derivation */
+  private lookBlockers: Blocker[] = [];
   readonly npcs = new Map<string, NpcView>();
   /** street extras and pets from the dressing list: idle in place */
   readonly extras: CharacterActor[] = [];
@@ -1082,6 +1089,8 @@ export class SceneSpace {
       markSince(`space:${id}:populate`, p0);
       w.gate = undefined;
     });
+    // `?collide=1`: every collider's outline on the ground, once the NPC stands are in
+    if (COLLIDE_VIEW) void w.ready.then(() => w.scene.add(colliderLines(w.blockers, (x, z) => L.heightAt(id, x, z))), () => {});
     if (!opts.stream) await w.ready;
     else w.ready.catch((e: unknown) => console.error(`${id}: a character didn't load`, e));
     return w;
@@ -1169,6 +1178,10 @@ export class SceneSpace {
     scene.add(this.sun);
     /** everything that never moves: batched by material at the end */
     const statics: THREE.Object3D[] = [];
+    /** every static piece that can stand in the way (collision.ts derives its colliders from what it draws) */
+    const bodies: BodyPart[] = [];
+    const body = (owner: string, asset: string | undefined, object: THREE.Object3D, p: Pick<Placement, "pos" | "rotY" | "scale" | "tiltX">, skip?: BodyPart["skip"]) =>
+      bodies.push({ owner, asset, object, origin: [p.pos[0], p.pos[2]], y: p.pos[1], rotY: p.rotY, skip, key: asset && `${asset}|${p.scale ?? 1}|${p.tiltX ?? 0}` });
 
     if (town) {
       // The landscape GLBs share the world origin; the sky dome is drawn unlit and unfogged, behind everything.
@@ -1206,14 +1219,16 @@ export class SceneSpace {
       if (LOOK.real) box.castShadow = box.receiveShadow = true;
       scene.add(box);
       statics.push(box);
+      body(g.name, undefined, box, { pos: [box.position.x, 0, box.position.z], rotY: 0 });
     }
 
-    for (const t of layout.tiles) {
+    for (const [i, t] of layout.tiles.entries()) {
       const o = await this.inst(t.asset);
       this.place(o, t);
       o.userData.see = seeSpecFor(L.asset(t.asset).set, t.asset);
       scene.add(o);
       statics.push(o);
+      body(`${t.asset}#tile${i}`, t.asset, o, t);
     }
     for (const b of layout.pieces) {
       const o = await this.inst(b.asset);
@@ -1224,12 +1239,10 @@ export class SceneSpace {
       o.userData.see = this.seeSpec(o, b.id, b.asset);
       scene.add(o);
       statics.push(o);
-      const blocker = b.block === "footprint" ? this.buildingBlocker(b, await this.assets.template(b.asset)) : b.block === "size" ? L.sizeBlocker(b) : null;
-      if (blocker) this.blockers.push(blocker);
+      body(b.id, b.asset, o, b);
     }
-    this.blockers.push(...layout.blockers); // the town's own (oriented rects)
     // Static dressing (the characters among it animate: populate()).
-    for (const d of layout.dressing) {
+    for (const [i, d] of layout.dressing.entries()) {
       const e = L.asset(d.asset);
       if (e.set === "characters" && CHARACTER_KINDS.has(e.kind ?? "")) continue;
       const o = await this.inst(d.asset);
@@ -1240,6 +1253,7 @@ export class SceneSpace {
       o.userData.see = host ? { ...host } : this.seeSpec(o, d.asset, d.asset);
       scene.add(o);
       statics.push(o);
+      body(`${d.asset}#${i}`, d.asset, o, d);
     }
     // Things to use (bed, notebook): a tap box each, with the prompt target's id.
     layout.interactables.forEach((x, i) => {
@@ -1258,6 +1272,13 @@ export class SceneSpace {
       this.pickables.push(proxy);
     }
     bandWalls(enclosure, layout, statics, (colour) => this.assets.toon.flat(colour));
+    // The room's walls as drawn (the open front's plane is where the player walks out).
+    if (enclosure) body("interior_enclosure", undefined, enclosure, { pos: [0, 0, 0], rotY: 0 }, (m) => m.userData.roomSurface === "wall_front");
+    // What stops walking: derived from the geometry (collision.ts), before batching merges it away.
+    const shapes: DeriveCache = new Map();
+    for (const b of bodies) this.collision.push(derive(b, (x, z) => L.heightAt(this.id, x, z), shapes));
+    this.blockers.push(...spaceBlockers(this.collision, layout.blockers));
+    this.lookBlockers.push(...layout.blockers);
     // Real look: the enclosure takes the room's shadows like the authored walls it continues.
     if (LOOK.real) enclosure?.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.receiveShadow = true; });
     this.batching.before = drawCalls(scene);
@@ -1313,7 +1334,7 @@ export class SceneSpace {
     this.lookSky = { zenith: c0(), horizon: c0(), ground: c0(), sun: new THREE.Vector3(), sunColor: c0(), daylight: 0, version: 0 };
     this.scene.userData.lookSky = this.lookSky;
     // for the environment layers (envlook.ts): the town's ground, its footprints (the array itself: NPC stands join it as they load), its sky dome
-    this.scene.userData.lookGround = { town: !!this.layout.town, blockers: this.blockers, sky: this.layout.town?.sky } satisfies LookGround;
+    this.scene.userData.lookGround = { town: !!this.layout.town, blockers: this.lookBlockers, sky: this.layout.town?.sky } satisfies LookGround;
     this.writeLookSky();
   }
 
@@ -1422,7 +1443,9 @@ export class SceneSpace {
         scene.add(o);
         this.pickables.push(proxy);
         this.npcs.set(npc, { npc, actor, homeYaw: o.rotation.y });
-        this.blockers.push({ min: [stand.pos[0] - 0.25, stand.pos[2] - 0.25], max: [stand.pos[0] + 0.25, stand.pos[2] + 0.25] });
+        const stood = npcBlocker(npc, stand.pos);
+        this.blockers.push(stood);
+        this.lookBlockers.push(stood);
       });
     layout.walkers.forEach((w, i) =>
       jobs.push(async () => {
@@ -1615,25 +1638,6 @@ export class SceneSpace {
   private async holdProp(actor: CharacterActor, spec: HeldPropSpec | undefined) {
     const prop = heldProp(spec);
     if (prop) actor.hold(await this.assets.instance(prop.asset), { carry: prop.carry });
-  }
-
-  /**
-   * A building blocks its footprint, cut short 0.35 m before its player_stand so the player can
-   * always reach where they talk from (awnings, steps and the warehouse dock stick out in front).
-   */
-  private buildingBlocker(b: Placement, template: THREE.Object3D): Box2 {
-    const box = new THREE.Box3().setFromObject(template);
-    const stand = this.L.asset(b.asset).anchors?.player_stand as { pos: Vec3 } | undefined;
-    const maxZ = stand ? Math.min(box.max.z, stand.pos[2] - 0.35) : box.max.z;
-    const corners: Vec3[] = [
-      [box.min.x, 0, box.min.z],
-      [box.max.x, 0, box.min.z],
-      [box.min.x, 0, maxZ],
-      [box.max.x, 0, maxZ],
-    ].map((c) => anchorToWorld(b, c as Vec3));
-    const xs = corners.map((c) => c[0]);
-    const zs = corners.map((c) => c[2]);
-    return { min: [Math.min(...xs), Math.min(...zs)], max: [Math.max(...xs), Math.max(...zs)] };
   }
 
   /**

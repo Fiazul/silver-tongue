@@ -8,6 +8,7 @@ import { PlayerCarry } from "../src/carry";
 import { LAYOUT, LayoutIndex, type Box2 } from "../src/layout";
 import { CAMERA } from "../src/camera";
 import { blocked, PLAYER_RADIUS } from "../src/movement";
+import { pushOut } from "../src/collision";
 import { ZONE_MARGIN } from "../src/spaces";
 import { AssetCache, drawCalls, SceneSpace } from "../src/world";
 import { BARKS } from "../barks";
@@ -96,10 +97,14 @@ describe.skipIf(!assetIndex)("scene spaces from the real GLBs", () => {
     expect(CAMERA.far).toBeGreaterThan(800 + 400);
     expect(street.scene.getObjectByName("noodle_shop")).toBeDefined();
     expect(street.scene.getObjectByName("pier")).toBeDefined();
-    expect(street.blockers.length).toBe(LAYOUT.town.blockers.length + street.npcs.size);
-    // the shop's checkout counter is box-built (layout ground, batched away): its blocker is there
+    // colliders from the drawn geometry (collision.ts), the town's authored rects only where a piece derived none, one disc per NPC
+    expect(street.blockers.filter((b) => b.source === "npc").length).toBe(street.npcs.size);
+    const derivedOwners = new Set(street.blockers.filter((b) => b.source === "geometry").map((b) => b.owner));
+    expect(street.blockers.filter((b) => b.source === "authored").every((b) => !derivedOwners.has(b.owner))).toBe(true);
+    expect(derivedOwners.size).toBeGreaterThan(LAYOUT.town.blockers.length);
+    // the shop's checkout counter is box-built (layout ground, batched away): its collider comes from its geometry
     const counter = L.space("shop").ground.find((g) => g.name === "shop_counter")!;
-    expect(spaces.get("shop")!.blockers.some((b) => b.min[0] <= counter.min[0] && b.max[0] >= counter.max[0] && b.min[1] <= counter.min[2] && b.max[1] >= counter.max[2])).toBe(true);
+    expect(spaces.get("shop")!.blockers.some((b) => b.owner === "shop_counter" && b.min[0] <= counter.min[0] + 0.05 && b.max[0] >= counter.max[0] - 0.05 && b.min[1] <= counter.min[2] + 0.05 && b.max[1] >= counter.max[2] - 0.05)).toBe(true);
     expect(spaces.get("tea_house")!.scene.getObjectByName("tea_interior:table_round")).toBeDefined();
     // hand props: no carry pose; Wang holds the fan on the grip bone
     for (const s of spaces.values())
@@ -139,7 +144,7 @@ describe.skipIf(!assetIndex)("scene spaces from the real GLBs", () => {
     expect(room.pick(new THREE.Vector2(0, 0), cam)).toEqual({ target: "sleep:0" });
   }, 30_000);
 
-  it("with the real blockers (the town's oriented rects and walk grid, interior furniture): every talk stand, entry and exit spawn, and a spot deep in every trigger is walkable", async () => {
+  it("with the real blockers (colliders from the geometry, the walk grid): every talk stand, entry and exit spawn, and a spot deep in every trigger is walkable", async () => {
     const { L, spaces } = await buildAll();
     for (const [id, sp] of spaces) {
       const free = (x: number, z: number) => !blocked(x, z, sp.blockers, sp.layout.bounds, PLAYER_RADIUS, sp.area.walkable);
@@ -152,12 +157,19 @@ describe.skipIf(!assetIndex)("scene spaces from the real GLBs", () => {
         expect(free(e[0], e[2]), `${id}: entry`).toBe(true);
         const outer = spaces.get(L.outerSpace(id)!)!;
         const o = L.exitSpawn(id).pos;
-        expect(!blocked(o[0], o[2], outer.blockers, outer.layout.bounds, PLAYER_RADIUS, outer.area.walkable), `${id}: exit spawn in ${outer.id}`).toBe(true);
+        const oq = pushOut(o[0], o[2], outer.blockers, PLAYER_RADIUS)!;
+        // the rented room's door opens onto flower_bed_7's edge: placing pushes the player clear (player.ts place), still well out of the door
+        expect(Math.hypot(oq[0] - o[0], oq[1] - o[2]), `${id}: exit spawn inside a piece in ${outer.id} (${o})`).toBeLessThan(PLAYER_RADIUS + 0.01);
+        expect(L.triggerAt(outer.id, oq[0], oq[1], -ZONE_MARGIN)?.kind === "door", `${id}: pushed exit spawn back in a door`).toBe(false);
+        expect(!blocked(oq[0], oq[1], outer.blockers, outer.layout.bounds, PLAYER_RADIUS, outer.area.walkable), `${id}: exit spawn in ${outer.id}`).toBe(true);
       }
       for (const place of Object.keys(course.world.places))
         if (L.spaceOf(place) === id && !LAYOUT.places[place]?.interior) {
           const p = L.spawn(place).pos;
-          expect(free(p[0], p[2]), `${id}: ${place} spawn`).toBe(true);
+          // placing the player pushes a stand a hair inside a piece clear of it (player.ts place): at most 3 cm
+          const q = pushOut(p[0], p[2], sp.blockers, PLAYER_RADIUS)!;
+          expect(Math.hypot(q[0] - p[0], q[1] - p[2]), `${id}: ${place} spawn inside a piece`).toBeLessThan(0.03);
+          expect(free(q[0], q[1]), `${id}: ${place} spawn`).toBe(true);
         }
       // the zone tracker fires only 0.25 m inside a trigger: there must be a free spot that deep
       for (const t of sp.layout.triggers) {

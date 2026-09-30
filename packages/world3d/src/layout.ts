@@ -7,6 +7,7 @@
 import type { World } from "@silver-tongue/core";
 import layoutJson from "./layout.json";
 import townJson from "./town.json";
+import type { Shape } from "./collision";
 import { PLAYER_RADIUS } from "./movement";
 
 export type Vec3 = [number, number, number];
@@ -42,9 +43,14 @@ export interface OrientedRect {
   half: Vec2;
   rotY: number;
 }
-/** What stops walking: an x/z box, or an oriented rect inside its box (`obb`). */
+/** What stops walking: an x/z box, or an oriented rect inside its box (`obb`), or an exact shape inside it (collision.ts). */
 export interface Blocker extends Box2 {
   obb?: OrientedRect;
+  /** the exact outline (collision.ts derive: from the drawn geometry) */
+  shape?: Shape;
+  /** the piece it belongs to (a placement id), and where it came from */
+  owner?: string;
+  source?: "geometry" | "authored" | "npc";
 }
 /** A fixed point with a facing (x/z or x/y/z). */
 export interface FixedStand {
@@ -318,7 +324,7 @@ export interface Stand {
   facing: Vec3;
 }
 
-/** How a placed piece blocks walking: street buildings by their footprint (world.ts, from the mesh), interior furniture by its size. */
+/** How a placed piece used to block walking (by its footprint, by its index size): world.ts now derives every piece's colliders from its geometry (collision.ts); `sizeBlocker` stays for the collision audit. */
 export type BlockMode = "footprint" | "size" | "none";
 export interface SpacePiece extends BuildingPlacement {
   block: BlockMode;

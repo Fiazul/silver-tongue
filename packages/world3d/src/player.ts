@@ -6,7 +6,8 @@ import * as THREE from "three";
 import type { CharacterActor } from "./actor";
 import { turnToward } from "./anim";
 import type { Blocker, Box2 } from "./layout";
-import { step, WALK_SPEED, type WalkableFn } from "./movement";
+import { pushOut } from "./collision";
+import { PLAYER_RADIUS, step, WALK_SPEED, type WalkableFn } from "./movement";
 
 /** Where the player walks: the current scene space's bounds, blockers, walkable ground (the town's grid and decks) and walking height. */
 export interface WalkArea {
@@ -39,6 +40,8 @@ export class Player {
   }
 
   place(x: number, z: number, face?: THREE.Vector3) {
+    // a stand a hair inside a drawn piece (collision.ts: colliders from the geometry) is pushed clear of it
+    [x, z] = pushOut(x, z, this.area.blockers, PLAYER_RADIUS) ?? [x, z];
     this.root.position.set(x, this.area.heightAt(x, z), z);
     if (face) this.yaw = Math.atan2(face.x, face.z);
     this.root.rotation.y = this.yaw;

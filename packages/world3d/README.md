@@ -511,7 +511,7 @@ courses/<id>/<learner>.json (courses.ts) ─► core ◄─ inputs ── game.t
   `triggerAt` / `placeAt` (per space: doors and ways out win over the zone round them; stay spots
   never count), `holds` (is standing here being at that place, margin and stay spots included),
   `heightAt` (the town: deck, else the plaza's top, else the terrain grid, bilinear), `walkable`
-  (the town's grid classes and decks), `sizeBlocker` (interior furniture from its index size) and
+  (the town's grid classes and decks), `sizeBlocker` (a piece's index-size box: the collision audit's "before", no longer what blocks) and
   `assetNames` (a scan of the whole layout; `scripts/used-assets.mjs` has the same scan). `route`
   finds place hops.
 - `src/spaces.ts` (pure):
@@ -548,8 +548,7 @@ courses/<id>/<learner>.json (courses.ts) ─► core ◄─ inputs ── game.t
   - Toon look: `MeshToonMaterial` with a 3-step gradient map, one material per palette colour.
   - Outline: inverted hull. Skinned meshes get a skinned hull on the same skeleton.
   - `SceneSpace` builds any space from its `SpaceLayout`: its own `THREE.Scene`, lights, blockers
-    (the town's oriented rects; a side street's buildings: footprints cut 0.35 m short of their
-    `player_stand`; interior furniture: index sizes; a small box per NPC), picking (NPCs,
+    (derived from every static piece's geometry, see Movement and collision; a disc per NPC), picking (NPCs,
     interactables, then the ground: in the town settled onto the walking height), NPCs, extras,
     walkers and scatterers, the day tint (`setDaylight`) and shrugs. The town adds its landscape
     GLBs at the origin, the sky dome (unlit, unfogged, drawn first), the sun at town.json's bearing
@@ -558,8 +557,8 @@ courses/<id>/<learner>.json (courses.ts) ─► core ◄─ inputs ── game.t
     or idle prefetch (see Loading and streaming).
 - `src/player.ts` + `src/movement.ts`:
   - Walking: tap to walk in a straight line, sliding along blockers, or WASD/arrows relative to the
-    screen. The player walks in the current space's `WalkArea` (bounds, blockers, oriented rects
-    tested in their own frame, the walkable ground, the walking height it eases onto).
+    screen. The player walks in the current space's `WalkArea` (bounds, blockers, the walkable
+    ground, the walking height it eases onto). See Movement and collision.
   - The character faces its movement direction; its `CharacterActor` animates (see Character animation).
 - `src/camera.ts`: a fixed high three-quarter view (elevation 42°, azimuth 36°, distance 19 m,
   fov 30°, as in `tools/blender/lib/sheet.py`; far plane 2500 m for the sky dome and the fly-over).
@@ -617,6 +616,56 @@ language" option when that NPC is the mentor and notes are waiting. With one ite
 `startScene` (or `visitMentor`) straight away. With several it shows a list. With none it shows a
 "nothing to talk about" toast. Tapping an NPC from further away first walks to their building's
 `player_stand` and talks on arrival.
+
+## Movement and collision
+
+What stops walking is what is drawn. `src/collision.ts` derives every static piece's colliders
+from its rendered triangles when a space loads (`SceneSpace.buildStatic`, before batching): the
+town's buildings and dressing, every interior's shell, furniture, dressing, ground boxes, and the
+room's enclosure walls (its open front excepted). Nothing is hand-authored: a relaid space (the
+shop rebuild) gets its colliders from its new geometry with no extra step.
+
+- **The body's slab.** Each triangle is clipped between `COLLIDE.step` (0.2 m) and `COLLIDE.head`
+  (1.8 m) over the walking height under it (`LayoutIndex.heightAt`). Lower: floors, rugs, kerbs,
+  steps, a deck, the plaza are walked over. Higher: awnings, roofs, lantern strings, a lamp's arm,
+  branches never block. A piece's own low wide platform (upward faces at most 0.5 m high, a body
+  wide (opened by 0.3 m), covering 4 m² or more: the pavilion's floor) raises the walking height
+  over itself, so its rim and steps don't block; a ring of kerb stones or a bench seat is no floor. Foliage materials (`FOLIAGE`: leaves, canopies, willow fronds, lotus pads) never
+  block; the trunk, the pot, the bed's kerb do.
+- **Shapes.** The slab's projection is rasterised at 2.5 cm in the piece's own frame (turned with
+  it), enclosed holes filled (a closed ring is solid, a ring with a gap stays open), split into
+  connected parts. A part becomes its convex hull when the hull adds nothing more than 5 cm
+  (`COLLIDE.tol`) beyond the part; a thin round part (radius up to 0.45 m: posts, poles, trunks) the
+  circle round it; a concave part (a U of walls, an L-counter, a pavilion's rail) is cut in two
+  across its longer side until each piece fits the same way (a few cells: rectangles). No padding:
+  the player's radius (0.28 m) is the only inflation.
+- **Cache.** On flat ground, a second placement of the same asset (same scale and tilt, same
+  height over the ground) reuses the first's shapes, turned and moved.
+- **Authored rects.** town.json's oriented rects (`port-town.mjs`) stay only for a piece whose
+  geometry derives nothing; with the vendored library every piece derives its own, so none remain.
+  NPC stands are a 0.25 m disc each.
+- **Resolver** (`movement.ts step`): the move in 5 cm sub-steps; each one pushed out of whatever it
+  overlaps (signed distance to the circle or convex polygon, deepest first, a few rounds: a
+  concave corner settles), so the player slides along a surface with whatever part of the move
+  runs along it, rounds convex corners without catching, and stops dead in a concave one. Where the
+  pushed spot can't stand (the walk grid's edge, the bounds) it tries the move along x, then z.
+  `player.place` pushes a stand a hair inside a piece clear of it (the town spawn is 1 cm into a
+  plaza bench; the rented room's door opens onto flower_bed_7's edge).
+- **Nav.** The "Take me there" path grid (`wayview.ts spaceGrid`) tests the same colliders at the
+  same radius (0.25 m cells in the town, 0.1 m indoors), so a path never runs through furniture and
+  never refuses a gap the player fits through.
+- **Debug view.** `?collide=1` (`src/collide-view.ts`) draws every collider's outline on the ground,
+  always on top: red from the geometry, orange an authored rect, blue an NPC stand; the faint ring
+  is where the player's centre stops. `scripts/collide-capture.mjs` shoots the street and each
+  interior with it into `shots/collision/`.
+- **Audit.** `COLLISION_AUDIT=1 npx vitest run packages/world3d/test/collision.test.ts` writes
+  `shots/collision/audit.md`: per piece, the old collider (authored rect, index-size box, none)
+  and the new against the drawn footprint, over- and under-blocking beyond 5 cm in m².
+- **Tests** (`test/collision.test.ts`): per piece in every space, over- and under-blocking within
+  tolerance; every talk stand, trigger and thing to use reachable from where the player arrives; a
+  slide along every collider edge never snags (progress each step until another surface faces the
+  player); each room's way out and the town gate's passage as wide as drawn; paths to every
+  hotspot clear of every collider; the walkers' laid routes clear.
 
 ## Character animation
 
@@ -1572,8 +1621,9 @@ steps point at the same target and hand over to it. No core inputs or state. `sr
   projection a frame from clip space (a point behind the camera keeps its side); only transforms
   change per frame; the HUD's box (measured twice a second) is kept clear.
 - **Ground path** (`PathTrail`): A* (8-neighbour, no corner cutting) on the space's walk grid: the
-  town's 1 m grid, classes 1..5 (grass 1.6, pad 1.2, path / plaza / bridge 1; decks count as
-  bridge), blockers out; an interior's floor at 0.4 m. Breadcrumb dots every 0.8 m, fading from
+  town's ground classes 1..5 (grass 1.6, pad 1.2, path / plaza / bridge 1; decks count as
+  bridge) at 0.25 m, an interior's floor at 0.1 m; a cell is out where the player can't stand
+  (the same colliders at the player's radius: see Movement and collision). Breadcrumb dots every 0.8 m, fading from
   14 m to 40 m along the way, one merged mesh (one draw call). Rebuilt twice a second or on a new
   target; not drawn within 3 m of where it ends (the door across the room). Menu → Show path (on
   by default, remembered in `prefs.ts`).
@@ -1789,14 +1839,12 @@ that role said last).
 - **Gestures:** reactions are poses (README "Character animation"); nothing hands a prop from one
   hand to another, and nothing seats a character yet (the `sit` layer is ready).
 - **Audio:** no per-clip volume or speed control beyond the TUI's (slow repeats at 0.8).
-- **Movement:** no navmesh. The town blocks what town.json lists (buildings, trunks, rocks,
-  lanterns, the pavilion's pillars, the gate's); benches, flower beds, stools and the canal
-  railings don't block (the grid's edge keeps you off the canal). The pavilion's raised floor and
-  the canal steps down to the water aren't walked on. Walkers don't avoid anything beyond their
-  laid paths (the port keeps those clear of the blockers).
+- **Movement:** no navmesh; colliders come from the drawn geometry (Movement and collision). The
+  pavilion's raised floor is walked at the grid's height (the feet sink 0.3-0.4 m into it) and the
+  canal steps down to the water aren't walked on. Walkers don't avoid anything beyond their laid
+  paths (test/collision.test.ts keeps those clear of every collider).
 - **Barks:** a walker, pet or extra can't be tapped on the 3D model itself (world.ts picks NPCs,
-  interactables and the ground): walk up and use the prompt (tap it, the round button, or E). The
-  egg stall's table isn't blocked (the town's blockers are town.json's own).
+  interactables and the ground): walk up and use the prompt (tap it, the round button, or E).
 - **Day card:** "change today" counts from the start of the day in this session (a game resumed
   mid-day counts from the resume).
 

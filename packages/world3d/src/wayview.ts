@@ -3,7 +3,8 @@
 // only: no layout reads per frame) and each space's walk grid for the A* (built once per space).
 import * as THREE from "three";
 import { gridClass, deckAt, LAYOUT, STREET, type Blocker, type Box2 } from "./layout";
-import { blocked } from "./movement";
+import { BlockerIndex } from "./collision";
+import { blocked, PLAYER_RADIUS } from "./movement";
 import { el } from "./ui/dom";
 import { breadcrumbs, buildPathGrid, CLASS_COST, type EdgeArrow, type PathGrid } from "./wayfind";
 
@@ -15,21 +16,26 @@ const DOT_R = 0.13;
 const FADE_FROM = 14;
 const FADE_TO = 40;
 
+/** the path grid's cell (m), the town's and a room's: fine enough that a gap the player fits through has a cell centre in it */
+export const PATH_CELL = { town: 0.25, room: 0.1 };
+
 /**
- * A space's walk grid for the path: the town's 1 m grid (classes 1..5 with their costs, decks as
- * bridge), an interior's floor at 0.4 m; blockers (the town's rects, pieces, NPC stands) out,
- * tested at a small radius so narrow lanes stay open.
+ * A space's walk grid for the path: the town's ground classes (their costs, decks as bridge) or an
+ * interior's floor, at PATH_CELL; a cell is out where the player can't stand (movement.ts blocked:
+ * the same colliders, at the player's radius), so a path never runs through a piece and never
+ * refuses a gap the player walks through.
  */
 export function spaceGrid(space: { id: string; blockers: Blocker[]; layout: { bounds: Box2 } }): PathGrid {
   const bounds = space.layout.bounds;
-  const hit = (x: number, z: number) => blocked(x, z, space.blockers, bounds, 0.15);
-  if (space.id !== STREET) return buildPathGrid(bounds, 0.4, () => 1, hit);
+  const index = new BlockerIndex(space.blockers);
+  const hit = (x: number, z: number) => blocked(x, z, index.near(x, z, PLAYER_RADIUS), bounds, PLAYER_RADIUS);
+  if (space.id !== STREET) return buildPathGrid(bounds, PATH_CELL.room, () => 1, hit);
   const t = LAYOUT.town;
   const g = t.grid;
   const box: Box2 = { min: [g.x0, g.z0], max: [g.x0 + g.cols * g.cell, g.z0 + g.rows * g.cell] };
   return buildPathGrid(
     box,
-    g.cell,
+    PATH_CELL.town,
     (x, z) => {
       if (deckAt(t.decks, x, z)) return CLASS_COST[5];
       return CLASS_COST[gridClass(g, x, z)] ?? 0;
