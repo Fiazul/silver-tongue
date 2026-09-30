@@ -35,10 +35,16 @@ describe("the lawn (envlook.ts GRASS, GRASS_LOOK)", () => {
     expect(lum(tip)).toBeLessThanOrEqual(lum(lawn) * 1.1); // no glow above the lawn
     expect(GRASS_LOOK.maxSat).toBeGreaterThanOrEqual(0.8);
     expect(GRASS_LOOK.maxSat).toBeLessThanOrEqual(0.9);
-    // the ground's lawn lifted a touch, no more
-    expect(GRASS_LOOK.lawn.sat).toBeGreaterThan(1);
-    expect(GRASS_LOOK.lawn.sat).toBeLessThanOrEqual(1.3);
-    expect(GRASS_LOOK.lawn.tint[1]).toBe(Math.max(...GRASS_LOOK.lawn.tint));
+    expect(sat(tip)).toBeLessThanOrEqual(0.87); // the tip a notch calmer than the root and mid
+    // the ground's lawn (round 4: raised from a light lift to the tufts' own green): the mid's hue
+    // and brightness, its saturation lifted (up to 1.1x in linear: the ground's sky sheen greys it by
+    // about a third on screen, so it lands at ~75-80 % of the tufts' there), so the tufts read as its
+    // texture, not dots on beige
+    const ground = mid.map((c) => Math.max(0, lum(mid) + (c - lum(mid)) * GRASS_LOOK.lawn.sat));
+    expect(sat(ground) / sat(mid)).toBeGreaterThanOrEqual(0.7);
+    expect(sat(ground) / sat(mid)).toBeLessThanOrEqual(1.1);
+    expect(Math.abs(lum(ground) - lum(mid)) / lum(mid)).toBeLessThan(0.05);
+    expect(ground[1]).toBe(Math.max(...ground));
     expect(GRASS_LOOK.clump.floor).toBeGreaterThan(0);
     expect(GRASS_LOOK.clump.floor).toBeLessThan(0.3);
   });

@@ -55,17 +55,19 @@ export const GRASS = {
  * the blade's colour, multipliers on the lawn's own (linear) colour: `root` a deep green at the
  * ground (greener and darker than the lawn round it), `mid` up the blade, `tip` a bright
  * green-yellow, every blade held to `maxSat` saturation (linear: a healthy, well-watered lawn, not
- * neon). `lawn`: the ground shader's lawn under the tufts, a touch more saturated (`sat`) and green
- * (`tint`) so the two agree (the dirt untouched). `lean`: the tuft's random lean (rad, at most).
+ * neon). `lawn`: the ground shader's lawn under the tufts takes the tufts' `mid` green (same hue and
+ * brightness), its saturation x `sat` (above 1: the ground's sky sheen, which the Lambert tufts
+ * don't take, greys it by about a third on screen; measured on 20-default-desktop, it lands at
+ * ~75-80 % of the tufts'), so the tufts read as texture on a green lawn (dirt, paths, wear untouched). `lean`: the tuft's random lean (rad, at most).
  */
 export const GRASS_LOOK = {
   clump: { scale: 7.3, offset: 0.61, lo: 0.34, hi: 0.62, floor: 0.12 },
   bare: { patch: [0.6, 0.72], detail: [0.52, 0.62], gone: [0.12, 0.4] },
   root: [0.3, 0.62, 0.3],
   mid: [0.5, 0.85, 0.35],
-  tip: [0.75, 1.1, 0.4],
+  tip: [0.85, 1.0, 0.55],
   maxSat: 0.9,
-  lawn: { sat: 1.18, tint: [0.93, 1.02, 0.86] },
+  lawn: { sat: 1.12 },
   lean: 0.12,
 };
 /** lite's far band fade (m): as full's (18-24 m thinned the lawn visibly at the phone's top edge, for little: the far blades are cheap) */
@@ -833,8 +835,9 @@ ${BARE_GLSL}
   float envPatch = envBare(envM.r, envM2.g);
   envMix = clamp(max(envWear, envPatch), 0.0, 1.0);
   vec3 envGrass = diffuseColor.rgb * mix(vec3(1.0), envG, envNear) * mix(vec3(0.84, 0.88, 0.86), vec3(1.14, 1.1, 0.88), envM.g);
-  // the lawn a touch lusher (GRASS_LOOK.lawn): the tufts' green agrees with it
-  envGrass = max(mix(vec3(dot(envGrass, vec3(0.2126, 0.7152, 0.0722))), envGrass, ${f3(GRASS_LOOK.lawn.sat)}), 0.0) * ${v3(GRASS_LOOK.lawn.tint)};
+  // the lawn in the tufts' middle green (GRASS_LOOK.lawn: on screen a little less saturated than them): the tufts read as its texture
+  envGrass *= ${v3(GRASS_LOOK.mid)};
+  envGrass = max(vec3(0.0), mix(vec3(dot(envGrass, vec3(0.2126, 0.7152, 0.0722))), envGrass, ${f3(GRASS_LOOK.lawn.sat)}));
   vec3 envDirt = envDirtColor * mix(vec3(1.0), envD, envNear) * mix(0.9, 1.1, envM2.b);
   diffuseColor.rgb = mix(envGrass, envDirt, envMix);
 #else
