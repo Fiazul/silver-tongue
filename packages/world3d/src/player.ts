@@ -1,10 +1,9 @@
 // The player character: click/tap-to-walk (straight line, sliding along blockers) and the held
 // movement vector (WASD / arrows / the touch joystick, input.ts), facing the way it moves. Its
-// CharacterActor plays idle / walk from the ground speed (or bobs when the GLB has no clips). In a
-// scene the player stays on idle.
+// CharacterActor animates it from the ground speed (animator.ts: walk / idle, listen in a scene) and
+// turns it to face its heading (the head leads, the body follows without overshoot).
 import * as THREE from "three";
 import type { CharacterActor } from "./actor";
-import { turnToward } from "./anim";
 import type { Blocker, Box2 } from "./layout";
 import { step, WALK_SPEED, type WalkableFn } from "./movement";
 
@@ -17,7 +16,8 @@ export interface WalkArea {
 }
 
 const ARRIVE = 0.08; // m
-const TURN_RATE = 12; // 1/s, facing easing
+/** turn-to-face stiffness (1/s, critically damped: a 90 degree turn settles in ~0.3 s) */
+const TURN_OMEGA = 16;
 
 export class Player {
   /** moves and turns; the actor's body inside it animates */
@@ -41,7 +41,7 @@ export class Player {
   place(x: number, z: number, face?: THREE.Vector3) {
     this.root.position.set(x, this.area.heightAt(x, z), z);
     if (face) this.yaw = Math.atan2(face.x, face.z);
-    this.root.rotation.y = this.yaw;
+    this.actor.setFacing(this.yaw);
     this.target = null;
   }
 
@@ -91,10 +91,10 @@ export class Player {
       speed = dt > 0 ? moved / dt : 0;
       p.x = nx;
       p.z = nz;
-      if (moved > 1e-5) this.yaw = turnToward(this.yaw, Math.atan2(dx, dz), TURN_RATE * dt);
+      if (moved > 1e-5) this.yaw = Math.atan2(dx, dz);
     }
     p.y += (this.area.heightAt(p.x, p.z) - p.y) * Math.min(1, dt * 15); // ease up/down slopes, steps and decks
-    this.root.rotation.y = turnToward(this.root.rotation.y, this.yaw, TURN_RATE * dt);
+    this.actor.face(this.yaw, dt, TURN_OMEGA);
     this.actor.update(dt, speed);
   }
 

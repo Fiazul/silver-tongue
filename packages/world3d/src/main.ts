@@ -18,7 +18,6 @@ import { decodeSave, encodeSave, sessionLines } from "@silver-tongue/tui";
 import { fromLocalStorage, SETTINGS_KEY, type KeyValue } from "@silver-tongue/web-common";
 import { COMING_SOON, FALLBACK_UI, NATIVE_NAMES, UI_LOCALES } from "../locale";
 import { BARKS } from "../barks";
-import { turnToward } from "./anim";
 import { BarkPicker, spaceFigures, type Figure } from "./barks";
 import {
   ambientFor,
@@ -37,6 +36,8 @@ import {
   type SoundEntry,
   type SoundPhase,
 } from "./audio";
+import type { CharacterActor } from "./actor";
+import type { Reaction } from "./animator";
 import { JsonFetcher, LateLoad, ModuleLoadError, retrying, StartWatch, WebGLError } from "./boot";
 import { CAMERA, CameraRig, outlineScale } from "./camera";
 import { PlayerCarry } from "./carry";
@@ -738,7 +739,7 @@ async function main() {
   /** the figure (walker, extra, pigeon) whose bark is on screen, and the yaw an extra turns back to */
   let barking: { fig: Figure; homeYaw: number } | null = null;
   /** extras turning back to their own facing after a bark */
-  const turningBack: { root: THREE.Object3D; yaw: number }[] = [];
+  const turningBack: { root: THREE.Object3D; actor: CharacterActor; yaw: number }[] = [];
   let figuresFor: { space: string; list: Figure[] } | null = null;
   const barkHead = new THREE.Vector3();
   const figures = (): Figure[] => {
@@ -1053,6 +1054,9 @@ async function main() {
     // The scene's NPC talks while their line is on screen (the player stays on idle).
     // A story NPC with nothing to talk about barks: they talk too.
     space.setTalking(m.scene && m.bubble?.npc === m.scene.npc ? m.scene.npc : m.bark && space.npcs.has(m.bark.id) ? m.bark.id : null);
+    // The other side of a scene listens (head tilt, slow nods): the player while the NPC talks, the NPC otherwise.
+    for (const [n, v] of space.npcs) v.actor.listening = m.scene?.npc === n;
+    player.actor.listening = !!m.scene || !!m.bark;
     if (barking && m.bark?.id !== barking.fig.id) releaseBark();
     const npc = m.scene?.npc ?? null;
     if (npc === sceneNpc) return;
@@ -1064,11 +1068,31 @@ async function main() {
     pendingTalk = null;
     player.locked = !!npc;
     if (npc && space.npcs.has(npc)) {
+      space.npcs.get(npc)!.actor.react("greet", player.position);
       const stand = L.talkStand(npc);
       const at = L.npcStand(npc).pos;
       const face = new THREE.Vector3(at[0] - stand.pos[0], 0, at[2] - stand.pos[2]);
       player.walkTo(stand.pos[0], stand.pos[2], { face, scripted: true });
       marker.visible = false;
+    }
+  }
+
+  /**
+   * Game events -> one-shot poses (animator.ts reactions; the mix-up shrug comes through syncWorld):
+   * a right reply: the NPC nods; money changes hands (shopping, wages): both reach; a scene done:
+   * both are happy.
+   */
+  function reactToEvent(e: { type: string; matched?: boolean; reason?: string }) {
+    const npc = sceneNpc ? space.npcs.get(sceneNpc)?.actor : undefined;
+    if (e.type === "actionPerformed" && e.matched) npc?.react("nod");
+    else if (e.type === "walletChanged" && (e.reason === "shopping" || e.reason === "wages")) {
+      if (npc) {
+        player.actor.react("reach", npc.root.position);
+        npc.react("reach", player.position);
+      }
+    } else if (e.type === "sceneEnded") {
+      npc?.react("happy");
+      player.actor.react("happy");
     }
   }
 
@@ -1101,6 +1125,7 @@ async function main() {
       onEvent: (e) => {
         const id = ready ? sfxForEvent(e) : null;
         if (id) sfx(id);
+        if (ready) reactToEvent(e);
       },
     });
     game = opened.game;
@@ -1279,6 +1304,7 @@ async function main() {
       turningBack.splice(i, 1);
     }
     player.faceToward(a.root.position.x, a.root.position.z);
+    a.react("greet", player.position);
     game.bark({ id: f.id, name: game.s(`role-${f.role}`), role: f.role }, line, hint);
   }
 
@@ -1292,7 +1318,7 @@ async function main() {
     if (m) m.held = false;
     if (a) {
       a.talking = false;
-      if (fig.kind === "extra") turningBack.push({ root: a.root, yaw: homeYaw });
+      if (fig.kind === "extra") turningBack.push({ root: a.root, actor: a, yaw: homeYaw });
     }
   }
 
@@ -1560,7 +1586,7 @@ async function main() {
       if (a) {
         const dx = player.position.x - a.root.position.x;
         const dz = player.position.z - a.root.position.z;
-        if (barking.fig.kind === "extra" && Math.hypot(dx, dz) > 1e-3) a.root.rotation.y = turnToward(a.root.rotation.y, Math.atan2(dx, dz), 5 * dt);
+        if (barking.fig.kind === "extra" && Math.hypot(dx, dz) > 1e-3) a.face(Math.atan2(dx, dz), dt);
         if (Math.hypot(dx, dz) > TALK_RANGE + BARK_LEAVE_M) game!.endBark();
       }
     } else if (b && space.npcs.has(b.id)) {
@@ -1569,7 +1595,7 @@ async function main() {
     } else if (b) game!.endBark(); // its speaker isn't here any more (through a door)
     for (let i = turningBack.length - 1; i >= 0; i--) {
       const t = turningBack[i];
-      t.root.rotation.y = turnToward(t.root.rotation.y, t.yaw, 5 * dt);
+      t.actor.face(t.yaw, dt);
       if (Math.abs(t.root.rotation.y - t.yaw) < 1e-3) turningBack.splice(i, 1);
     }
   }
@@ -1577,6 +1603,8 @@ async function main() {
   let firstFrame = false;
   /** `?perf=1`: the scenes drawn so far (a scene's first draw gets stall marks: its compile, upload, env build) */
   const drawnScenes = new WeakSet<THREE.Scene>();
+  /** motion capture (world3d.afterDraw): called right after each draw, while the canvas still holds the frame */
+  let afterDraw: ((canvas: HTMLCanvasElement) => void) | null = null;
   /** the frame's draw: the composer (real look) or the plain render */
   const drawFrame = () => {
     const first = stallMarks.on && !drawnScenes.has(space.scene) ? { t0: performance.now(), gl: perf?.glNow() ?? {}, env: real?.stats.envBuildMs ?? 0, programs: renderer.info.programs?.length ?? 0 } : null;
@@ -1598,6 +1626,7 @@ async function main() {
       if (real && real.stats.envBuildMs !== first.env) markMs(`${id}:env`, real.stats.envBuildMs);
       markMs(`${id}:programs+${(renderer.info.programs?.length ?? 0) - first.programs}`, 0.001);
     }
+    afterDraw?.(renderer.domElement);
   };
   const frame = () => {
     const dt = Math.min(0.05, clock.getDelta());
@@ -1821,10 +1850,29 @@ async function main() {
       shop: () => ({ holding: hand.spot?.id ?? null, inHand: hand.inHand }),
       anim: () => ({
         player: player.actor.state,
-        npcs: Object.fromEntries([...space.npcs].map(([n, v]) => [n, { state: v.actor.state, clips: v.actor.animated, clip: v.actor.playing?.getClip().name ?? null, carrying: v.actor.carrying, shrugging: v.actor.shrugging }])),
+        playerLayers: player.actor.layers,
+        npcs: Object.fromEntries([...space.npcs].map(([n, v]) => [n, { state: v.actor.state, clips: v.actor.animated, clip: v.actor.playing?.getClip().name ?? null, carrying: v.actor.carrying, shrugging: v.actor.shrugging, layers: v.actor.layers }])),
         walkers: space.walkers.map((w) => ({ state: w.actor.state, waiting: w.motion.waiting })),
       }),
       talk: (npc: string) => requestTalk(npc),
+      /** motion capture: a character's screen box (CSS px) from its feet to its head top, and where it stands */
+      frameOf: (who: string) => {
+        const a = who === "player" ? player.actor : space.npcs.get(who)?.actor;
+        if (!a) return null;
+        const top = project(a.headTop());
+        const foot = project(a.root.position.clone());
+        return { top, foot, at: a.root.position.toArray(), yaw: a.root.rotation.y };
+      },
+      /** motion capture: `fn` runs after every draw (scripts/motion-capture.mjs copies frames out of the canvas); null stops it */
+      afterDraw: (fn: ((canvas: HTMLCanvasElement) => void) | null) => {
+        afterDraw = fn;
+      },
+      /** a one-shot pose (animator.ts Reaction) on the player or an NPC here, aimed at the other */
+      react: (who: string, kind: Reaction) => {
+        const a = who === "player" ? player.actor : space.npcs.get(who)?.actor;
+        a?.react(kind, who === "player" ? undefined : player.position);
+        return !!a;
+      },
       /** everyone here who barks: id, role, where they are now, whether held (talking) */
       figures: () =>
         figures().map((f) => {

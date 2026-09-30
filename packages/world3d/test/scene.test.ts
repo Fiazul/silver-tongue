@@ -110,13 +110,14 @@ describe.skipIf(!assetIndex)("scene spaces from the real GLBs", () => {
       }
     const fan = street.npcs.get("wang")!.actor.bone("RightHandGrip")!.children;
     expect(fan.length).toBe(1);
-    // frames run: walkers walk, pigeons scatter from a player next to them, a shrug plays
+    // frames run: walkers walk, pigeons scatter from a player next to them, a shrug (the confused pose) plays
     const pigeon = street.scatterers[0];
     const player = new THREE.Vector3(pigeon.motion.x + 0.5, 0.18, pigeon.motion.z);
     street.shrug("wang");
     street.update(1 / 60, player, null);
     expect(street.npcs.get("wang")!.actor.shrugging).toBe(true);
-    expect(street.npcs.get("wang")!.actor.state).toBe("talk"); // no shrug clip: talk + head shake
+    expect(street.npcs.get("wang")!.actor.state).toBe("idle"); // the shrug is a reaction pose on top (animator.ts confused), not a state
+    expect(street.npcs.get("wang")!.actor.animator!.reacting("confused")).toBeGreaterThan(0);
     for (let i = 0; i < 90; i++) street.update(1 / 60, player, null);
     expect(pigeon.motion.away).toBeGreaterThan(0.5);
     expect(street.walkers.some((w) => w.actor.state === "walk")).toBe(true);

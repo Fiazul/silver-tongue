@@ -503,7 +503,7 @@ courses/<id>/<learner>.json (courses.ts) ─► core ◄─ inputs ── game.t
   - Walking: tap to walk in a straight line, sliding along blockers, or WASD/arrows relative to the
     screen. The player walks in the current space's `WalkArea` (bounds, blockers, oriented rects
     tested in their own frame, the walkable ground, the walking height it eases onto).
-  - The character faces its movement direction; its `CharacterActor` animates (see Animation).
+  - The character faces its movement direction; its `CharacterActor` animates (see Character animation).
 - `src/camera.ts`: a fixed high three-quarter view (elevation 42°, azimuth 36°, distance 19 m,
   fov 30°, as in `tools/blender/lib/sheet.py`; far plane 2500 m for the sky dome and the fly-over).
   It follows the player with damping and closes in on player + NPC during a scene. Interiors set a shorter distance (`camera.distance`); on a portrait phone it pulls
@@ -545,7 +545,7 @@ courses/<id>/<learner>.json (courses.ts) ─► core ◄─ inputs ── game.t
   - One look: `start/start.css`'s tokens (lacquer, ink, paper, jade, gold; 2 px ink borders,
     radius 14, the hard ink under-shadow, buttons that press, Lilita One / Noto Serif SC) over the
     HUD, bubble, reply sheet, lists, menu, settings, notebook and day card (`page.css`).
-- `src/anim.ts` + `src/actor.ts`: character animation (see Animation).
+- `src/anim.ts` + `src/animator.ts` + `src/actor.ts`: character animation (see Character animation).
 - `src/strings.ts`: text in two layers. `s(id)`: strings the learner FTL doesn't have yet, in
   the chrome's UI language (the reading language, or `?ui=bn` / `?ui=zh` to preview): `locale/<ui>.json`
   `game`, else the English here.
@@ -561,47 +561,91 @@ language" option when that NPC is the mentor and notes are waiting. With one ite
 "nothing to talk about" toast. Tapping an NPC from further away first walks to their building's
 `player_stand` and talks on arrival.
 
-## Animation
+## Character animation
 
-Rig contract (the Blender rig export): a human GLB has one skinned mesh and an armature, with
-clips `idle`, `walk`, `talk`, `carry_idle`, `carry_walk` (pets: `idle`). Clips are 24 fps, loop
-seamlessly and walk in place. Bones `HeadTop`, `RightHandGrip` and `LeftHandGrip` anchor the
-speech bubble and held props. `rig.stride_m` in the characters manifest (so in `index.json`) is the
-distance one loop of the walk clip covers.
+Every human and pet is posed procedurally each frame by `src/animator.ts` (pure, no three.js);
+`src/actor.ts` puts the pose on the rig. The baked clips in the GLBs (`idle`, `walk`, `talk`,
+`carry_*`) are no longer played: `idle` and `talk` were short sine loops (4 s / 2 s) that rolled
+the hips and swung the spine and head left and right like a metronome, every character in step.
 
-- `src/anim.ts` (pure, tested in `test/anim.test.ts`):
-  - `AnimMachine` / `nextState`: moving wins (`walk`, or `carry_walk` when holding a prop), then
-    talking (`talk`), then `carry_idle` or `idle`. Walking starts above `WALK_ON` (0.3 m/s) and
-    stops below `WALK_OFF` (0.15 m/s), so it doesn't flicker. There is no carry-talk clip: a
-    character holding a prop talks with `talk`, and the prop stays on the grip bone.
-  - `clipFor`: a missing clip falls back (`carry_*` to the plain clip, `talk`/`walk` to `idle`),
-    so pets and partial rigs just idle.
-  - `walkTimeScale(speed, stride, clipSeconds) = speed / (stride / clipSeconds)`: the walk clip's
-    playback rate at which the feet cover the ground speed. The actor applies it each frame from the
-    measured speed. Without `rig.stride_m` it uses `DEFAULT_STRIDE` (1.3 m).
-- `src/actor.ts`: `CharacterActor` wraps an instance in a `root` group (owners move and turn it).
-  It runs an `AnimationMixer` and crossfades (`FADE`, 0.2 s) on every state change. `hold(prop)`
-  puts a prop (origin at its grip) on `RightHandGrip` and sets the carry flag. `headTop()` returns
-  the `HeadTop` bone's world position. A GLB with no clips falls back to the old procedural bob and
-  lean. With no `HeadTop` bone, the head position falls back to the manifest `head_top` height.
-  With no grip bone, the prop isn't shown.
-- Who plays what:
-  - Player: idle / walk from its ground speed. It stays on idle during a scene, facing the NPC.
-  - NPCs idle at their stand. Within `FACE_RANGE` (3 m) of the player, and always during their
-    scene, they turn smoothly to face the player; otherwise they turn back to the stand's facing.
-    During their scene they play `talk` while their line is in the bubble (`Street.setTalking`,
-    set from the model in `main.ts`).
-  - Held props come from `layout.json` `npcs.<name>.heldProp` (and `walkers[].heldProp`, through
-    the same `heldProp()` reading); see the table below. These are hand props: the NPC keeps
-    idle / talk. Only `{asset, carry: true}` (boxes, bags) plays `carry_idle` / `carry_walk`: the
-    player's parcel (`player.errandProp`, `delivery_bag`) during an errand. The build copies them.
-  - Mix-ups (a reply that did the wrong thing): the NPC shrugs. The rigs have no `shrug` clip, so
-    it is `talk` plus a head shake on the `Head` bone for 1.1 s; a rig that brings a `shrug` clip
-    plays that once instead.
-  - Walkers play walk (at their ground speed) and idle while waiting; pigeons idle and hop as they
-    scatter; the cat, the courier and other street extras play `idle` in place.
-- Debug: `world3d.anim()` in the browser console lists each character's state and clip (NPCs:
-  `carrying`, `shrugging`; walkers: `waiting`).
+**Rig** (st-human-v1, docs/asset-conventions.md): 22 skinned joints, rigid weights. Hips (root,
+translates), Spine, Chest, Neck, Head (+ HeadTop), per side Shoulder, Arm, ForeArm, Hand (+
+HandGrip), UpLeg, Leg (knee), Foot. No eyes, no morph targets: no blink. Pets (st-pet-v1): Root,
+Spine, Head, Tail. The rest pose is the bind pose; front is +Z, the character's left +X.
+
+**Pose convention:** per joint a rotation in character axes (Euler YXZ), relative to the parent's
+posed frame; `RigPose` applies `local = rest * W^-1 * R * W` (W: the bone's rest orientation in the
+model) and the hips offset through the Hips parent's rest frame. Up-pointing bones pitch forward
+on +X; hanging limbs swing forward on -X; -Z rolls the top toward the character's left.
+
+**States** (`AnimMachine` in `anim.ts` still picks `idle` / `walk` / `talk` / `carry_*` with the
+walk hysteresis) feed **layers**, each with a critically damped weight (`TUNE.blendS`, ease-in and
+ease-out, no pop). Layers sum:
+
+| Layer | Driven by | What it does |
+|---|---|---|
+| idle | always (fades out walking) | breathing (chest ~1 deg pitch, shoulders, 0.22-0.3 Hz), weight shift onto one leg every 4-8 s (hips 1.5 cm, hip up, shoulders counter, feet kept planted), look-around (head yaw up to 28 deg, pitch 5 deg) at random 2.5-7 s intervals, damped while talking / listening |
+| walk | state `walk` / `carry_walk`, ground speed | step length and cadence from speed (`stepBaseM + stepPerMps * v`, capped), feet on a stance / swing path solved by a soft two-bone IK per leg (planted in stance, knee bends, toe-off pitch), run blend from 1.6 to 3.0 m/s (shorter stance, higher lift, more lean, bent elbows), arm counter-swing 17-24 deg, bob 2-3 cm twice a cycle, pelvis / shoulder counter-twist, lean into the pace and into acceleration, the head counters the twist and lean; stopping: a 0.5 s settle dip |
+| talk | `actor.talking` (their line is on screen) | head nods on a pseudo-syllable clock (2-4 Hz, random amplitude, ~18 % skipped), a new slight head tilt each phrase (1.5-3.5 s), a forearm gesture (20-40 deg, 0.5-0.75 s) every 2-5 s (mostly the right hand), a 2.5 deg lean toward the listener |
+| listen | `actor.listening` (the other side of a scene or bark) | head tilt 3-5 deg to a seeded side, small nods every ~2 s with 30 % skipped |
+| carry | `actor.carrying` (a `carry: true` prop) | both forearms up in front of the chest, the chest back a touch; arm swing and gestures fade out |
+| sit | `actor.sitting` | hips and knees at 90 deg, hips lowered by the thigh length (nothing seats a character yet) |
+| react | `actor.react(kind, toward?)` / `actor.shrug()` | one-shots with smooth envelopes (a repeat fades the old one out under the new): `greet` a raised-hand wave (2 s), `happy` anticipation + small hop + landing (1 s), `confused` shoulders up, palms out, head tilt (1.1 s), `nod` (0.7 s), `reach` near arm forward, hold 0.4 s, back (1.1 s). `toward` picks the near arm; a prop in the right hand makes it the left |
+| face | `actor.face(yaw, dt, omega)` | the body turns on a critically damped ease (no overshoot, no oscillation); the head (70 %) and neck (30 %) lead by the rest of the turn, up to 45 deg, easing back as the body arrives |
+| pet | pets | spine breathing, quicker look-around, the tail idles and now and then wags in a 1.4 s burst |
+
+Distances scale with height (`k` = HeadTop height / 1.7: the kid moves smaller); every interval,
+tempo, side and amplitude is jittered from a per-character seed (`ActorOptions.seed`, default the
+rig name plus its instance count: two walkers of one GLB never move in step). Same seed, same
+inputs: the same motion.
+
+**Tuning:** `TUNE` in `src/animator.ts` (ranges are `[min, max]`, jittered per character):
+`blendS`, `breathHz`, `breathChestDeg`, `shiftEveryS`, `shiftCm`, `lookEveryS`, `lookYawDeg`,
+`stepBaseM` / `stepPerMps` / `stepMaxM`, `runFrom` / `runTo`, `armSwingDeg`, `bobCm`, `crouchCm`,
+`liftCm`, `leanDeg`, `accelLeanDegPerMps2`, `settleS` / `settleCm`, `headLeadMaxDeg` /
+`headLeadS`, `turnOmega` (7: NPCs; the player uses 16, walkers 10), `syllableHz`, `nodDeg`,
+`syllableSkip`, `gestureEveryS`, `gestureS`, `gestureForeDeg`, `talkLeanDeg`, `listenTiltDeg`,
+`listenNodEveryS`, `listenNodDeg`, `listenSkip`. Soft IK starts at 92 % of the leg's length
+(`SOFT_IK`): the knee never snaps straight.
+
+**Who plays what:**
+- Player: walk / idle from its ground speed, turns with `face` (head first); listens during a
+  scene or a bark.
+- NPCs idle at their stand; within `FACE_RANGE` (3 m, kept until 3.5 m: no to-and-fro at the edge)
+  and always during their scene they `face` the player, else turn back to the stand's facing. They
+  talk while their line is in the bubble and listen the rest of their scene.
+- Walkers walk at their ground speed (the same gait, ~1.1 m/s), `face` their heading; pigeons and
+  the cat idle (pet layer) and turn with `face`.
+- Game events -> reactions (`main.ts` `reactToEvent` / `syncWorld` / `startBark`): a scene starts:
+  the NPC greets; a bark starts: the figure greets; a right reply: the NPC nods; a mix-up: the NPC
+  is `confused` (`shrug()`); money changes hands (`shopping`, `wages`): both reach; a scene ends:
+  both are happy. Sleep / the day change is a screen fade: no pose.
+- Held props come from `layout.json` `npcs.<name>.heldProp` (and `walkers[].heldProp`); only
+  `{asset, carry: true}` (boxes, bags) plays the carry layer: the player's parcel
+  (`player.errandProp`, `delivery_bag`) during an errand. `hold(prop)` puts a prop (origin at its
+  grip) on `RightHandGrip`; no grip bone: the prop isn't shown. `headTop()` is the HeadTop bone's
+  world position (else the manifest `head_top` height).
+- Fallbacks: a rig without these skeletons but with clips runs the old `AnimationMixer` crossfade
+  (`clipFor` fallbacks, `walkTimeScale` from `rig.stride_m`); no bones at all: a step bob and a
+  forward lean, no side roll.
+
+**Cost:** pure CPU bone transforms, no mixer: ~0.07 ms per frame for 10 characters (the cost test
+in `test/animator.test.ts`, best of 5 x 1000 updates, budget 0.2 ms).
+
+**Debug:** `world3d.anim()` lists each character's state and layer weights (`playerLayers`,
+`npcs.<id>.layers`); `world3d.react(who, kind)` plays a reaction on the player or an NPC;
+`world3d.frameOf(who)` gives a character's screen box.
+
+**Seeing it:** `scripts/motion-capture.mjs` grabs 12 frames 80 ms apart straight out of the canvas
+after each draw (`world3d.afterDraw`; page screenshots take ~300 ms here) and lays them out as a
+contact strip per shot in `shots/motion/`: `01-idle-player`, `02-walk-player`, `03-talk-wang` (he
+talks, the player listens), `04-react-greet`, `05-react-confused`; `report.json` has the frame
+times, `world3d.anim()` at the first and last frame and the console errors. Serve a dist with the
+course audio beside it (else the clips 404):
+
+```sh
+URL=http://127.0.0.1:8910/ CHROME=/usr/bin/google-chrome nice -n 15 node scripts/motion-capture.mjs
+```
 
 ## Parity with the TUI
 
@@ -1645,7 +1689,11 @@ that role said last).
   a bark in the game (bubble, reading, meaning, clip on the bark player, "…" closes, core unchanged,
   meaning in bn, the one-off hint, sound off, a story NPC with nothing to say, the Go to list and
   core inputs ending it); a held walker / pigeon.
-- `test/anim.test.ts`: the animation state machine and `CharacterActor`.
+- `test/anim.test.ts`: the animation state machine and `CharacterActor`'s clip / no-bones fallbacks.
+- `test/animator.test.ts`: the procedural animator: no pops across every state and reaction (a
+  jump wouldn't shrink with the frame time), determinism per seed, the gait tracking speed, idle
+  bounds (kid smaller), turn-to-face without overshoot (head first), talk / listen rhythms, poses
+  and planted feet on the real rigs, the cost budget.
 - `test/input.test.ts`: joystick maths (vector from the touch offset, dead zone, clamp at the
   rim), tap vs drag, keys and joystick feeding one vector, the phone outline width.
 - `test/viewport.test.ts`: the phone layout at 390x844 and 844x390 (and smaller, with and without
@@ -1668,8 +1716,8 @@ that role said last).
 
 ## Stubbed in this slice
 
-- **Gestures:** no gesture on `npcReacted` beyond the mix-up shrug; `actionPerformed` has no prop
-  animation, only narration.
+- **Gestures:** reactions are poses (README "Character animation"); nothing hands a prop from one
+  hand to another, and nothing seats a character yet (the `sit` layer is ready).
 - **Audio:** no per-clip volume or speed control beyond the TUI's (slow repeats at 0.8).
 - **Movement:** no navmesh. The town blocks what town.json lists (buildings, trunks, rocks,
   lanterns, the pavilion's pillars, the gate's); benches, flower beds, stools and the canal

@@ -167,12 +167,13 @@ describe("CharacterActor", () => {
     expect(a.playing?.getClip().name).toBe("idle");
   });
 
-  it("no clips: the procedural bob, no mixer", () => {
+  it("no bones: the procedural bob, no mixer", () => {
     const a = new CharacterActor(new THREE.Group(), { headTopY: 1.6 });
     expect(a.animated).toBe(false);
     a.update(0.1, WALK_SPEED);
     expect(a.state).toBe("walk");
     expect(a.body.rotation.x).toBeGreaterThan(0); // leaning into the walk
+    expect(a.body.rotation.z).toBe(0); // no side-to-side roll
     expect(a.hold(new THREE.Group())).toBe(false); // no grip bone: no prop, no carry
     expect(a.headTop().y).toBeCloseTo(1.6);
   });

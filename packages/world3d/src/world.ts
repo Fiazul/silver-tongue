@@ -9,7 +9,6 @@ import type { GLTF, GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js"
 import { mergeGeometries, mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { CharacterActor, type ActorOptions } from "./actor";
-import { turnToward } from "./anim";
 import { buildCountryside, flyoverViews, hazeColour, HORIZON, moveClouds, type Part } from "./horizon";
 import { canReadImages, packSources, readImage, sliced, type AtlasSource, type PackedAtlas, type PackRect } from "./atlas";
 import { CANOPIES, isSeeThrough, markSeeThrough, patchSeeThrough, seeAttribute, SEE_ATTR, SEE_FRAG, SEE_FRAG_PARS, SEE_ID0, SEE_NEVER, SEE_OCCLUDER, SEE_VERT, SEE_VERT_PARS, SEE_THROUGH, seeSpecFor, seeUniforms, type Occluder, type SeeSpec } from "./seethrough";
@@ -935,6 +934,8 @@ export interface NpcView {
   actor: CharacterActor;
   /** the stand's facing, turned back to when the player walks off */
   homeYaw: number;
+  /** facing the player (FACE_RANGE, with FACE_HYSTERESIS) */
+  looking?: boolean;
 }
 
 export interface WalkerView {
@@ -949,8 +950,10 @@ export interface ScatterView {
 
 /** NPCs turn to the player inside this range (m), and always during their scene. */
 export const FACE_RANGE = 3;
-const NPC_TURN_RATE = 5; // 1/s, yaw easing
-const WALKER_TURN_RATE = 8;
+/** ...and keep facing until this much further (m) */
+const FACE_HYSTERESIS = 0.5;
+const NPC_TURN_RATE = 7; // 1/s, turn-to-face stiffness (CharacterActor.face: critically damped, the head leads)
+const WALKER_TURN_RATE = 10;
 
 /** Asset kinds (index.json) that are characters: animated with an actor, idle when standing about. */
 /** Pick proxies: raycast, never drawn. */
@@ -1673,7 +1676,7 @@ export class SceneSpace {
     for (const v of this.npcs.values()) v.actor.talking = v.npc === npc;
   }
 
-  /** A mix-up: the NPC shrugs (talk + head shake: the rigs have no shrug clip). */
+  /** A mix-up: the NPC shrugs (the confused reaction pose, animator.ts). */
   shrug(npc: string) {
     this.npcs.get(npc)?.actor.shrug();
   }
@@ -1730,16 +1733,18 @@ export class SceneSpace {
       const p = v.actor.root.position;
       const dx = player.x - p.x;
       const dz = player.z - p.z;
-      const look = v.npc === sceneNpc || Math.hypot(dx, dz) <= FACE_RANGE;
-      const yaw = look && Math.hypot(dx, dz) > 1e-3 ? Math.atan2(dx, dz) : v.homeYaw;
-      v.actor.root.rotation.y = turnToward(v.actor.root.rotation.y, yaw, NPC_TURN_RATE * dt);
+      const d = Math.hypot(dx, dz);
+      // hysteresis: a player lingering at the edge doesn't flip the NPC to and fro
+      v.looking = v.npc === sceneNpc || d <= FACE_RANGE + (v.looking ? FACE_HYSTERESIS : 0);
+      const yaw = v.looking && d > 1e-3 ? Math.atan2(dx, dz) : v.homeYaw;
+      v.actor.face(yaw, dt, NPC_TURN_RATE);
       v.actor.update(dt, 0);
     }
     for (const w of this.walkers) {
       const speed = w.motion.update(dt, player.x, player.z);
       const r = w.actor.root;
       r.position.set(w.motion.x, r.position.y + (this.L.heightAt(this.id, w.motion.x, w.motion.z) - r.position.y) * Math.min(1, dt * 12), w.motion.z);
-      r.rotation.y = turnToward(r.rotation.y, w.motion.yaw, WALKER_TURN_RATE * dt);
+      w.actor.face(w.motion.yaw, dt, WALKER_TURN_RATE);
       w.actor.update(dt, speed);
     }
     for (const s of this.scatterers) {
@@ -1748,7 +1753,7 @@ export class SceneSpace {
       // A little hop while darting away (pigeons only have an idle clip).
       const hop = speed > 0.8 ? Math.abs(Math.sin(performance.now() / 55)) * 0.06 : 0;
       r.position.set(s.motion.x, this.L.heightAt(this.id, s.motion.x, s.motion.z) + hop, s.motion.z);
-      r.rotation.y = turnToward(r.rotation.y, s.motion.yaw, WALKER_TURN_RATE * dt);
+      s.actor.face(s.motion.yaw, dt, WALKER_TURN_RATE);
       s.actor.update(dt, 0);
     }
     for (const a of this.extras) a.update(dt, 0);

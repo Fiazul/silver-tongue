@@ -1,0 +1,1721 @@
+{
+  "url": "http://127.0.0.1:8910/",
+  "errors": [],
+  "shots": [
+    {
+      "file": "shots/motion/01-idle-player.png",
+      "first": {
+        "player": "idle",
+        "playerLayers": {
+          "walk": 0,
+          "talk": 0,
+          "listen": 0,
+          "carry": 0,
+          "sit": 0,
+          "react": 0
+        },
+        "npcs": {
+          "teacher": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "classmate": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "wang": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "doctor": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "foreman": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "dispatcher": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "driver": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "traveller": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          }
+        },
+        "walkers": [
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          }
+        ]
+      },
+      "last": {
+        "player": "idle",
+        "playerLayers": {
+          "walk": 0,
+          "talk": 0,
+          "listen": 0,
+          "carry": 0,
+          "sit": 0,
+          "react": 0
+        },
+        "npcs": {
+          "teacher": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "classmate": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "wang": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "doctor": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "foreman": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "dispatcher": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "driver": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "traveller": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          }
+        },
+        "walkers": [
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          }
+        ]
+      },
+      "timesMs": [
+        0,
+        86,
+        169,
+        355,
+        475,
+        558,
+        641,
+        730,
+        2423,
+        2507,
+        2592,
+        2676
+      ]
+    },
+    {
+      "file": "shots/motion/02-walk-player.png",
+      "first": {
+        "player": "walk",
+        "playerLayers": {
+          "walk": 0.99,
+          "talk": 0,
+          "listen": 0,
+          "carry": 0,
+          "sit": 0,
+          "react": 0
+        },
+        "npcs": {
+          "teacher": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "classmate": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "wang": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "doctor": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "foreman": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "dispatcher": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "driver": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "traveller": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          }
+        },
+        "walkers": [
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          }
+        ]
+      },
+      "last": {
+        "player": "walk",
+        "playerLayers": {
+          "walk": 1,
+          "talk": 0,
+          "listen": 0,
+          "carry": 0,
+          "sit": 0,
+          "react": 0
+        },
+        "npcs": {
+          "teacher": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "classmate": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "wang": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "doctor": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "foreman": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "dispatcher": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "driver": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "traveller": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          }
+        },
+        "walkers": [
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          }
+        ]
+      },
+      "timesMs": [
+        0,
+        87,
+        176,
+        252,
+        328,
+        431,
+        507,
+        588,
+        671,
+        769,
+        864,
+        949
+      ]
+    },
+    {
+      "file": "shots/motion/03-talk-wang.png",
+      "first": {
+        "player": "idle",
+        "playerLayers": {
+          "walk": 0,
+          "talk": 0,
+          "listen": 1,
+          "carry": 0,
+          "sit": 0,
+          "react": 0
+        },
+        "npcs": {
+          "teacher": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "classmate": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "wang": {
+            "state": "talk",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 1,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0.13
+            }
+          },
+          "doctor": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "foreman": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "dispatcher": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "driver": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "traveller": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          }
+        },
+        "walkers": [
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          }
+        ]
+      },
+      "last": {
+        "player": "idle",
+        "playerLayers": {
+          "walk": 0,
+          "talk": 0,
+          "listen": 1,
+          "carry": 0,
+          "sit": 0,
+          "react": 0
+        },
+        "npcs": {
+          "teacher": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "classmate": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "wang": {
+            "state": "talk",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 1,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "doctor": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "foreman": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "dispatcher": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "driver": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "traveller": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          }
+        },
+        "walkers": [
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          }
+        ]
+      },
+      "timesMs": [
+        0,
+        80,
+        165,
+        248,
+        344,
+        424,
+        510,
+        617,
+        709,
+        805,
+        896,
+        991
+      ]
+    },
+    {
+      "file": "shots/motion/04-react-greet.png",
+      "first": {
+        "player": "idle",
+        "playerLayers": {
+          "walk": 0,
+          "talk": 0,
+          "listen": 1,
+          "carry": 0,
+          "sit": 0,
+          "react": 0
+        },
+        "npcs": {
+          "teacher": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "classmate": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "wang": {
+            "state": "talk",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 1,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 1.73
+            }
+          },
+          "doctor": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "foreman": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "dispatcher": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "driver": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "traveller": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          }
+        },
+        "walkers": [
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          }
+        ]
+      },
+      "last": {
+        "player": "idle",
+        "playerLayers": {
+          "walk": 0,
+          "talk": 0,
+          "listen": 1,
+          "carry": 0,
+          "sit": 0,
+          "react": 0
+        },
+        "npcs": {
+          "teacher": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "classmate": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "wang": {
+            "state": "talk",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 1,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0.8
+            }
+          },
+          "doctor": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "foreman": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "dispatcher": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "driver": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "traveller": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          }
+        },
+        "walkers": [
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          }
+        ]
+      },
+      "timesMs": [
+        0,
+        91,
+        186,
+        269,
+        358,
+        443,
+        539,
+        619,
+        699,
+        777,
+        860,
+        938
+      ]
+    },
+    {
+      "file": "shots/motion/05-react-confused.png",
+      "first": {
+        "player": "idle",
+        "playerLayers": {
+          "walk": 0,
+          "talk": 0,
+          "listen": 1,
+          "carry": 0,
+          "sit": 0,
+          "react": 0
+        },
+        "npcs": {
+          "teacher": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "classmate": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "wang": {
+            "state": "talk",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": true,
+            "layers": {
+              "walk": 0,
+              "talk": 1,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0.97
+            }
+          },
+          "doctor": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "foreman": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "dispatcher": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "driver": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "traveller": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          }
+        },
+        "walkers": [
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          }
+        ]
+      },
+      "last": {
+        "player": "idle",
+        "playerLayers": {
+          "walk": 0,
+          "talk": 0,
+          "listen": 1,
+          "carry": 0,
+          "sit": 0,
+          "react": 0
+        },
+        "npcs": {
+          "teacher": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "classmate": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "wang": {
+            "state": "talk",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": true,
+            "layers": {
+              "walk": 0,
+              "talk": 1,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0.06
+            }
+          },
+          "doctor": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "foreman": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "dispatcher": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "driver": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          },
+          "traveller": {
+            "state": "idle",
+            "clips": true,
+            "clip": null,
+            "carrying": false,
+            "shrugging": false,
+            "layers": {
+              "walk": 0,
+              "talk": 0,
+              "listen": 0,
+              "carry": 0,
+              "sit": 0,
+              "react": 0
+            }
+          }
+        },
+        "walkers": [
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          },
+          {
+            "state": "walk",
+            "waiting": false
+          }
+        ]
+      },
+      "timesMs": [
+        0,
+        77,
+        158,
+        246,
+        327,
+        424,
+        504,
+        585,
+        662,
+        740,
+        831,
+        934
+      ]
+    }
+  ]
+}
