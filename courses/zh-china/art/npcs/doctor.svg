@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 900">
+  <g fill="currentColor">
+    <circle cx="200" cy="124" r="40"/>
+    <path d="M184 158h32v44h-32z"/>
+    <path fill-rule="evenodd" d="M146 202q54-22 108 0l30 520h-168zM169.6 206.6 200 332.5 230.4 206.6 225.6 205.4 200 327.5 174.4 205.4zM197.5 336 197.5 716 202.5 716 202.5 336zM179.1 199.3 167 249.9 175.3 297.3 200 315 224.7 297.3 233 249.9 220.9 199.3 215.1 200.7 227 250.1 219.3 294.7 200 309 180.7 294.7 173 250.1 184.9 200.7zM219.1 300.8 233 350.5 233 380 239 380 239 349.5 224.9 299.2zM236 382a11 11 0 1 0 0.1 0z"/>
+    <path stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="40" d="M180 700 176 878"/>
+    <path stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="40" d="M220 700 226 878"/>
+    <ellipse cx="168" cy="886" rx="30" ry="14"/>
+    <ellipse cx="234" cy="886" rx="30" ry="14"/>
+    <path stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="32" d="M152 214 130 340 138 470"/>
+    <path stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="32" d="M248 214 270 340 262 470"/>
+  </g>
+</svg>

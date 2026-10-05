@@ -1,0 +1,35 @@
+[
+  {
+    "id": "ja-japan",
+    "language": "ja",
+    "setting": "japan-city",
+    "learners": [
+      "en"
+    ],
+    "learnerNames": {
+      "en": "English"
+    }
+  },
+  {
+    "id": "ko-seoul",
+    "language": "ko",
+    "setting": "seoul-city",
+    "learners": [
+      "en"
+    ],
+    "learnerNames": {
+      "en": "English"
+    }
+  },
+  {
+    "id": "zh-china",
+    "language": "zh",
+    "setting": "china-city",
+    "learners": [
+      "en"
+    ],
+    "learnerNames": {
+      "en": "English"
+    }
+  }
+]
