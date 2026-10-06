@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 900">
+  <g fill="currentColor">
+    <circle cx="234" cy="160" r="37"/>
+    <path d="M192 150q4-38 44-40q38 0 48 30l22 8q2 10-14 10h-100z"/>
+    <path d="M204 186l34 4-2 40-40-2z"/>
+    <path d="M140 250q20-52 90-50q50 4 62 60l-6 120q-2 100-8 180h-152q-18-120-8-220q2-50 22-90z"/>
+    <path stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="42" d="M180 540 176 878"/>
+    <path stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="42" d="M238 540 250 878"/>
+    <ellipse cx="168" cy="886" rx="30" ry="14"/>
+    <ellipse cx="258" cy="886" rx="30" ry="14"/>
+    <path stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="34" d="M162 250 150 370 158 470"/>
+    <path stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="34" d="M270 246 296 350 304 440"/>
+    <circle cx="306" cy="452" r="18"/>
+    <path d="M300 440q6-30 30-26q20 6 10 30l-8-2q6-18-6-20q-14 0-16 18z"/>
+    <path stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="12" d="M318 450 330 892"/>
+  </g>
+</svg>

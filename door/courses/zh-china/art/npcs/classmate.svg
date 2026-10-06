@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 900">
+  <g fill="currentColor">
+    <circle cx="204" cy="136" r="36"/>
+    <path d="M170 128q-2-44 36-46q38 0 36 42q-20-16-36-14q-18 0-36 18z"/>
+    <path d="M188 166h32v44h-32z"/>
+    <path d="M252 222q46-6 50 30l6 140q0 20-22 20h-40z"/>
+    <path d="M156 210q48-20 96 0l8 320h-112z"/>
+    <path stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="40" d="M184 520 176 878"/>
+    <path stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="40" d="M224 520 234 878"/>
+    <ellipse cx="168" cy="886" rx="30" ry="14"/>
+    <ellipse cx="242" cy="886" rx="30" ry="14"/>
+    <path stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="28" d="M160 222 118 170 104 90"/>
+    <ellipse cx="100" cy="76" rx="15" ry="20" transform="rotate(-12 100 76)"/>
+    <path stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="6" d="M88 64 84 48"/>
+    <path stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="6" d="M98 58 98 40"/>
+    <path stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="28" d="M248 222 266 340 262 460"/>
+  </g>
+</svg>

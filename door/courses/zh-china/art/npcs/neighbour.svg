@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 900">
+  <g fill="currentColor">
+    <circle cx="200" cy="132" r="38"/>
+    <circle cx="162" cy="120.4" r="13"/>
+    <circle cx="169.6" cy="103.3" r="13"/>
+    <circle cx="186.7" cy="91.9" r="13"/>
+    <circle cx="205.7" cy="90" r="13"/>
+    <circle cx="222.8" cy="97.6" r="13"/>
+    <circle cx="236.1" cy="114.7" r="13"/>
+    <circle cx="238" cy="131.8" r="13"/>
+    <path d="M184 164h32v44h-32z"/>
+    <path d="M144 208q56-22 112 0l14 280h-140z"/>
+    <path d="M140 470h120l14 250h-148z"/>
+    <path stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="30" d="M182 700 180 878"/>
+    <path stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="30" d="M218 700 222 878"/>
+    <ellipse cx="172" cy="886" rx="24" ry="11"/>
+    <ellipse cx="230" cy="886" rx="24" ry="11"/>
+    <path stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="30" d="M150 220 124 340 112 460"/>
+    <circle cx="110" cy="470" r="15"/>
+    <path stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="6" d="M98 476 84 530"/>
+    <path stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="6" d="M122 476 136 530"/>
+    <path d="M60 526h100l-8 110h-84z"/>
+    <path stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="30" d="M250 220 272 340 270 460"/>
+  </g>
+</svg>
