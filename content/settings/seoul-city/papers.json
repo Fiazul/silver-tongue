@@ -51,6 +51,12 @@
      "text": "김민준"
     },
     {
+     "id": "latin",
+     "text": "KIM MIN-JUN",
+     "say": "김민준",
+     "latin": true
+    },
+    {
      "id": "born",
      "text": "760314",
      "say": "칠육공삼일사"

@@ -13,7 +13,7 @@ paper-book-yes = yes
 paper-book-no = no
 paper-book-bye-stay = goodbye (I'm off)
 paper-book-bye-go = goodbye (you go)
-paper-idcard-learned = The same name as inside the book: gim min-jun, which he'd spell Kim Min-jun. Not yours.
+paper-idcard-learned = The same name as inside the book: 김민준, and in English letters, KIM MIN-JUN. Not yours.
 paper-newspaper-learned = A newspaper from Seoul. The date on it: the year 2000.
 paper-bill-learned = A note: 방세, 50,000 won. Someone owes it.
 

@@ -9,8 +9,10 @@ export interface DeskPaperLine {
   id: string;
   /** Hangul, digits and punctuation only */
   text: string;
-  /** what text-to-speech reads instead of `text` (a number read digit by digit) */
+  /** what text-to-speech reads instead of `text` (a number read digit by digit, a Latin name in Hangul) */
   say?: string;
+  /** a name printed in Latin letters beside the Hangul, as on an ID card: shown, never sounded out */
+  latin?: boolean;
   /** its clip ids, in the words voice (added by the build) */
   audio?: string[];
 }
