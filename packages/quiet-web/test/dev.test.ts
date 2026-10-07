@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import { createCore, mulberry32, newGame, type Course } from "@silver-tongue/core";
 import { deskPapers } from "@silver-tongue/view";
 import { readFileSync } from "node:fs";
-import { driveTo, lastScreen, maxScreen, screenOf } from "../src/dev";
+import { deskSteps, driveTo, lastScreen, maxScreen, screenOf } from "../src/dev";
 import { createQuiet, type PaperStore } from "../src/quiet";
 
 const course = JSON.parse(readFileSync(new URL("../../../dist/courses/ko-seoul/en.json", import.meta.url), "utf8")) as Course;
-const P = deskPapers(course).length;
+const P = deskSteps(course).length;
 
 function fresh() {
   const core = createCore(course, newGame(course), { now: () => 1_000_000, rng: mulberry32(1) });
@@ -33,9 +33,9 @@ describe("screen numbering", () => {
     expect(P).toBeGreaterThan(0);
     q.setName("Dev");
     expect(screenOf(q)).toBe(3);
-    q.readPaper(deskPapers(course)[0].id);
+    q.readPaper(deskSteps(course)[0].id);
     expect(screenOf(q)).toBe(4);
-    for (const p of deskPapers(course)) q.readPaper(p.id);
+    for (const p of deskSteps(course)) q.readPaper(p.id);
     expect(screenOf(q)).toBe(3 + P);
   });
 });

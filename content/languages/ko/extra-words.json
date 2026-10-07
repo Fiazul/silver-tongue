@@ -34,5 +34,13 @@
    "sujin"
   ],
   "name": true
+ },
+ {
+  "id": "ko-yeongeo",
+  "w": "영어",
+  "lv": "T1",
+  "readings": [
+   "yeongeo"
+  ]
  }
 ]

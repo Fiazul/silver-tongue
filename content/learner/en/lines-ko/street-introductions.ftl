@@ -4,11 +4,11 @@ park-reply-intent = Greet him by name
 park-alt1 = Hello.
 park-alt1-intent = Just say hello
 
-ask = What's your name?
-ask-reply = I'm { $player }.
-ask-reply-intent = Give your name
-ask-alt1 = I don't know.
-ask-alt1-intent = Say you don't know
+friend = Are you Min-jun's friend?
+friend-reply = Yes, I'm his friend.
+friend-reply-intent = Say you are
+friend-alt1 = No.
+friend-alt1-intent = Say you aren't
 
 sit = Have a seat.
 sit-reply = Thank you.
@@ -21,9 +21,3 @@ understand-reply = No, I don't.
 understand-reply-intent = Admit it
 understand-alt1 = Yes, I do.
 understand-alt1-intent = Bluff
-
-bye = Goodbye.
-bye-reply = Goodbye.
-bye-reply-intent = Say goodbye to Park as you leave
-bye-alt1 = Thank you.
-bye-alt1-intent = Thank him

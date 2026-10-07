@@ -57,7 +57,7 @@ describe("engine and front ends are free of any particular language", () => {
     const dir = join(REPO, "content", "settings", "seoul-city");
     const ids = [
       ...readdirSync(join(dir, "scenes")).map((f) => JSON.parse(readFileSync(join(dir, "scenes", f), "utf8")).id as string),
-      JSON.parse(readFileSync(join(dir, "opening.json"), "utf8")).reward.paper,
+      ...[JSON.parse(readFileSync(join(dir, "opening.json"), "utf8")).reward?.paper].filter((id): id is string => !!id),
       ...Object.keys(JSON.parse(readFileSync(join(dir, "world.json"), "utf8")).npcs),
     ];
     const literal = new RegExp(`(["'\`])(${ids.join("|")})(?:[:][^"'\`]+)?\\1`);

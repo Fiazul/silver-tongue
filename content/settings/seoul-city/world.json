@@ -1,7 +1,7 @@
 {
  "start": "room",
  "home": "room",
- "currency": "\u20a9",
+ "currency": "₩",
  "slotsPerDay": 4,
  "homeScene": "room-wake",
  "startWallet": 20000,
@@ -26,7 +26,7 @@
     "street"
    ],
    "after": [
-    "street-hello"
+    "street-hungry"
    ]
   },
   "shop": {
@@ -60,6 +60,10 @@
   "landlady": {
    "place": "room"
   },
+  "minjun": {
+   "place": "room",
+   "introducedAfter": "room-minjun"
+  },
   "oldman": {
    "place": "street",
    "introducedAfter": "street-introductions"
@@ -83,6 +87,6 @@
  },
  "mentor": {
   "npc": "oldman",
-  "after": "street-hello"
+  "after": "street-introductions"
  }
 }

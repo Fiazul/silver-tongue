@@ -1,17 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { bestMeaning, bestMeanings, contentWords, meaningMatches, meaningScore, normalizeMeaning } from "../src/meaning";
-import { fileURLToPath } from "node:url";
-import { buildCourse } from "../../../tools/src/build-course";
-import { scribeRules, scribeAccepts } from "../src/scribe";
+import { readFileSync } from "node:fs";
+import type { ScribeAccepts } from "../src/course-extra";
 
-const course = buildCourse(fileURLToPath(new URL("../../../content", import.meta.url)), "ko-seoul").course!;
-const SCRIBE_ACCEPTS = scribeRules(course);
+/** Typed-meaning accepts as the earlier typed opening shipped them: real phrasing to test the matcher against. */
+const SCRIBE_ACCEPTS: ScribeAccepts = JSON.parse(readFileSync(new URL("./fixtures/scribe-accepts.json", import.meta.url), "utf8"));
 
-/** The real meanings of room-wake and street-hello, with the accepts the page uses. */
 const ok = (typed: string, meaning: string) => {
   const key = Object.keys(SCRIBE_ACCEPTS).find((k) => normalizeMeaning(SCRIBE_ACCEPTS[k].meaning) === normalizeMeaning(meaning));
-  const [scene, line] = key?.split(":") ?? [];
-  return meaningMatches(typed, meaning, scene ? scribeAccepts(course, scene, line) : []);
+  return meaningMatches(typed, meaning, key ? SCRIBE_ACCEPTS[key].fragments.map((f) => f.replaceAll("{player}", "?")) : []);
 };
 
 describe("normalizeMeaning", () => {

@@ -36,15 +36,25 @@ export function deskOn(course: Course, state: GameState, read: ReadonlySet<strin
   return !deskReady(ps, read);
 }
 
+/**
+ * A paper is done when it is read in full, or when the lines it requires are read ([] requires none: an optional
+ * paper is done from the start). One rule for the knock and for the order papers are read in, so a paper whose
+ * required lines are read never holds up the next one.
+ */
+export const paperDone = (p: DeskPaper, read: ReadonlySet<string>): boolean =>
+  read.has(p.id) || (p.required !== undefined && p.required.every((id) => read.has(`${p.id}.${id}`)));
+
 /** Required discovery is complete; optional documents remain available in the Book. */
-export const deskReady = (papers: DeskPaper[], read: ReadonlySet<string>): boolean => papers.every((p) =>
-  read.has(p.id) || (p.required !== undefined && p.required.every((id) => read.has(`${p.id}.${id}`))));
+export const deskReady = (papers: DeskPaper[], read: ReadonlySet<string>): boolean => papers.every((p) => paperDone(p, read));
 
-/** The paper to read next on the desk: the first one not read yet. */
-export const firstUnread = (papers: DeskPaper[], read: ReadonlySet<string>): string | undefined => papers.find((p) => !read.has(p.id))?.id;
+/** The paper to read next on the desk: the first one not done yet. */
+export const firstUnread = (papers: DeskPaper[], read: ReadonlySet<string>): string | undefined => papers.find((p) => !paperDone(p, read))?.id;
 
-/** A paper can be opened when it is read already or is the next unread one; later papers wait their turn. */
-export const canOpenPaper = (papers: DeskPaper[], read: ReadonlySet<string>, id: string): boolean => read.has(id) || firstUnread(papers, read) === id;
+/** A paper can be opened when it is done (or optional) or is the next one; later papers wait their turn. */
+export const canOpenPaper = (papers: DeskPaper[], read: ReadonlySet<string>, id: string): boolean => {
+  const p = papers.find((x) => x.id === id);
+  return (!!p && paperDone(p, read)) || firstUnread(papers, read) === id;
+};
 
 /** Where the read set is kept in the browser. */
 export const papersKey = (course: string): string => `silver-tongue:papers:${course}`;

@@ -19,20 +19,10 @@
    "missCost": 0
   },
   {
-   "id": "missing",
+   "id": "message",
    "slots": {},
    "expect": {
-    "action": "missing"
-   },
-   "hinges": [],
-   "pay": 0,
-   "missCost": 0
-  },
-  {
-   "id": "who",
-   "slots": {},
-   "expect": {
-    "action": "who"
+    "action": "message"
    },
    "hinges": [],
    "pay": 0,
@@ -46,10 +36,10 @@
    }
   },
   {
-   "id": "rent",
+   "id": "bye",
    "slots": {},
    "expect": {
-    "action": "rent"
+    "action": "bye"
    },
    "hinges": [],
    "pay": 0,

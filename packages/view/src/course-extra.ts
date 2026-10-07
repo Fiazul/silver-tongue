@@ -75,13 +75,25 @@ export interface OpeningArrival {
   audio?: string[];
 }
 export interface OpeningSceneStyle { glosses?: boolean; select?: boolean; prompt?: string }
+/**
+ * A clue or a memory that floats up when the player tries to work out a line. `learned`: the label it takes once
+ * the player has made that choice (a sentence heard but not understood, understood later).
+ */
+export interface OpeningCard { label: string; learned?: { choice: string; option: OpeningOption; label: string } }
+/** Working out a line: the cards that float up, the one that explains it, and the thought it gives. */
+export interface OpeningDeduction { cards: string[]; right: string; thought: string }
 /** Optional experiment data: settings supply story references; learner content supplies acceptance rules. */
 export interface OpeningProfile {
   scenes: Record<string, OpeningSceneStyle>;
   choices: Record<string, Partial<Record<OpeningOption, OpeningEffect>>>;
-  reward: { choice: string; option: OpeningOption; paper: string; place: string; decoded: string };
-  arrival: { scene: string; choice: string; branches: Partial<Record<OpeningOption, OpeningArrival>>; fallback: OpeningArrival };
+  /** A paper earned by one choice, read later at a place. */
+  reward?: { choice: string; option: OpeningOption; paper: string; place: string; decoded: string };
+  /** A scene whose arrival line and menu label depend on one choice. */
+  arrival?: { scene: string; choice: string; branches: Partial<Record<OpeningOption, OpeningArrival>>; fallback: OpeningArrival };
   directions: Record<string, string>;
+  cards?: Record<string, OpeningCard>;
+  /** Keyed `scene:exchange`, like `choices`: every line of an opening scene is worked out this way when present. */
+  deduce?: Record<string, OpeningDeduction>;
 }
 export type ScribeAccepts = Record<string, { meaning: string; fragments: string[] }>;
 

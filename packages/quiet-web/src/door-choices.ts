@@ -18,8 +18,15 @@ export const openingEffects = (course: Course) => extra(course).labOpening?.choi
 export const openingProfile = (course: Course) => extra(course).labOpening;
 export function openingArrival(course: Course, choices: OpeningChoices) {
   const profile = openingProfile(course);
-  if (!profile) return;
+  if (!profile?.arrival) return;
   return profile.arrival.branches[choices.options[profile.arrival.choice]] ?? profile.arrival.fallback;
+}
+
+/** A card's label as this game has it: a sentence heard, then understood once the choice that explains it is made. */
+export function cardLabel(course: Course, choices: OpeningChoices | undefined, id: string): string | undefined {
+  const card = openingProfile(course)?.cards?.[id];
+  if (!card) return;
+  return card.learned && choices?.options[card.learned.choice] === card.learned.option ? card.learned.label : card.label;
 }
 
 /** Native accepted alt outcomes are configured only in the lab's course, never in the shared source. */

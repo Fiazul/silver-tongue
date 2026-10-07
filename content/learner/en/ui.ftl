@@ -397,5 +397,9 @@ quiet-scribe-example = “{ $line }” means “{ $meaning }”. Type what they 
 quiet-scribe-full = It means: { $meaning }
 
 quiet-scribe-choose = Which reply do you mean? Choose one.
-lab-stall-card = Take the old man's card to the stall
-lab-stall-pointed = Go where the old man pointed
+# Working a line out from clues and memories (lab opening).
+quiet-deduce-prompt = What could it mean? Something comes back to you…
+quiet-deduce-miss = Hmm… no. That doesn't sound right.
+quiet-deduce-again = Think again
+quiet-deduce-conclude = That's it
+quiet-hint-meaning = Meaning: { $meaning }

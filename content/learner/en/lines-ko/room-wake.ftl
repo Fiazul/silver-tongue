@@ -2,19 +2,15 @@ call = Min-jun?
 call-reply = No.
 call-reply-intent = Say you're not him
 
-missing = Where's Min-jun?
-missing-reply = I don't know.
-missing-reply-intent = Say you don't know
+message = OK, OK… Min-jun, rent! Pay the rent!
+message-reply = Yes.
+message-reply-intent = Say yes
+message-alt1 = No.
+message-alt1-intent = Say no
+message-alt1-answer = Pay the rent!
 
-who = Who are you?
-who-reply = I'm { $player }.
-who-reply-intent = Give your name
-who-alt1 = I don't know.
-who-alt1-intent = Say you don't know
-
-rent = Rent!
-rent-reply = OK.
-rent-reply-intent = Agree to pay
-rent-alt1 = No.
-rent-alt1-intent = Refuse
-rent-alt1-answer = Rent!
+bye = Goodbye (I'm off).
+bye-reply = Goodbye (you go).
+bye-reply-intent = Say goodbye as she leaves
+bye-alt1 = Yes.
+bye-alt1-intent = Say yes

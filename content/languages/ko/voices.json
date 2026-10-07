@@ -7,6 +7,11 @@
    "voice": "ko-KR-SunHiNeural",
    "pitch": "-8Hz"
   },
+  "minjun": {
+   "voice": "ko-KR-HyunsuMultilingualNeural",
+   "pitch": "+2Hz",
+   "rate": "+5%"
+  },
   "oldman": {
    "voice": "ko-KR-HyunsuMultilingualNeural",
    "pitch": "-12Hz",

@@ -5,6 +5,7 @@ import { Line } from "./Line";
 import type { Quiet, QuietView } from "../quiet";
 import { replyOrder, type Exchange } from "../stage";
 import { resolveScribeReply, freshOnce, scribeRound, subscribeRounds, updateRound, type Round } from "../scribe";
+import { cardLabel, openingProfile } from "../door-choices";
 
 /*
  * Scribe mode (lab only, the first conversations): their line in Latin letters with a field for what it means, your
@@ -57,6 +58,64 @@ function Field({ placeholder, onTry, onHelp, hot, helpLabel, children }: {
   );
 }
 
+/** The deduction for the exchange on stage, if the course works this line out from cards. */
+export function deductionFor(q: Quiet) {
+  const run = q.core.state.run;
+  if (!run) return;
+  const ex = q.course.scenes.find((s) => s.id === run.scene)?.exchanges[run.exchange];
+  return ex && openingProfile(q.course)?.deduce?.[`${run.scene}:${ex.id}`];
+}
+
+/**
+ * Working out their line, the way a detective does: clues and memories float up, and the one that fits gives a thought.
+ * A card that doesn't fit shakes and dims; nothing is lost. Help gives the line's meaning, never what to answer.
+ */
+function Thoughts({ q, exKey, round, set, meaning }: { q: Quiet; exKey: string; round: Round; set: (c: Partial<Round>) => void; meaning: string }) {
+  const { t } = q;
+  const d = openingProfile(q.course)!.deduce![exKey];
+  const [tried, setTried] = useState<string[]>([]);
+  const [chosen, setChosen] = useState<string>();
+  const [shake, setShake] = useState(false);
+  const label = (id: string) => t(cardLabel(q.course, q.openingChoices(), id)!);
+  // The right card is never always first: a fixed turn per line, so the order is the same each time it is played.
+  const turn = [...exKey].reduce((n, ch) => n + ch.charCodeAt(0), 0) % d.cards.length;
+  const order = [...d.cards.slice(turn), ...d.cards.slice(0, turn)];
+  // As in a detective's thinking: tap a thought to hold it, then conclude, or let it go and think again.
+  const conclude = () => {
+    if (!chosen) return;
+    if (chosen === d.right) return set({ solved: true });
+    setTried((x) => (x.includes(chosen) ? x : [...x, chosen]));
+    setChosen(undefined);
+    setShake(true);
+    setTimeout(() => setShake(false), SHAKE_MS);
+    set({ misses: round.misses + 1 });
+  };
+  const thought = (id: string, i: number) => (
+    <button key={id} type="button" style={`--i:${i}`} aria-pressed={chosen === id} disabled={tried.includes(id)}
+      class={`thought${chosen === id ? " chosen" : ""}${tried.includes(id) ? " tried" : ""}`} onClick={() => setChosen(chosen === id ? undefined : id)}>{label(id)}</button>
+  );
+  return (
+    <div class={`thoughts${shake ? " shake" : ""}`}>
+      <p class="thoughts-ask">{t("quiet-deduce-prompt")}</p>
+      <div class="thought-field" role="group" aria-label={t("quiet-deduce-prompt")}>
+        <div class="thought-side left">{order.map((id, i) => (i % 2 === 0 ? thought(id, i) : null))}</div>
+        <div class="thought-mind" aria-hidden="true">💭</div>
+        <div class="thought-side right">{order.map((id, i) => (i % 2 === 1 ? thought(id, i) : null))}</div>
+      </div>
+      {/* Said to yourself after a thought that doesn't fit; it goes once you take up another thought. */}
+      {tried.length > 0 && !chosen && <p class="thoughts-miss" key={tried.length} aria-live="polite">{t("quiet-deduce-miss")}</p>}
+      <div class="thought-actions">
+        <button type="button" class="thought-act" disabled={!chosen} onClick={() => setChosen(undefined)}>{t("quiet-deduce-again")}</button>
+        <button type="button" class="thought-act go" disabled={!chosen} onClick={conclude}>{t("quiet-deduce-conclude")}</button>
+      </div>
+      <div class="read-tools">
+        <button type="button" class={round.misses >= 1 ? "help hot" : "help"} onClick={() => set({ help: 2 })}>? {t("quiet-read-help")}</button>
+      </div>
+      {round.help >= 2 && <p class="rh-full">{t("quiet-hint-meaning", { meaning })}</p>}
+    </div>
+  );
+}
+
 /**
  * Their Korean line and its romanisation, with tappable words and a field for its meaning; once typed
  * right the meaning stays under the line. The shared Line preserves recognised-name highlighting.
@@ -74,7 +133,9 @@ export function ScribeTheir({ q, ex, held, onWord, children }: {
   const source = course.scenes.find((s) => s.id === run.scene)!.exchanges[run.exchange].id;
   const accepts = scribeAccepts(course, run.scene, source, q.core.state.player);
   const sounded = soundedTokens(course, q.readPapers(), line);
-  const glosses = scribeScene(q.course, run.scene)?.glosses || (!solved && round.help >= 1);
+  const deduce = deductionFor(q);
+  // Working a line out from cards: no word is glossed until it is understood, or the cards would be pointless.
+  const glosses = scribeScene(q.course, run.scene)?.glosses || (!solved && round.help >= 1) || (!!deduce && solved);
   // Help first, hands off later: a word never met shows its gloss, a met one only when help asks.
   const fresh = freshOnce(q, `${course.id}:${ex.line.id}:line`, () => freshOnTheirLine(ex.shown, q.core.state.words, ex.line.line ?? ex.shown));
   const set = (change: Partial<Round>) => updateRound(q, course.id, ex.line.id, change);
@@ -95,13 +156,22 @@ export function ScribeTheir({ q, ex, held, onWord, children }: {
             ) : (
               <span key={i} class="sw">
                 <button type="button" class={`w${s.token !== undefined && sounded.has(s.token) ? " sounded" : ""}`} onClick={(e) => (e.stopPropagation(), onWord(s.word!, s.surface ?? s.text, e.currentTarget))}>{s.text}</button>
-                {(glosses || fresh.has(s.word)) && <span class="sw-g">{displayGloss(course.words[s.word])}</span>}
+                {(glosses || (!deduce && fresh.has(s.word))) && <span class="sw-g">{displayGloss(course.words[s.word])}</span>}
               </span>
             ),
           )}
         </span>
       </div>
-      {solved ? (
+      {deduce ? (
+        solved ? (
+          <>
+            <p class="say-thought">{t(deduce.thought)}</p>
+            {round.help >= 2 && meaning && <p class="say-mean">{meaning}</p>}
+          </>
+        ) : (
+          !held && <Thoughts key={`${run.scene}:${source}`} q={q} exKey={`${run.scene}:${source}`} round={round} set={set} meaning={meaning} />
+        )
+      ) : solved ? (
         meaning && <p class="say-mean">{meaning}</p>
       ) : (
         !held && (
@@ -184,7 +254,6 @@ export function ScribeSlips({ q, view, ex }: { q: Quiet; view: QuietView; ex?: E
               )}
             </span>
             {(round.rHelp || scribeScene(q.course, run.scene)?.glosses) && <span class="slip-mean">{meaningOf(o)}</span>}
-            {scribeScene(q.course, run.scene)?.glosses && <span class="slip-mean">{o.intent}</span>}
           </>;
           const cls = `slip scribe-slip${tried.has(o.text) ? " tried" : ""}`;
           return scribeScene(q.course, run.scene)?.select ? (
@@ -194,6 +263,11 @@ export function ScribeSlips({ q, view, ex }: { q: Quiet; view: QuietView; ex?: E
           );
         })}
       </div>
+      {scribeScene(q.course, run.scene)?.select && !round.rHelp && (
+        <div class="read-tools">
+          <button type="button" class="help" onClick={() => set({ rHelp: true })}>? {t("quiet-read-help")}</button>
+        </div>
+      )}
       {!scribeScene(q.course, run.scene)?.select && (ties.length ? (
         <div role="group" aria-label={t("quiet-scribe-choose")}>
           <p>{t("quiet-scribe-choose")}</p>

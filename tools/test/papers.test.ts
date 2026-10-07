@@ -34,10 +34,10 @@ describe("ko-seoul's desk", () => {
   const { course, errors } = buildCourse(CONTENT, "ko-seoul");
   const papers = course ? (extra(course).papers ?? []) : [];
 
-  it("builds without errors, three papers, each line with a clip", () => {
+  it("builds without errors, four papers, each line with a clip", () => {
     expect(errors).toEqual([]);
-    expect(deskPapers(course!).map((p) => p.id)).toEqual(["idcard", "newspaper", "bill"]);
-    expect(papers.map((p) => p.id)).toEqual(["idcard", "newspaper", "bill", "stall-card"]);
+    expect(deskPapers(course!).map((p) => p.id)).toEqual(["book", "idcard", "bill", "newspaper"]);
+    expect(papers.map((p) => p.id)).toEqual(["book", "idcard", "bill", "newspaper"]);
     for (const l of papers.flatMap((p) => p.lines)) expect(l.audio?.length).toBeGreaterThan(0);
   });
 

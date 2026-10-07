@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Course, RenderedLine } from "@silver-tongue/core";
-import { canOpenPaper, foldRomanization, readsAs, romanize, soundedTokens } from "../src/desk";
+import { canOpenPaper, deskReady, firstUnread, foldRomanization, readsAs, romanize, soundedTokens } from "../src/desk";
 import type { CourseExtra } from "../src/course-extra";
 
 describe("romanize", () => {
@@ -86,5 +86,22 @@ describe("canOpenPaper", () => {
     expect(open([])).toEqual([true, false, false]);
     expect(open(["idcard"])).toEqual([true, true, false]);
     expect(open(["idcard", "bill", "news"])).toEqual([true, true, true]);
+  });
+  it("counts a paper's required lines as done for the order too, and never holds the desk on an optional paper", () => {
+    const line = (id: string) => ({ id, text: "가" });
+    const desk = [
+      { id: "book", kind: "masthead", required: ["title"], lines: [line("title"), line("name")] },
+      { id: "news", kind: "masthead", required: [], lines: [line("title")] },
+      { id: "bill", kind: "bill", required: ["title"], lines: [line("title"), line("amount")] },
+    ] as unknown as Parameters<typeof canOpenPaper>[0];
+    const open = (read: string[]) => desk.map((p) => canOpenPaper(desk, new Set(read), p.id));
+    expect(firstUnread(desk, new Set())).toBe("book");
+    expect(open([])).toEqual([true, true, false]);
+    // The book's title read: the next required paper opens, though the book's name line is still unread.
+    expect(firstUnread(desk, new Set(["book.title"]))).toBe("bill");
+    expect(open(["book.title"])).toEqual([true, true, true]);
+    expect(deskReady(desk, new Set(["book.title"]))).toBe(false);
+    expect(deskReady(desk, new Set(["book.title", "bill.title"]))).toBe(true);
+    expect(firstUnread(desk, new Set(["book.title", "bill.title"]))).toBeUndefined();
   });
 });

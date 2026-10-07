@@ -4,7 +4,7 @@ import { extra, type OpeningArrival, type OpeningEffect, type OpeningProfile, ty
 type SoundSource = { audioWords?: string[] };
 export type OpeningSource = Omit<OpeningProfile, "choices" | "arrival"> & {
   choices: Record<string, Record<string, OpeningEffect & SoundSource>>;
-  arrival: Omit<OpeningProfile["arrival"], "branches" | "fallback"> & {
+  arrival?: Omit<NonNullable<OpeningProfile["arrival"]>, "branches" | "fallback"> & {
     branches: Record<string, OpeningArrival & SoundSource>;
     fallback: OpeningArrival & SoundSource;
   };
@@ -59,16 +59,43 @@ export function compileOpening(source: OpeningSource, course: Course, messages: 
     }
   }
   const reward = profile.reward;
-  if (!profile.choices[reward.choice]?.[reward.option]) errors.push(`opening.json: unknown reward choice "${reward.choice}/${reward.option}"`);
-  if (!extra(course).papers?.some((paper) => paper.id === reward.paper && paper.reward)) errors.push(`opening.json: unknown reward paper "${reward.paper}"`);
-  if (!course.world.places[reward.place]) errors.push(`opening.json: unknown reward place "${reward.place}"`);
-  message(reward.decoded);
-  if (!scene(profile.arrival.scene)) errors.push(`opening.json: unknown arrival scene "${profile.arrival.scene}"`);
-  if (!profile.choices[profile.arrival.choice]) errors.push(`opening.json: unknown arrival choice "${profile.arrival.choice}"`);
-  for (const option of Object.keys(profile.arrival.branches)) if (!profile.choices[profile.arrival.choice]?.[option as keyof (typeof profile.choices)[string]]) errors.push(`opening.json: arrival branch "${option}" is not an option of "${profile.arrival.choice}"`);
-  for (const branch of [...Object.values(profile.arrival.branches), profile.arrival.fallback]) {
-    message(branch.text); message(branch.menu);
-    if (branch.decodedText) message(branch.decodedText);
+  if (reward) {
+    if (!profile.choices[reward.choice]?.[reward.option]) errors.push(`opening.json: unknown reward choice "${reward.choice}/${reward.option}"`);
+    if (!extra(course).papers?.some((paper) => paper.id === reward.paper && paper.reward)) errors.push(`opening.json: unknown reward paper "${reward.paper}"`);
+    if (!course.world.places[reward.place]) errors.push(`opening.json: unknown reward place "${reward.place}"`);
+    message(reward.decoded);
+  }
+  const arrival = profile.arrival;
+  if (arrival) {
+    if (!scene(arrival.scene)) errors.push(`opening.json: unknown arrival scene "${arrival.scene}"`);
+    if (!profile.choices[arrival.choice]) errors.push(`opening.json: unknown arrival choice "${arrival.choice}"`);
+    for (const option of Object.keys(arrival.branches)) if (!profile.choices[arrival.choice]?.[option as keyof (typeof profile.choices)[string]]) errors.push(`opening.json: arrival branch "${option}" is not an option of "${arrival.choice}"`);
+    for (const branch of [...Object.values(arrival.branches), arrival.fallback]) {
+      message(branch.text); message(branch.menu);
+      if (branch.decodedText) message(branch.decodedText);
+    }
+  }
+  const cards = profile.cards ?? {};
+  for (const [id, card] of Object.entries(cards)) {
+    message(card.label);
+    if (card.learned) {
+      message(card.learned.label);
+      if (!profile.choices[card.learned.choice]?.[card.learned.option]) errors.push(`opening.json: card "${id}" is learned by unknown choice "${card.learned.choice}/${card.learned.option}"`);
+    }
+  }
+  if (profile.deduce) {
+    for (const [key, d] of Object.entries(profile.deduce)) {
+      if (!exchange(key) || !profile.scenes[key.split(":")[0]]) errors.push(`opening.json: deduction for "${key}", which is not a line of an opening scene`);
+      message(d.thought);
+      if (!Array.isArray(d.cards) || d.cards.length < 2 || d.cards.length > 4) errors.push(`opening.json: deduction "${key}" needs 2 to 4 cards`);
+      for (const c of d.cards ?? []) if (!cards[c]) errors.push(`opening.json: deduction "${key}" names unknown card "${c}"`);
+      if (!d.cards?.includes(d.right)) errors.push(`opening.json: deduction "${key}": the right card "${d.right}" is not one of its cards`);
+      if (new Set(d.cards).size !== d.cards?.length) errors.push(`opening.json: deduction "${key}" repeats a card`);
+    }
+    // Every line of an opening scene is worked out from cards: none is left to the typed field.
+    for (const id of Object.keys(profile.scenes)) for (const ex of scene(id)?.exchanges ?? []) {
+      if (!profile.deduce[`${id}:${ex.id}`]) errors.push(`opening.json: no deduction for "${id}:${ex.id}"`);
+    }
   }
   for (const [key, id] of Object.entries(profile.directions)) {
     if (!exchange(key)) errors.push(`opening.json: unknown direction exchange "${key}"`);

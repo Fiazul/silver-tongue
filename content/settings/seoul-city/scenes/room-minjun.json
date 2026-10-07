@@ -1,20 +1,20 @@
 {
- "id": "street-introductions",
- "place": "street",
- "npc": "oldman",
+ "id": "room-minjun",
+ "place": "room",
+ "npc": "minjun",
  "stage": 1,
  "after": [
-  "room-minjun"
+  "room-wake"
  ],
  "requires": {},
  "repeatable": false,
  "trustGain": 1,
  "exchanges": [
   {
-   "id": "park",
+   "id": "who",
    "slots": {},
    "expect": {
-    "action": "park"
+    "action": "who"
    },
    "hinges": [],
    "pay": 0,
@@ -28,10 +28,10 @@
    }
   },
   {
-   "id": "friend",
+   "id": "minjun",
    "slots": {},
    "expect": {
-    "action": "friend"
+    "action": "minjun"
    },
    "hinges": [],
    "pay": 0,
@@ -45,10 +45,10 @@
    }
   },
   {
-   "id": "sit",
+   "id": "english",
    "slots": {},
    "expect": {
-    "action": "sit"
+    "action": "english"
    },
    "hinges": [],
    "pay": 0,
@@ -62,10 +62,44 @@
    }
   },
   {
-   "id": "understand",
+   "id": "why",
    "slots": {},
    "expect": {
-    "action": "understand"
+    "action": "why"
+   },
+   "hinges": [],
+   "pay": 0,
+   "missCost": 0,
+   "alts": {
+    "1": {
+     "accept": true,
+     "pay": 0,
+     "loss": 0
+    }
+   }
+  },
+  {
+   "id": "together",
+   "slots": {},
+   "expect": {
+    "action": "together"
+   },
+   "hinges": [],
+   "pay": 0,
+   "missCost": 0,
+   "alts": {
+    "1": {
+     "accept": true,
+     "pay": 0,
+     "loss": 0
+    }
+   }
+  },
+  {
+   "id": "leave",
+   "slots": {},
+   "expect": {
+    "action": "leave"
    },
    "hinges": [],
    "pay": 0,

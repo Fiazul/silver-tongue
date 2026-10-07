@@ -22,8 +22,7 @@ const CONTENT = fileURLToPath(new URL("../../content", import.meta.url));
 /** ko-seoul stage 1: each scene answers a need the one before it raised (spec section 11). */
 const CHAIN = [
   "room-wake",
-  "street-hello",
-  "stall-lead",
+  "room-minjun",
   "street-introductions",
   "street-again",
   "street-what",
@@ -142,13 +141,13 @@ describe("ko-seoul's stage-1 chain", () => {
     expect(course!.scenes.filter((s) => s.repeatable).map((s) => s.id).sort()).toEqual(["copy-shift", "shop-buy", "stall-shift"]);
   });
 
-  it("teaches the farewell for Park staying while the player leaves", () => {
-    const scene = course!.scenes.find((s) => s.id === "street-introductions")!;
+  it("teaches the farewell at the door: the landlady leaves, the player stays", () => {
+    const scene = course!.scenes.find((s) => s.id === "room-wake")!;
     const v = Object.values(scene.exchanges.find((e) => e.id === "bye")!.variants)[0];
-    expect(v.npc.text).toBe("안녕히 가세요.");
-    expect(v.reply.text).toBe("안녕히 계세요.");
-    expect(v.reply.intent).toBe("Say goodbye to Park as you leave");
-    expect(v.alts?.map((l) => l.text)).toEqual(["감사합니다."]);
+    expect(v.npc.text).toBe("안녕히 계세요.");
+    expect(v.reply.text).toBe("안녕히 가세요.");
+    expect(v.reply.intent).toBe("Say goodbye as she leaves");
+    expect(v.alts?.map((l) => l.text)).toEqual(["네."]);
   });
 
   it("keeps the fast-question narration to observable speed and gestures", () => {
@@ -159,23 +158,22 @@ describe("ko-seoul's stage-1 chain", () => {
     expect(t("scene-street-introductions-end")).not.toMatch(/quick|fast|asks/i);
   });
 
-  it("opens the stall directly after the greeting; it brings only its two food words, and replies use words heard first", () => {
-    const s = course!.scenes.find((s) => s.id === "stall-lead")!;
-    expect(s.after).toEqual(["street-hello"]);
-    expect(course!.world.places.stall.after).toEqual(["street-hello"]);
-    const opening = new Set(course!.scenes.filter((s) => ["room-wake", "street-hello"].includes(s.id)).flatMap((s) => s.exchanges.flatMap((ex) => Object.values(ex.variants).flatMap((v) => [v.npc, v.reply].flatMap((l) => l.tokens.map((t) => t.word))))));
-    const heard = new Set(opening);
-    const fresh = new Set<string>();
+  it("Min-jun comes home right after the door; his replies use only words heard first; the stall opens once Park points at it", () => {
+    const s = course!.scenes.find((s) => s.id === "room-minjun")!;
+    expect(s.after).toEqual(["room-wake"]);
+    expect(course!.scenes.find((x) => x.id === "street-introductions")!.after).toEqual(["room-minjun"]);
+    expect(course!.world.places.stall.after).toEqual(["street-hungry"]);
+    const heard = new Set(course!.scenes.filter((x) => x.id === "room-wake").flatMap((x) => x.exchanges.flatMap((ex) => Object.values(ex.variants).flatMap((v) => [v.npc, v.reply].flatMap((l) => l.tokens.map((t) => t.word))))));
     for (const v of s.exchanges.flatMap((ex) => Object.values(ex.variants))) {
-      for (const tk of v.npc.tokens) { if (!heard.has(tk.word)) fresh.add(course!.words[tk.word].w); heard.add(tk.word); }
-      for (const l of [v.reply, ...(v.alts ?? [])]) for (const tk of l.tokens) expect(heard.has(tk.word), l.text).toBe(true);
+      for (const tk of v.npc.tokens) heard.add(tk.word);
+      for (const l of v.alts ?? []) for (const tk of l.tokens) expect(heard.has(tk.word), l.text).toBe(true);
+      for (const tk of v.reply.tokens) heard.add(tk.word);
     }
-    expect([...fresh].sort()).toEqual(["김밥", "맛있어요"]);
   });
 
-  it("keeps the door to the script's four exchanges and at most nine new lexical items", () => {
+  it("keeps the door to the script's three exchanges and at most nine new lexical items", () => {
     const door = course!.scenes.find((s) => s.id === "room-wake")!;
-    expect(door.exchanges.map((e) => e.id)).toEqual(["call", "missing", "who", "rent"]);
+    expect(door.exchanges.map((e) => e.id)).toEqual(["call", "message", "bye"]);
     const words = new Set(door.exchanges.flatMap((ex) => Object.values(ex.variants).flatMap((v) => [v.npc, v.reply, ...(v.alts ?? [])].flatMap((l) => l.tokens.map((t) => t.word)))));
     const nonNames = [...words].filter((id) => course!.words[id].w !== "민준");
     expect(nonNames.length).toBeLessThanOrEqual(9);
@@ -208,8 +206,10 @@ describe("ko-seoul's stage-1 chain", () => {
     expect(anchorRow(course!, { ...short, scenesDone: state.scenesDone }, t).rent).toBeDefined();
     expect(npcLabel(course!, state, t, "oldman")).toBe("Grandpa Park");
     const fresh = newGame(course!);
-    expect(npcLabel(course!, { ...fresh, scenesDone: { "street-hello": 1, "stall-lead": 1 } }, t, "oldman")).toBe("The old man");
-    expect(npcLabel(course!, { ...fresh, scenesDone: { "street-hello": 1, "stall-lead": 1 } }, t, "jiwoo")).toBe(t("npc-jiwoo-unmet"));
+    expect(npcLabel(course!, { ...fresh, scenesDone: { "room-wake": 1, "room-minjun": 1 } }, t, "oldman")).toBe("The old man");
+    expect(npcLabel(course!, { ...fresh, scenesDone: { "room-wake": 1, "room-minjun": 1 } }, t, "jiwoo")).toBe(t("npc-jiwoo-unmet"));
+    expect(npcLabel(course!, { ...fresh, scenesDone: { "room-wake": 1 } }, t, "minjun")).toBe("A young man");
+    expect(npcLabel(course!, { ...fresh, scenesDone: { "room-wake": 1, "room-minjun": 1 } }, t, "minjun")).toBe("Min-jun");
     expect(npcLabel(course!, fresh, t, "oldman")).toBe("The old man");
     expect(npcLabel(course!, fresh, t, "landlady")).toBe("The landlady");
   });

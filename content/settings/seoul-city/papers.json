@@ -1,6 +1,43 @@
 {
  "papers": [
   {
+   "id": "book",
+   "kind": "masthead",
+   "lines": [
+    {
+     "id": "title",
+     "text": "영어"
+    },
+    {
+     "id": "yes",
+     "text": "네"
+    },
+    {
+     "id": "no",
+     "text": "아니요"
+    },
+    {
+     "id": "bye-stay",
+     "text": "안녕히 계세요"
+    },
+    {
+     "id": "bye-go",
+     "text": "안녕히 가세요"
+    },
+    {
+     "id": "name",
+     "text": "김민준"
+    }
+   ],
+   "required": [
+    "title",
+    "yes",
+    "no",
+    "bye-stay",
+    "bye-go"
+   ]
+  },
+  {
    "id": "idcard",
    "kind": "card",
    "names": "room",
@@ -24,6 +61,23 @@
    ]
   },
   {
+   "id": "bill",
+   "kind": "bill",
+   "lines": [
+    {
+     "id": "title",
+     "text": "방세"
+    },
+    {
+     "id": "amount",
+     "text": "50,000원"
+    }
+   ],
+   "required": [
+    "title"
+   ]
+  },
+  {
    "id": "newspaper",
    "kind": "masthead",
    "lines": [
@@ -37,34 +91,6 @@
     }
    ],
    "required": []
-  },
-  {
-   "id": "bill",
-   "kind": "bill",
-   "lines": [
-    {
-     "id": "title",
-     "text": "월세 고지서"
-    },
-    {
-     "id": "amount",
-     "text": "50,000원"
-    }
-   ],
-   "required": []
-  },
-  {
-   "id": "stall-card",
-   "kind": "card",
-   "names": "stall",
-   "reward": "park",
-   "required": [],
-   "lines": [
-    {
-     "id": "heading",
-     "text": "지우네"
-    }
-   ]
   }
  ]
 }

@@ -3,7 +3,7 @@ import { buildCourse } from "../../../tools/src/build-course";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createCore, mulberry32, newGame, personalize, PLAYER_MARK, type Course, type GameEvent, type RenderedLine } from "@silver-tongue/core";
 import { fixtureWithText } from "@silver-tongue/view/testing";
-import { bestMeaning, normalizeMeaning, scribeRules, freshOnReply, freshOnTheirLine, meaningMatches, scribeScenes, scribeAccepts, scribeReplyId, scribeCountKey, type CourseExtra } from "@silver-tongue/view";
+import { bestMeaning, makeText, normalizeMeaning, scribeRules, freshOnReply, freshOnTheirLine, meaningMatches, scribeScenes, scribeAccepts, scribeReplyId, scribeCountKey, type CourseExtra } from "@silver-tongue/view";
 import { emptyOpeningChoices, type OpeningChoices } from "../src/door-choices";
 import { resolveScribeReply, openingStore, scribeOn, scribeRound, updateRound, writeCount } from "../src/scribe";
 
@@ -49,9 +49,9 @@ describe("rounds", () => {
   });
   afterEach(() => void delete (globalThis as { localStorage?: Storage }).localStorage);
 
-  it("persists the old man's card choice either way across recreated stores, isolated by saved game", () => {
-    for (const hello of ["reply", "silence"] as const) {
-      const choices: OpeningChoices = { options: { "room-wake:rent": "alt1", "street-hello:hello": hello }, cardAt: 0, cardRead: hello === "reply" };
+  it("persists opening choices either way across recreated stores, isolated by saved game", () => {
+    for (const why of ["reply", "silence"] as const) {
+      const choices: OpeningChoices = { options: { "room-wake:message": "alt1", "room-minjun:why": why }, cardAt: 0, cardRead: false };
       openingStore(realCourse, "a").save(choices);
       expect(openingStore(realCourse, "a").load()).toEqual(choices);
       expect(openingStore(realCourse, "b").load()).toEqual(emptyOpeningChoices());
@@ -131,31 +131,24 @@ describe("the real scribe scenes (ko-seoul build)", () => {
     }
   });
 
-  it("sweeps EVERY scribe line: exact meanings, visible fragments, opposite negation, live keys", () => {
-    const current = new Map<string, string>();
-    for (const s of scenes) for (const ex of s.exchanges) for (const v of Object.values(ex.variants)) {
-      const lines: [string, RenderedLine][] = [[ex.id, v.npc], [`${ex.id}-reply`, v.reply], ...(v.alts ?? []).map((l, i): [string, RenderedLine] => [`${ex.id}-alt${i + 1}`, l]), ...Object.entries(v.altOutcomes ?? {}).flatMap(([i, outcome]): [string, RenderedLine][] => outcome.reaction ? [[`${ex.id}-alt${Number(i) + 1}-answer`, outcome.reaction]] : [])];
-      for (const [id, l] of lines) {
-        const key = `${s.id}:${id}`;
-        const meaning = name(l.meaning);
-        current.set(key, meaning);
-        const fragments = scribeAccepts(built, s.id, id, "Alex");
-        if (id !== ex.id && !id.endsWith("-answer")) expect(scribeReplyId(built, s.id, ex.id, personalize(l, "Alex"), "Alex"), key).toBe(id);
-        expect(fragments.length, key).toBeGreaterThan(0);
-        expect(meaningMatches(meaning, meaning, fragments), key).toBe(true);
-        for (const fragment of fragments) {
-          expect(meaningMatches(fragment, meaning, fragments), `${key}: ${fragment}`).toBe(true);
-          const norm = normalizeMeaning(fragment);
-          const hasNeg = /\b(no|not|never|nothing|none)\b/.test(norm);
-          const flip = hasNeg ? norm.replace(/\b(no|not|never|nothing|none)\b/g, "").trim() || "yes" : `not ${fragment}`;
-          expect(meaningMatches(flip, meaning, fragments), `${key}: flipped ${fragment}`).toBe(false);
-        }
+  it("work out EVERY line from cards: 2 to 4 known cards, one right, a thought; every slip maps back to its line", () => {
+    const profile = (built as CourseExtra).labOpening!;
+    const t = makeText(built.learnerFtl, built.learner);
+    for (const s of scenes) for (const ex of s.exchanges) {
+      const key = `${s.id}:${ex.id}`;
+      const d = profile.deduce?.[key];
+      expect(d, key).toBeDefined();
+      expect(d!.cards.length, key).toBeGreaterThanOrEqual(2);
+      expect(d!.cards.length, key).toBeLessThanOrEqual(4);
+      expect(d!.cards.filter((c) => c === d!.right), key).toHaveLength(1);
+      for (const c of d!.cards) expect(t.has(profile.cards![c].label), `${key}: ${c}`).toBe(true);
+      expect(t.has(d!.thought), key).toBe(true);
+      for (const v of Object.values(ex.variants)) for (const [i, l] of [v.reply, ...(v.alts ?? [])].entries()) {
+        expect(scribeReplyId(built, s.id, ex.id, personalize(l, "Alex"), "Alex"), key).toBe(i ? `${ex.id}-alt${i}` : `${ex.id}-reply`);
       }
     }
-    expect([...current.keys()].sort()).toEqual(Object.keys(SCRIBE_ACCEPTS).sort());
-    for (const [key, rule] of Object.entries(SCRIBE_ACCEPTS)) {
-      expect(current.get(key), key).toBe(rule.meaning.replace("{ $player }", "Alex"));
-    }
+    // Typing is for later: nothing in the opening is accepted from a typed meaning.
+    expect(Object.keys(SCRIBE_ACCEPTS).filter((k) => scenes.some((s) => k.startsWith(`${s.id}:`)))).toEqual([]);
   });
 });
 

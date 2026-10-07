@@ -330,9 +330,9 @@ export function createQuiet(opts: QuietOptions): Quiet {
           sceneFrom = nextId;
           {
             const start = `scene-${e.scene}-start`;
-            if (!resuming && !(experiment && e.scene === profile?.arrival.scene) && t.has(start)) push({ text: t(start), tone: "narr" });
+            if (!resuming && !(experiment && e.scene === profile?.arrival?.scene) && t.has(start)) push({ text: t(start), tone: "narr" });
           }
-          if (experiment && !resuming && e.scene === profile?.arrival.scene) {
+          if (experiment && !resuming && e.scene === profile?.arrival?.scene) {
             const arrival = openingArrival(course, choices)!;
             push({ text: t(choices.cardRead && arrival.decodedText ? arrival.decodedText : arrival.text), tone: "narr" }, speech(arrival.audio));
           }
@@ -541,7 +541,7 @@ export function createQuiet(opts: QuietOptions): Quiet {
     if (reply?.mode === "tiles") return { kind: "tiles", tiles: reply.tiles, placed, answer: joinTilesForDisplay(course, placed.map((i) => (reply as { tiles: string[] }).tiles[i])) };
     if (reply?.mode === "type") return { kind: "type", prompt: typePrompt(t), confused: !!core.state.run && core.state.run.misses < 2 };
     const menu = placeMenu(course, core.state, t, placeLabel).map((m) =>
-      experiment && m.kind === "talk" && m.scene === profile?.arrival.scene ? { ...m, label: t(openingArrival(course, choices)!.menu) } : m);
+      experiment && m.kind === "talk" && m.scene === profile?.arrival?.scene ? { ...m, label: t(openingArrival(course, choices)!.menu) } : m);
     if (!book) return { kind: "explore", menu, waiting: [...waitingForMoney(course, core.state, t), ...bedHint(course, core.state, t)] };
     // With the Book: what can't be done now is not offered, and the way to bed says why it's the way.
     const open = menu.filter((m) => !("disabled" in m && m.disabled));

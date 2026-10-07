@@ -1,6 +1,6 @@
 import { Fragment } from "preact";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
-import { canOpenPaper, deskReady, firstUnread, letterChart, lineRead, paperSyllables, readsSyllable, romanize, sumTiles, type DeskPaper, type SumTile } from "@silver-tongue/view";
+import { canOpenPaper, deskReady, firstUnread, paperDone, letterChart, lineRead, paperSyllables, readsSyllable, romanize, sumTiles, type DeskPaper, type SumTile } from "@silver-tongue/view";
 import type { Quiet } from "../quiet";
 import { DeskArt } from "./desk-art";
 
@@ -68,7 +68,8 @@ export function Desk({ q, papers, covered, onBook, onSettings }: { q: Quiet; pap
       <p class="desk-title">{t("quiet-desk-why")}</p>
       <div class="desk">
         {papers.map((p) => {
-          const done = read.has(p.id);
+          // "Read" only when it was: an optional paper is no step of the desk, but nobody has read it yet.
+          const done = read.has(p.id) || (!!p.required?.length && paperDone(p, read));
           const cls = `desk-card ${done ? "read" : p.id === next ? "next" : "later"}`;
           const art = (
             <>
@@ -248,6 +249,8 @@ export function PaperView({ q, paper, done, covered, onBook, onBack, opening = f
               <div key={l.id} class={`pl pl-${l.id}${lineDone ? " said" : ""}`}>
                 {lineDone ? <button type="button" class="pl-text" onClick={() => q.play(l.audio ?? [])}>{chars}</button> : <div class="pl-text">{chars}</div>}
                 {hasSyls && <span class="pl-rr" lang={`${q.course.language.code}-Latn`}>{lineDone ? romanize(l.text) : " "}</span>}
+                {/* A phrasebook line gives its meaning once read. */}
+                {lineDone && t.has(`paper-${paper.id}-${l.id}`) && <span class="pl-gloss">{t(`paper-${paper.id}-${l.id}`)}</span>}
               </div>
             );
           })}
