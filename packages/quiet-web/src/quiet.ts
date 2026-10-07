@@ -138,6 +138,8 @@ export interface Quiet {
   bookPapers(): DeskPaper[];
   /** a paper on the desk has been read out, every line */
   readPaper(id: string): void;
+  /** The lab opening: a paper is seen at a glance, read in full, nothing typed (its meaning and its sounds shown). */
+  glancePaper(id: string): void;
   readPaperLine(paper: string, line: string): void;
   /** syllables of a paper read so far (all of them once it is read) */
   deskAt(id: string): number;
@@ -723,6 +725,12 @@ export function createQuiet(opts: QuietOptions): Quiet {
       read.add(id);
       opts.papers?.save([...read]);
       changed();
+    },
+    glancePaper(id) {
+      const paper = bookPapers().find((p) => p.id === id);
+      if (!paper || read.has(id)) return;
+      this.setDeskAt(id, paperSyllables(paper).length);
+      this.readPaper(id);
     },
     leaveDesk() {
       if (!atDesk || naming || !deskReady(deskPapers(course), read)) return;

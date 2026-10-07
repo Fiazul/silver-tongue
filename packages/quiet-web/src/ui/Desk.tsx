@@ -1,6 +1,7 @@
 import { Fragment } from "preact";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
 import { canOpenPaper, deskReady, firstUnread, paperDone, letterChart, lineRead, paperSyllables, readsSyllable, romanize, sumTiles, type DeskPaper, type SumTile } from "@silver-tongue/view";
+import { doorExperimentOn } from "../door-choices";
 import type { Quiet } from "../quiet";
 import { DeskArt } from "./desk-art";
 
@@ -24,6 +25,9 @@ export function Desk({ q, papers, covered, onBook, onSettings }: { q: Quiet; pap
   const t = q.t;
   const read = q.readPapers();
   const [paper, setPaper] = useState<string | null>(null);
+  // The lab opening: a paper is seen, not typed. Its words, sounds and meaning show at once, and the thought it gives.
+  const glance = doorExperimentOn(q.course);
+  const openPaper = (id: string) => (glance && q.glancePaper(id), setPaper(id));
   const [leaving, setLeaving] = useState<"fade" | "knock" | null>(null);
   const allRead = deskReady(papers, read);
   const still = matches("(prefers-reduced-motion: reduce)");
@@ -45,7 +49,7 @@ export function Desk({ q, papers, covered, onBook, onSettings }: { q: Quiet; pap
       // On the desk, Enter reads the bright card, unless a focused button takes it.
       const next = firstUnread(papers, read);
       if (!paper && !leaving && next && e.key === "Enter" && !(document.activeElement instanceof HTMLButtonElement))
-        return void (e.preventDefault(), setPaper(next));
+        return void (e.preventDefault(), openPaper(next));
     };
     addEventListener("keydown", onKey);
     return () => removeEventListener("keydown", onKey);
@@ -78,7 +82,7 @@ export function Desk({ q, papers, covered, onBook, onSettings }: { q: Quiet; pap
             </>
           );
           return canOpenPaper(papers, read, p.id) ? (
-            <button key={p.id} type="button" class={cls} aria-label={p.lines[0]?.text} onClick={() => setPaper(p.id)}>{art}</button>
+            <button key={p.id} type="button" class={cls} aria-label={p.lines[0]?.text} onClick={() => openPaper(p.id)}>{art}</button>
           ) : (
             <div key={p.id} class={cls} role="img" aria-label={p.lines[0]?.text} aria-disabled="true">{art}</div>
           );

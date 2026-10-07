@@ -175,6 +175,23 @@ describe("the landlady's words", () => {
   });
 });
 
+describe("the desk at a glance", () => {
+  it("each paper is seen in full with nothing typed; the knock comes and the door opens on the landlady", () => {
+    const fresh = createQuiet({ course, core: createCore(course, newGame(course), { now, rng: mulberry32(1) }), now, lab: true, openingChoice: memory() });
+    fresh.setName("Alex");
+    for (const p of deskPapers(course).filter((p) => p.required?.length !== 0)) {
+      fresh.glancePaper(p.id);
+      expect(fresh.readPapers().has(p.id), p.id).toBe(true);
+      expect(fresh.deskAt(p.id), p.id).toBe(paperSyllables(p).length);
+    }
+    fresh.leaveDesk();
+    expect(fresh.core.state.run?.scene).toBe("room-wake");
+    // Words seen on the desk are the ones the door's clues name.
+    expect(fresh.t(cardLabel(course, fresh.openingChoices(), "id")!)).toContain("김민준");
+    expect(fresh.t(cardLabel(course, fresh.openingChoices(), "bill")!)).toContain("방세");
+  });
+});
+
 describe("experiment boundary and durable choice format", () => {
   afterEach(() => installPageStorage(undefined as never));
   it("uses native accepted alts only in a lab course without mutating the main course", () => {
