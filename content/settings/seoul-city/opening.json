@@ -159,7 +159,9 @@
   }
  },
  "directions": {
+  "room-minjun:who": "door-room-minjun-who-direction",
   "room-minjun:english": "door-room-minjun-english-direction",
+  "room-minjun:minjun": "door-room-minjun-minjun-direction",
   "room-minjun:why": "door-room-minjun-why-direction",
   "room-minjun:together": "door-room-minjun-together-direction",
   "room-minjun:leave": "door-room-minjun-leave-direction"
@@ -177,9 +179,6 @@
   "glasses": {
    "label": "card-glasses"
   },
-  "leaving": {
-   "label": "card-leaving"
-  },
   "message": {
    "label": "card-message",
    "learned": {
@@ -187,30 +186,6 @@
     "option": "reply",
     "label": "card-message-learned"
    }
-  },
-  "staring": {
-   "label": "card-staring"
-  },
-  "waiting": {
-   "label": "card-waiting"
-  },
-  "handshake": {
-   "label": "card-handshake"
-  },
-  "together": {
-   "label": "card-together"
-  },
-  "grandpa": {
-   "label": "card-grandpa"
-  },
-  "arm": {
-   "label": "card-arm"
-  },
-  "bench": {
-   "label": "card-bench"
-  },
-  "korean": {
-   "label": "card-korean"
   },
   "phrase-bye": {
    "label": "card-phrase-bye"
@@ -243,96 +218,20 @@
    ],
    "right": "phrase-bye",
    "thought": "thought-room-wake-bye"
-  },
-  "room-minjun:who": {
-   "cards": [
-    "staring",
-    "message",
-    "id"
-   ],
-   "right": "staring",
-   "thought": "thought-room-minjun-who"
-  },
-  "room-minjun:minjun": {
-   "cards": [
-    "id",
-    "bill",
-    "message"
-   ],
-   "right": "id",
-   "thought": "thought-room-minjun-minjun"
-  },
-  "room-minjun:english": {
-   "cards": [
-    "book",
-    "id",
-    "message"
-   ],
-   "right": "book",
-   "thought": "thought-room-minjun-english"
-  },
-  "room-minjun:why": {
-   "cards": [
-    "waiting",
-    "message",
-    "bill"
-   ],
-   "right": "waiting",
-   "thought": "thought-room-minjun-why"
-  },
-  "room-minjun:together": {
-   "cards": [
-    "handshake",
-    "bill",
-    "message"
-   ],
-   "right": "handshake",
-   "thought": "thought-room-minjun-together"
-  },
-  "room-minjun:leave": {
-   "cards": [
-    "together",
-    "bill",
-    "message"
-   ],
-   "right": "together",
-   "thought": "thought-room-minjun-leave"
-  },
-  "street-introductions:park": {
-   "cards": [
-    "grandpa",
-    "id",
-    "together"
-   ],
-   "right": "grandpa",
-   "thought": "thought-street-introductions-park"
-  },
-  "street-introductions:friend": {
-   "cards": [
-    "arm",
-    "id",
-    "bill"
-   ],
-   "right": "arm",
-   "thought": "thought-street-introductions-friend"
-  },
-  "street-introductions:sit": {
-   "cards": [
-    "bench",
-    "arm",
-    "grandpa"
-   ],
-   "right": "bench",
-   "thought": "thought-street-introductions-sit"
-  },
-  "street-introductions:understand": {
-   "cards": [
-    "korean",
-    "book",
-    "together"
-   ],
-   "right": "korean",
-   "thought": "thought-street-introductions-understand"
   }
- }
+ },
+ "understood": [
+  "room-minjun:english",
+  "room-minjun:minjun",
+  "room-minjun:why",
+  "room-minjun:together",
+  "room-minjun:leave",
+  "street-introductions:park",
+  "street-introductions:friend",
+  "street-introductions:sit",
+  "street-introductions:understand"
+ ],
+ "confused": [
+  "room-minjun:who"
+ ]
 }

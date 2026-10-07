@@ -28,10 +28,10 @@
    }
   },
   {
-   "id": "minjun",
+   "id": "english",
    "slots": {},
    "expect": {
-    "action": "minjun"
+    "action": "english"
    },
    "hinges": [],
    "pay": 0,
@@ -45,10 +45,10 @@
    }
   },
   {
-   "id": "english",
+   "id": "minjun",
    "slots": {},
    "expect": {
-    "action": "english"
+    "action": "minjun"
    },
    "hinges": [],
    "pay": 0,

@@ -131,13 +131,23 @@ describe("the real scribe scenes (ko-seoul build)", () => {
     }
   });
 
-  it("work out EVERY line from cards: 2 to 4 known cards, one right, a thought; every slip maps back to its line", () => {
+  it("think at the landlady's door; confused at Min-jun's first line; understood from the moment he speaks English", () => {
+    const profile = (built as CourseExtra).labOpening!;
+    expect(Object.keys(profile.deduce ?? {})).toEqual(["room-wake:call", "room-wake:message", "room-wake:bye"]);
+    expect(profile.confused).toEqual(["room-minjun:who"]);
+    const lines = scenes.flatMap((s) => s.exchanges.map((ex) => `${s.id}:${ex.id}`));
+    const from = lines.indexOf("room-minjun:english");
+    expect(from).toBe(lines.indexOf("room-minjun:who") + 1);
+    expect(profile.understood).toEqual(lines.slice(from));
+  });
+
+  it("work out the thinking lines from cards: 2 to 4 known cards, one right, a thought; every slip maps back to its line", () => {
     const profile = (built as CourseExtra).labOpening!;
     const t = makeText(built.learnerFtl, built.learner);
     for (const s of scenes) for (const ex of s.exchanges) {
       const key = `${s.id}:${ex.id}`;
       const d = profile.deduce?.[key];
-      expect(d, key).toBeDefined();
+      if (!d) continue;
       expect(d!.cards.length, key).toBeGreaterThanOrEqual(2);
       expect(d!.cards.length, key).toBeLessThanOrEqual(4);
       expect(d!.cards.filter((c) => c === d!.right), key).toHaveLength(1);

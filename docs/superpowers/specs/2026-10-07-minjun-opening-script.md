@@ -21,6 +21,16 @@ Cast for the opening: the landlady, Min-jun, and Grandpa Park. No one else.
 | The book | the desk: name inside the cover | Same name, 김민준. His English textbook, notes in the margins. |
 | A sentence you don't understand | the door | The landlady's words, as sounds you can't read yet: 방세 내세요. |
 
+## Where you think, and where you don't
+
+1. **The desk teaches the words.** Nothing to type: you see each paper, its sounds and its English.
+2. **The landlady: you think.** Her three lines are worked out from clue cards.
+3. **Min-jun's first line: you're confused.** No cards, no meaning. You point at yourself and say your name.
+4. **He sees his book: "My book." In English.** From this line on, nothing is worked out: he gives it to you in
+   English, and you just answer.
+5. **Grandpa Park: no thinking.** Min-jun is beside you.
+6. **The merchant is the final boss:** typed, big reward, later.
+
 ## Deduction: clues before answers
 
 You don't understand Korean, so you work it out the way the newer Genshin stories do: from clues.

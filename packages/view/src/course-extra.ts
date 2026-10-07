@@ -92,8 +92,12 @@ export interface OpeningProfile {
   arrival?: { scene: string; choice: string; branches: Partial<Record<OpeningOption, OpeningArrival>>; fallback: OpeningArrival };
   directions: Record<string, string>;
   cards?: Record<string, OpeningCard>;
-  /** Keyed `scene:exchange`, like `choices`: every line of an opening scene is worked out this way when present. */
+  /** Keyed `scene:exchange`, like `choices`: the lines the player works out from cards. */
   deduce?: Record<string, OpeningDeduction>;
+  /** Lines understood outright (Min-jun says it in English too): their meaning is shown, nothing to work out. */
+  understood?: string[];
+  /** Lines the player can't understand yet and isn't meant to: no cards, no meaning, just answer as best you can. */
+  confused?: string[];
 }
 export type ScribeAccepts = Record<string, { meaning: string; fragments: string[] }>;
 

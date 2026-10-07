@@ -92,9 +92,17 @@ export function compileOpening(source: OpeningSource, course: Course, messages: 
       if (!d.cards?.includes(d.right)) errors.push(`opening.json: deduction "${key}": the right card "${d.right}" is not one of its cards`);
       if (new Set(d.cards).size !== d.cards?.length) errors.push(`opening.json: deduction "${key}" repeats a card`);
     }
-    // Every line of an opening scene is worked out from cards: none is left to the typed field.
+    const understood = new Set(profile.understood ?? []);
+    const confused = new Set(profile.confused ?? []);
+    for (const [name, keys] of [["understood", understood], ["confused", confused]] as const) for (const key of keys) {
+      if (!exchange(key) || !profile.scenes[key.split(":")[0]]) errors.push(`opening.json: "${key}" is ${name} but is not a line of an opening scene`);
+      if (profile.deduce[key]) errors.push(`opening.json: "${key}" is both worked out and ${name}`);
+    }
+    for (const key of confused) if (understood.has(key)) errors.push(`opening.json: "${key}" is both understood and confused`);
+    // Every line of an opening scene is worked out from cards, understood outright, or plain confusion: none is typed.
     for (const id of Object.keys(profile.scenes)) for (const ex of scene(id)?.exchanges ?? []) {
-      if (!profile.deduce[`${id}:${ex.id}`]) errors.push(`opening.json: no deduction for "${id}:${ex.id}"`);
+      const key = `${id}:${ex.id}`;
+      if (!profile.deduce[key] && !understood.has(key) && !confused.has(key)) errors.push(`opening.json: "${key}" is neither worked out, understood nor confused`);
     }
   }
   for (const [key, id] of Object.entries(profile.directions)) {

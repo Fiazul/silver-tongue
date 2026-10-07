@@ -220,7 +220,9 @@ scene-street-introductions-start = Min-jun walks you down to the old man on the 
 scene-street-introductions-end = Min-jun checks his phone. "Class," he says in English, and points at you: "See you at home." Then he's gone up the alley. Grandpa Park pats the bench beside him: from now on, he's your teacher.
 
 # Min-jun's English, said before his Korean line.
-door-room-minjun-english-direction = He sees his book in your hand. "My book," he says, in English.
+door-room-minjun-who-direction = He says something, sharp and quick. You don't understand a word of it. You point at yourself.
+door-room-minjun-minjun-direction = "Min-jun," he says in English, tapping his chest.
+door-room-minjun-english-direction = He sees his book in your hand. "My book," he says. In English! He speaks English.
 door-room-minjun-why-direction = He waits for you to explain. The landlady's words are still going round in your head.
 door-room-minjun-together-direction = He taps the book, then you. "You teach English," he says, in English. "I teach Korean."
 door-room-minjun-leave-direction = "Grandpa Park," he says in English, pointing down at the street. "He helps."
@@ -242,7 +244,7 @@ door-room-wake-bye-reply-reaction = She smiles at the right goodbye.
 door-room-wake-bye-alt1-reaction = She laughs and goes anyway.
 door-room-wake-bye-silence-reaction = She doesn't wait for an answer.
 door-room-minjun-who-reply-reaction = He repeats your name, more confused than before.
-door-room-minjun-who-alt1-reaction = "No?" he says in English. "No who?" He almost laughs.
+door-room-minjun-who-alt1-reaction = He blinks. Whatever he asked, that wasn't the answer.
 door-room-minjun-who-silence-reaction = He looks at you, at the open door, and back at you.
 door-room-minjun-minjun-reply-reaction = He shakes your hand, still baffled.
 door-room-minjun-minjun-alt1-reaction = He laughs. You've only just met.
@@ -277,33 +279,14 @@ card-id = The ID card: 김민준
 card-bill = The note on the desk: 방세 50,000원
 card-book = The book's cover: 영어
 card-glasses = Her glasses, pushed up on her head
-card-leaving = She's turning to go
 card-phrase-bye = The book's page: 안녕히 계세요, goodbye (I'm off)
 card-message = Her words: 방세 내세요
 card-message-learned = Her words: 방세 내세요. Pay the rent!
-card-staring = He's frozen in the doorway, staring at you
-card-waiting = He's waiting for you to explain
-card-handshake = He taps the book, then you
-card-together = 같이: the word from his deal
-card-grandpa = 할아버지: who Min-jun took you to see
-card-arm = Min-jun's arm round your shoulders
-card-bench = He pats the bench beside him
-card-korean = 한국어: Min-jun's word, from the deal
 
 # What you work out when the right one fits.
 thought-room-wake-call = 민준… 김민준, the name on the ID. She's asking if I'm him.
 thought-room-wake-message = 방세: the word on the note. Something about the note, for Min-jun.
 thought-room-wake-bye = 안녕히 계세요: it's on the book's page. Goodbye. She's the one leaving.
-thought-room-minjun-who = He's asking who I am.
-thought-room-minjun-minjun = 민준: the name on the ID. He's Min-jun, and this is his room.
-thought-room-minjun-english = 영어: the word on the book's cover. English! It's his book, and he's asking if I know English.
-thought-room-minjun-why = He's asking what's going on.
-thought-room-minjun-together = Korean, together: he teaches me Korean, I teach him English.
-thought-room-minjun-leave = 같이: together. He wants me to come with him, to see someone.
-thought-street-introductions-park = 할아버지: this is who Min-jun meant. His name is Park.
-thought-street-introductions-friend = 민준, and an arm round my shoulders. He's asking if I'm Min-jun's friend.
-thought-street-introductions-sit = He's offering me a seat.
-thought-street-introductions-understand = 한국어: Korean. He's asking if I know any.
 
 # What room-rent remembers of Min-jun's first question: how the landlady has your name.
 door-room-minjun-who-named-later = Your name is in her ledger now. Min-jun must have told her.

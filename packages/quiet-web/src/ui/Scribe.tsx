@@ -66,6 +66,16 @@ export function deductionFor(q: Quiet) {
   return ex && openingProfile(q.course)?.deduce?.[`${run.scene}:${ex.id}`];
 }
 
+const lineKey = (q: Quiet): string | undefined => {
+  const run = q.core.state.run;
+  const ex = run && q.course.scenes.find((s) => s.id === run.scene)?.exchanges[run.exchange];
+  return ex ? `${run!.scene}:${ex.id}` : undefined;
+};
+/** Whether the line on stage is understood outright (said in English too): its meaning shows, nothing to work out. */
+export const understoodNow = (q: Quiet): boolean => !!openingProfile(q.course)?.understood?.includes(lineKey(q) ?? "");
+/** Whether the line on stage is one the player can't understand yet: no cards, no meaning, just answer. */
+export const confusedNow = (q: Quiet): boolean => !!openingProfile(q.course)?.confused?.includes(lineKey(q) ?? "");
+
 /**
  * Working out their line, the way a detective does: clues and memories float up, and the one that fits gives a thought.
  * A card that doesn't fit shakes and dims; nothing is lost. Help gives the line's meaning, never what to answer.
@@ -127,7 +137,9 @@ export function ScribeTheir({ q, ex, held, onWord, children }: {
   const round = useRound(q, ex)!;
   const line = ex.shown;
   const meaning = lineMeaning(line);
-  const solved = round.solved || !meaning;
+  const understood = understoodNow(q);
+  const confused = confusedNow(q);
+  const solved = round.solved || !meaning || understood || confused;
   const segs = romanSegments(line);
   const run = q.core.state.run!;
   const source = course.scenes.find((s) => s.id === run.scene)!.exchanges[run.exchange].id;
@@ -135,7 +147,7 @@ export function ScribeTheir({ q, ex, held, onWord, children }: {
   const sounded = soundedTokens(course, q.readPapers(), line);
   const deduce = deductionFor(q);
   // Working a line out from cards: no word is glossed until it is understood, or the cards would be pointless.
-  const glosses = scribeScene(q.course, run.scene)?.glosses || (!solved && round.help >= 1) || (!!deduce && solved);
+  const glosses = scribeScene(q.course, run.scene)?.glosses || (!solved && round.help >= 1) || (!!deduce && solved) || understood;
   // Help first, hands off later: a word never met shows its gloss, a met one only when help asks.
   const fresh = freshOnce(q, `${course.id}:${ex.line.id}:line`, () => freshOnTheirLine(ex.shown, q.core.state.words, ex.line.line ?? ex.shown));
   const set = (change: Partial<Round>) => updateRound(q, course.id, ex.line.id, change);
@@ -156,7 +168,7 @@ export function ScribeTheir({ q, ex, held, onWord, children }: {
             ) : (
               <span key={i} class="sw">
                 <button type="button" class={`w${s.token !== undefined && sounded.has(s.token) ? " sounded" : ""}`} onClick={(e) => (e.stopPropagation(), onWord(s.word!, s.surface ?? s.text, e.currentTarget))}>{s.text}</button>
-                {(glosses || (!deduce && fresh.has(s.word))) && <span class="sw-g">{displayGloss(course.words[s.word])}</span>}
+                {(glosses || (!deduce && !confused && fresh.has(s.word))) && <span class="sw-g">{displayGloss(course.words[s.word])}</span>}
               </span>
             ),
           )}
@@ -170,6 +182,11 @@ export function ScribeTheir({ q, ex, held, onWord, children }: {
           </>
         ) : (
           !held && <Thoughts key={`${run.scene}:${source}`} q={q} exKey={`${run.scene}:${source}`} round={round} set={set} meaning={meaning} />
+        )
+      ) : confused ? (
+        // Not understood, and not meant to be: the meaning only if asked for.
+        round.help >= 2 ? <p class="say-mean">{t("quiet-hint-meaning", { meaning })}</p> : (
+          <div class="read-tools"><button type="button" class="help" onClick={() => set({ help: 2 })}>? {t("quiet-read-help")}</button></div>
         )
       ) : solved ? (
         meaning && <p class="say-mean">{meaning}</p>
@@ -219,7 +236,7 @@ export function ScribeSlips({ q, view, ex }: { q: Quiet; view: QuietView; ex?: E
   const round = useRound(q, ex);
   const p = view.phase;
   if (p.kind !== "pick" || !ex || !round) return null;
-  if (!round.solved && lineMeaning(ex.shown)) return null;
+  if (!round.solved && lineMeaning(ex.shown) && !understoodNow(q) && !confusedNow(q)) return null;
   const run = q.core.state.run!;
   const source = q.course.scenes.find((s) => s.id === run.scene)!.exchanges[run.exchange].id;
   const accepts = (o: RenderedLine) => scribeAccepts(q.course, run.scene, scribeReplyId(q.course, run.scene, source, o, q.core.state.player), q.core.state.player);
