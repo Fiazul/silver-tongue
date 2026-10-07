@@ -336,6 +336,11 @@ export function createQuiet(opts: QuietOptions): Quiet {
             const arrival = openingArrival(course, choices)!;
             push({ text: t(choices.cardRead && arrival.decodedText ? arrival.decodedText : arrival.text), tone: "narr" }, speech(arrival.audio));
           }
+          // An opening choice that a later scene remembers: said as that scene opens, before anyone speaks.
+          if (experiment && !resuming) for (const [key, option] of Object.entries(choices.options)) {
+            const effect = effects[key]?.[option];
+            if (effect?.consequence && effect.at === e.scene) push({ text: t(effect.consequence), tone: "narr" });
+          }
           break;
         case "lineSpoken":
           if (!resuming && profile && scene) {
@@ -414,10 +419,6 @@ export function createQuiet(opts: QuietOptions): Quiet {
           {
             const end = `scene-${e.scene}-end`;
             if (t.has(end)) push({ text: t(end), tone: "narr" });
-          }
-          if (experiment) for (const [key, option] of Object.entries(choices.options)) {
-            const effect = effects[key]?.[option];
-            if (effect?.consequence && effect.at === e.scene) push({ text: t(effect.consequence), tone: "narr" });
           }
           closing = { from: finished.to, to: nextId };
           break;

@@ -62,7 +62,7 @@ export type SceneExtra = Omit<Scene, "exchanges"> & { exchanges: ExchangeExtra[]
 export type OpeningOption = "reply" | "alt1" | "alt2" | "silence";
 export interface OpeningEffect {
   reaction: string;
-  /** Optional later line, shown at the end of scene `at`: only where the choice changes something the player can see later. */
+  /** Optional later line, said as scene `at` opens: only where the choice changes something the player meets later. */
   consequence?: string;
   at?: string;
   /** Resolved from content-declared word references by the builder. */

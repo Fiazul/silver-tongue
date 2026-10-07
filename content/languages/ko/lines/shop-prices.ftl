@@ -4,7 +4,6 @@
 welcome = 어서 오세요.
 welcome-reply = 안녕하세요.
 welcome-alt1 = 안녕히 가세요.
-welcome-alt2 = 누구세요?
 
 bread = 빵 있어요.
 bread-reply = 이거 주세요.
@@ -19,17 +18,13 @@ milk-alt2 = 우유 없어요.
 total = 네, 빵, 우유.
 total-reply = 얼마예요?
 total-alt1 = 이거 뭐예요?
-total-alt2 = 누구세요?
 
 price = 천 원, 천 원!
 price-reply = 네?
 price-alt1 = 이거 뭐예요?
-price-alt2 = 좋아요!
 
 again = 빵 천 원, 우유 천 원!
 again-reply = 천천히 말해 주세요.
-again-alt1 = 우유 없어요.
-again-alt2 = 좋아요!
 
 slow = 빵…… 천 원. 우유…… 천 원.
 slow-reply = 네, 여기 있어요.
@@ -44,4 +39,3 @@ change-alt2 = 안녕히 가세요.
 bye = 안녕히 가세요.
 bye-reply = 안녕히 계세요.
 bye-alt1 = 안녕히 가세요.
-bye-alt2 = 이거 뭐예요?

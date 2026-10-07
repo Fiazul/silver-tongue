@@ -25,6 +25,12 @@ export function compileOpening(source: OpeningSource, course: Course, messages: 
     const [id, line, ...rest] = key.split(":");
     return rest.length ? undefined : scene(id)?.exchanges.find((ex) => ex.id === line);
   };
+  /** Whether scene `id` can only be played after scene `before`. */
+  const follows = (id: string, before: string): boolean => {
+    const seen = new Set<string>();
+    const walk = (at: string): boolean => (scene(at)?.after ?? []).some((prev) => prev === before || (!seen.has(prev) && (seen.add(prev), walk(prev))));
+    return walk(id);
+  };
   const message = (id: string) => { if (!messages.has(id)) errors.push(`opening.json: missing message "${id}"`); };
   for (const [id, style] of Object.entries(profile.scenes)) {
     if (!scene(id)) errors.push(`opening.json: unknown scene "${id}"`);
@@ -37,7 +43,12 @@ export function compileOpening(source: OpeningSource, course: Course, messages: 
       const alt = /^alt([1-3])$/.exec(option);
       if (option !== "reply" && option !== "silence" && (!alt || !ex || Object.values(ex.variants).some((v) => !v.alts?.[Number(alt[1]) - 1]))) errors.push(`opening.json: unknown option "${key}/${option}"`);
       message(effect.reaction);
-      if (effect.consequence !== undefined) { message(effect.consequence); if (!effect.at || !scene(effect.at)) errors.push(`opening.json: unknown consequence scene "${effect.at}"`); }
+      if (effect.consequence !== undefined) {
+        message(effect.consequence);
+        if (!effect.at || !scene(effect.at)) errors.push(`opening.json: unknown consequence scene "${effect.at}"`);
+        // It is said as that scene opens, so the scene must come after the choice.
+        else if (!follows(effect.at, key.split(":")[0])) errors.push(`opening.json: consequence of "${key}/${option}" is said in "${effect.at}", which does not come after it`);
+      }
     }
   }
   // Every option the player can take in an opening scene needs its reaction: reply, each written wrong reply, silence.

@@ -12,12 +12,10 @@ who = 누구예요?
 who-reply = 저는 { $player }입니다.
 who-alt1 = 민준 씨 친구예요.
 who-alt1-answer = 친구? 네……
-who-alt2 = 배고파요.
 
 borrowed = 민준 씨가 돈을 빌렸어요.
 borrowed-reply = 돈을 빌렸어요?
 borrowed-alt1 = 돈을 냈어요?
-borrowed-alt2 = 배고파요?
 
 debt = 십만 원이에요.
 debt-reply = 십만 원이에요?

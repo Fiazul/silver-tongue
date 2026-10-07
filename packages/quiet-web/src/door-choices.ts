@@ -1,4 +1,4 @@
-// Content-driven lab opening mechanics. Reactions are immediate; consequences appear at the scene end.
+// Content-driven lab opening mechanics. Reactions are immediate; a consequence is said when its later scene opens.
 import { comboKey, personalize, tilePieces, type Course, type GameState, type Input, type RenderedLine } from "@silver-tongue/core";
 import { deskPapers, extra, type OpeningOption } from "@silver-tongue/view";
 import { labMode } from "@silver-tongue/web-common";

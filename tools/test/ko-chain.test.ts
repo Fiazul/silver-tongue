@@ -153,11 +153,10 @@ describe("ko-seoul's stage-1 chain", () => {
 
   it("keeps the fast-question narration to observable speed and gestures", () => {
     const t = makeText(course!.learnerFtl, course!.learner);
-    for (const id of ["scene-street-again-start", "scene-street-introductions-end"]) {
-      const direction = t(id);
-      expect(direction).not.toMatch(/where.*going/i);
-      expect(direction).toMatch(/quick|fast/i);
-    }
+    for (const id of ["scene-street-again-start", "scene-street-introductions-end"]) expect(t(id)).not.toMatch(/where.*going/i);
+    expect(t("scene-street-again-start")).toMatch(/quick|fast/i);
+    // A night can fall between the two (four scenes a day, and the mentor takes one), so the question is set up where it is asked.
+    expect(t("scene-street-introductions-end")).not.toMatch(/quick|fast|asks/i);
   });
 
   it("opens the stall directly after the greeting; it brings only its two food words, and replies use words heard first", () => {

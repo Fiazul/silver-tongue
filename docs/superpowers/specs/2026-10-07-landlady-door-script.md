@@ -10,6 +10,10 @@ Rules every line follows:
   or non-answers. Two or three options plus silence; fewer is fine.
 - Every option gets a believable reaction and the scene moves on. Nothing loops.
 - The player leaves each scene knowing more about where they are, who is who, and what is at stake.
+- A reaction may only refer to what every path has shown. (No "the landlady was right about you" when the player may have
+  told her their name.)
+- Scene openings and endings read right whether or not a night fell in between: a day is four scenes and the mentor
+  takes one, so where the nights fall depends on the player. No "as you stand, he asks…" carried into the next scene.
 
 ## The desk
 
@@ -31,17 +35,17 @@ A woman in slippers holds a bill like the one on the desk. She expected someone 
 | 누구예요? *Who are you?* | {name}입니다. *I'm {name}.* | She repeats your name, trying it out. |
 | | 몰라요. *I don't know.* | She stares: you don't know who you are, either? |
 | | *(silence)* | She sighs and stops asking. |
-| 방세! *Rent!* (taps the bill, holds up one finger: one day) | 네. *OK.* | She nods. Tomorrow, then. |
-| | 아니요. *No.* | 방세! *Rent!* Louder, one finger up. It was not a question. |
+| 방세! *Rent!* (taps the bill) | 네. *OK.* | She nods. She'll be back for it. |
+| | 아니요. *No.* | 방세! *Rent!* Louder. She'll be back for it either way. |
 | | *(silence)* | She presses the bill into your hand. |
 
 Why no "pretend to be him" (네 on the first line): a wrong reply may use only words already met, and 네 is not met yet.
 Why "where" comes before "who": "I don't know" is learned answering "where", then reused as the honest answer to "who".
-Why one finger instead of 내일 (tomorrow): 내일 is above stage 1; the gesture carries the deadline.
+No deadline word: 내일 (tomorrow) is above stage 1, and she comes back for the rent in `room-rent`.
 
 She goes downstairs.
 
-*Now you know:* Min-jun is gone, his rent is 50,000 won, it is due tomorrow, and the wallet on the desk will not cover it.
+*Now you know:* Min-jun is gone, his rent is 50,000 won, she will be back for it, and the wallet on the desk will not cover it.
 An old man on the bench below saw all of it.
 
 ## Outside (the old man)
@@ -77,7 +81,8 @@ Without it: a woman is serving at the stall the old man pointed to.
 | | *(silence)* | You are eating too fast to answer. She laughs. |
 
 With the card she waves away your money: the old man sent you. Without it you pay for the roll.
-When you take out the ID to put the change away, she sees the face on it and goes still. She hands it back without a word.
+As you get up, Min-jun's ID falls out of the Book. She picks it up, sees the face on it, and goes still. She hands it back
+without a word.
 
 *Now you know:* this woman knew Min-jun. She will not say how. (The sibling reveal stays in `stall-family`.)
 
@@ -89,14 +94,22 @@ When you take out the ID to put the change away, she sees the face on it and goe
 | | 안녕하세요. *Hello.* | He nods and taps his chest: Park. |
 | | *(silence)* | He taps his chest: Park. |
 | 이름 뭐예요? *What's your name?* | 저는 {name}입니다. *I'm {name}.* | He repeats it slowly. |
-| | 몰라요. *I don't know.* | He laughs: the landlady was right about you. |
+| | 몰라요. *I don't know.* | He laughs. A stranger with no name, then. |
 | | *(silence)* | He lets it go. |
 | 앉으세요. *Have a seat.* | 감사합니다. *Thank you.* | You sit. |
 | | 아니요. *No.* | He shrugs. The seat stays free. |
 | | *(silence)* | He pats the bench until you sit. |
-| 한국어 알아요? *Do you know Korean?* | 아니요, 몰라요. *No, I don't.* | He slows down for you from now on. |
+| 한국어 알아요? *Do you know Korean?* | 아니요, 몰라요. *No, I don't.* | He nods. An honest answer. |
 | | 네, 알아요. *Yes, I do.* | He tries a fast sentence. You catch none of it. |
 | | *(silence)* | He points at your textbook and nods. |
 | 안녕히 가세요. *Goodbye.* (you are leaving) | 안녕히 계세요. *Goodbye.* (he is staying) | He waves you off. |
 | | 감사합니다. *Thank you.* | He waves you off. |
 | | *(silence)* | He waves you off anyway. |
+
+## Later: what the door is remembered for
+
+The landlady calls you by name in `room-rent` and `room-letter`. If you told her at the door, that is all. If you said
+몰라요 or nothing, `room-rent` opens with: *Your name is in the ledger now. You never told her. Ji-woo must have.*
+(Ji-woo always has it by then: `stall-intro` asks it, and `room-rent` comes after the stall scenes.) Declared in
+`opening.json` as a `consequence` with `at: "room-rent"`; it is said as that scene opens, and the builder rejects a
+consequence in a scene that does not come after its choice.

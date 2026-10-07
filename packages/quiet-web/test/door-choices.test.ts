@@ -74,7 +74,8 @@ describe("every opening action has an effect", () => {
     // A final choice has already ended the scene; otherwise the callback is emitted after reload.
     complete(reloaded);
     const visible = [...texts(q), ...texts(reloaded)];
-    if (effect.consequence) expect(visible).toContain(q.t(effect.consequence));
+    // A consequence belongs to a later scene: never said in the scene of the choice.
+    if (effect.consequence) expect(visible).not.toContain(q.t(effect.consequence));
     expect(q.core.state.scenesDone[scene] || reloaded.core.state.scenesDone[scene]).toBe(1);
   });
 
@@ -120,16 +121,35 @@ describe("every opening action has an effect", () => {
         }
         expect(q.core.state.run).toBeNull();
         expect(q.core.state.scenesDone[scene]).toBe(1);
-        for (const step of sceneSteps) {
-          const later = OPENING_CHOICES[step.key][q.openingChoices()!.options[step.key]]!.consequence;
-          if (later) { expect(texts(q)).toContain(q.t(later)); downstream.push(q.t(later)); }
-        }
       }
       expect(Object.keys(q.openingChoices()!.options)).toHaveLength(8);
       signatures.add(downstream.join("\n"));
     }
     expect(signatures.size).toBe(variants.length);
   }, 120_000);
+});
+
+describe("a choice a later scene remembers", () => {
+  it.each(["reply", "alt1", "silence"] as const)("who/%s: room-rent explains how the landlady has your name only if you never told her", (option) => {
+    const store = memory();
+    const { q } = start("room-wake", 0, true, store);
+    for (const step of ["reply", "reply", option, "reply"] as const) choose(q, step);
+    expect(q.core.state.run).toBeNull();
+    // Skip the days between: every scene before room-rent done, home, a fresh day.
+    const before = ["room-wake", "street-hello", "stall-lead", "street-introductions", "street-again", "street-what", "street-hungry", "shop-prices", "street-numbers", "shop-count", "stall-intro", "stall-shift", "stall-family"];
+    const state: GameState = { ...structuredClone(q.core.state), place: "room", slot: 0, scenesDone: Object.fromEntries(before.map((id) => [id, 1])) };
+    const later = createQuiet({ course, core: createCore(course, state, { now, rng: mulberry32(3) }), now, lab: true, openingChoice: store });
+    clock += 1000;
+    const phase = later.view().phase;
+    if (phase.kind !== "explore") throw new Error(`Expected the room, got ${phase.kind}`);
+    later.choose(phase.menu.findIndex((m) => m.kind === "talk" && m.scene === "room-rent"));
+    const shown = texts(later);
+    const named = later.t("door-room-wake-who-named-later");
+    const greeting = shown.findIndex((text) => text.startsWith("Alex 씨"));
+    expect(greeting).toBeGreaterThan(-1);
+    if (option === "reply") expect(shown).not.toContain(named);
+    else expect(shown.indexOf(named)).toBeGreaterThan(-1), expect(shown.indexOf(named)).toBeLessThan(greeting);
+  });
 });
 
 describe("the old man's card", () => {

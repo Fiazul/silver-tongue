@@ -4,8 +4,6 @@ areyou-reply-intent = Say you're not
 areyou-alt1 = Yes, I'm a student.
 areyou-alt1-intent = Say you are
 areyou-alt1-answer = A student? Sure, sure.
-areyou-alt2 = Welcome.
-areyou-alt2-intent = Welcome him
 
 shop = This is a copy shop.
 shop-reply = A copy shop?
@@ -44,5 +42,3 @@ again-reply = Yes, I'll come again tomorrow.
 again-reply-intent = Promise to come
 again-alt1 = Work tomorrow?
 again-alt1-intent = Ask about work
-again-alt2 = Is it a copy shop?
-again-alt2-intent = Ask what it is

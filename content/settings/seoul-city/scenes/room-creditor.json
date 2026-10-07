@@ -68,6 +68,9 @@
    "alts": {
     "1": {
      "accept": true
+    },
+    "2": {
+     "accept": true
     }
    }
   },

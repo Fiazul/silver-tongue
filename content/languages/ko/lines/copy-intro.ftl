@@ -5,7 +5,6 @@ areyou = 어서 오세요. 학생이에요?
 areyou-reply = 아니요, 학생이 아니에요.
 areyou-alt1 = 네, 학생이에요.
 areyou-alt1-answer = 학생? 네, 네.
-areyou-alt2 = 어서 오세요.
 
 shop = 여기는 복사집이에요.
 shop-reply = 복사집?
@@ -30,4 +29,3 @@ sheets-alt2 = 세 장, 여기 있어요.
 again = 내일 또 와요!
 again-reply = 네, 내일 또 올게요.
 again-alt1 = 내일 일해요?
-again-alt2 = 복사집이에요?

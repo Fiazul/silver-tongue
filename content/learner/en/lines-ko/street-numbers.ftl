@@ -3,24 +3,16 @@ cost-reply = A thousand won, a thousand won.
 cost-reply-intent = Tell him the prices
 cost-alt1 = I don't know.
 cost-alt1-intent = Say you don't know
-cost-alt2 = Yes, thank you.
-cost-alt2-intent = Say yes and thank him
 
 note = This is a thousand won. One.
 note-reply = One?
 note-reply-intent = Repeat the number
-note-alt1 = Milk too, please.
-note-alt1-intent = Ask for milk
-note-alt2 = Good!
-note-alt2-intent = Say it's fine
 
 count = One, two, three.
 count-reply = One, two, three.
 count-reply-intent = Count along
 count-alt1 = Three, two, one.
 count-alt1-intent = Count along
-count-alt2 = Yes, thank you.
-count-alt2-intent = Say yes and thank him
 
 owed = Three! Three thousand won.
 owed-reply = Three thousand won?
@@ -35,8 +27,6 @@ five-reply = One, two, three, four, five!
 five-reply-intent = Count to five
 five-alt1 = One, two, three, four.
 five-alt1-intent = Count to five
-five-alt2 = Hello.
-five-alt2-intent = Say hello
 
 next-a = { $number ->
     [2] One…

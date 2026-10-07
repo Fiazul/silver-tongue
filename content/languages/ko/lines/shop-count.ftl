@@ -19,8 +19,6 @@ count-alt2 = 천 원, 하나.
 
 sorry = 미안해요.
 sorry-reply = 괜찮아요.
-sorry-alt1 = 미안해요.
-sorry-alt2 = 얼마예요?
 
 bye = 안녕히 가세요.
 bye-reply = 안녕히 계세요.

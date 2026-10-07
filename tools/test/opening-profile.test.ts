@@ -8,7 +8,7 @@ function fixture() {
   course.words.w_ni.audio = ["clip-a"];
   course.words.w_hao.audio = ["clip-b"];
   extra(course).papers = [{ id: "kept-card", kind: "card", reward: "connection", lines: [{ id: "heading", text: "test" }] }];
-  const options = Object.fromEntries(["reply", "alt1", "alt2", "silence"].map((option) => [option, { reaction: `reaction-${option}`, consequence: `later-${option}`, at: "intro" }]));
+  const options = Object.fromEntries(["reply", "alt1", "alt2", "silence"].map((option) => [option, { reaction: `reaction-${option}`, consequence: `later-${option}`, at: "shift" }]));
   const source: OpeningSource = {
     scenes: { intro: { glosses: true, prompt: "prompt" } },
     choices: { "intro:greet": options, "intro:menu": { reply: { reaction: "menu-reply" }, silence: { reaction: "menu-silence" } } },
@@ -47,6 +47,11 @@ describe("content-declared opening profile", () => {
     const stray = fixture();
     (stray.source.arrival.branches as Record<string, unknown>).alt3 = { text: "arrive", menu: "menu" };
     expect(compileOpening(stray.source, stray.course, stray.messages).errors).toContain('opening.json: arrival branch "alt3" is not an option of "intro:greet"');
+  });
+  it("rejects a consequence said in a scene that does not come after its choice", () => {
+    const { course, source, messages } = fixture();
+    source.choices["intro:greet"].alt1.at = "intro";
+    expect(compileOpening(source, course, messages).errors).toContain('opening.json: consequence of "intro:greet/alt1" is said in "intro", which does not come after it');
   });
   it("accepts current learner fragments and rejects removed lines or stale meanings", () => {
     const { course } = fixture();

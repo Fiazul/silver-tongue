@@ -25,15 +25,11 @@ count-alt2-intent = Hold up one note
 sorry = Sorry.
 sorry-reply = It's fine.
 sorry-reply-intent = Let it go
-sorry-alt1 = Sorry.
-sorry-alt1-intent = Apologise
-sorry-alt2 = How much is it?
-sorry-alt2-intent = Ask the price
 
 bye = Goodbye.
 bye-reply = Goodbye.
 bye-reply-intent = Take your leave
-bye-alt1 = Goodbye.
+bye-alt1 = Goodbye (you go).
 bye-alt1-intent = See him off
 bye-alt2 = Sorry.
 bye-alt2-intent = Apologise

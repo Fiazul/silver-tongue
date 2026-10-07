@@ -31,10 +31,14 @@
     "reaction": "door-room-wake-who-reply-reaction"
    },
    "alt1": {
-    "reaction": "door-room-wake-who-alt1-reaction"
+    "reaction": "door-room-wake-who-alt1-reaction",
+    "consequence": "door-room-wake-who-named-later",
+    "at": "room-rent"
    },
    "silence": {
-    "reaction": "door-room-wake-who-silence-reaction"
+    "reaction": "door-room-wake-who-silence-reaction",
+    "consequence": "door-room-wake-who-named-later",
+    "at": "room-rent"
    }
   },
   "room-wake:rent": {

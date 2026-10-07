@@ -3,8 +3,6 @@ welcome-reply = Hello.
 welcome-reply-intent = Say hello
 welcome-alt1 = Goodbye.
 welcome-alt1-intent = See him off
-welcome-alt2 = Who is it?
-welcome-alt2-intent = Ask who he is
 
 bread = We have bread.
 bread-reply = This one, please.
@@ -27,24 +25,16 @@ total-reply = How much is it?
 total-reply-intent = Ask the price
 total-alt1 = What's this?
 total-alt1-intent = Ask what it is
-total-alt2 = Who is it?
-total-alt2-intent = Ask who he is
 
 price = Thousandwonthousandwon!
 price-reply = Sorry?
 price-reply-intent = Show you didn't catch it
 price-alt1 = What's this?
 price-alt1-intent = Ask what it is
-price-alt2 = Good!
-price-alt2-intent = Say it's fine
 
 again = Bread's a thousand won, milk's a thousand won!
 again-reply = Please say it slowly.
 again-reply-intent = Ask him to slow down
-again-alt1 = There's no milk.
-again-alt1-intent = Say there's no milk
-again-alt2 = Good!
-again-alt2-intent = Say it's fine
 
 slow = Bread… a thousand won. Milk… a thousand won.
 slow-reply = OK, here you go.
@@ -65,7 +55,5 @@ change-alt2-intent = See him off
 bye = Goodbye.
 bye-reply = Goodbye.
 bye-reply-intent = Take your leave
-bye-alt1 = Goodbye.
+bye-alt1 = Goodbye (you go).
 bye-alt1-intent = See him off
-bye-alt2 = What's this?
-bye-alt2-intent = Ask what it is

@@ -48,26 +48,26 @@ npc-creditor = A man in a suit
 # Scene names for the menu; scene-<id>-start and scene-<id>-end are optional narration.
 scene-room-wake = Answer the door
 scene-room-wake-start = You open the door. A woman in slippers holds a bill like the one on your desk. She was expecting someone else.
-scene-room-wake-end = She goes downstairs. Min-jun is gone, his rent is 50,000 won, and it is due tomorrow. The wallet on the desk won't cover it. Below the window, an old man on a bench saw all of it.
+scene-room-wake-end = She goes downstairs. Min-jun is gone, his rent is 50,000 won, and she'll be back for it. The wallet on the desk won't cover it. Below the window, an old man on a bench saw all of it.
 
 scene-street-hello = Go down to the old man
 scene-street-hello-start = Outside, the old man on the bench waves you over. He heard every word of that.
 scene-street-hello-end = He mimes eating, then points down the alley at a food stall: go.
 scene-street-again = Catch what he said
-scene-street-again-start = Back at the bench, he speaks quickly, too fast to catch.
-scene-street-again-end = He laughs, pulls you back down onto the bench, and nods at the textbook in your hand.
+scene-street-again-start = Grandpa Park calls something to you from his bench, too fast to catch.
+scene-street-again-end = He laughs, pulls you down onto the bench beside him, and nods at the textbook in your hand.
 scene-street-what = Show him your textbook
 scene-street-what-start = Grandpa Park taps the book's cover.
 scene-street-what-end = He folds his newspaper and nods across the alley at the shop.
 scene-street-hungry = Find something to eat
-scene-street-hungry-start = Last night's food didn't go far. Your stomach growls, and Grandpa Park hears it and laughs.
-scene-street-hungry-end = He points across the alley at the shop, then down it, at a tent with steam rising from it.
+scene-street-hungry-start = Your stomach growls: the gimbap is long gone. Grandpa Park hears it and laughs.
+scene-street-hungry-end = He points across the alley at the shop, then down it, at the food stall's steaming tent.
 
 scene-shop-prices = Buy some bread
 scene-shop-prices-start = A bell over the door. A young clerk looks up from a comic book. Bread and milk sit by the till.
 scene-shop-prices-end = He took your five-thousand-won note and dropped one note back in your palm. He's already reading again.
 scene-street-numbers = Show Grandpa Park your change
-scene-street-numbers-start = Grandpa Park saw it all through the shop window. He's waiting outside the door, and holds out his hand for your change.
+scene-street-numbers-start = Grandpa Park saw your shopping through the shop window. He holds out his hand for your change.
 scene-street-numbers-end = He holds up your one note, then three fingers, and glares across the alley at the shop.
 scene-shop-count = Ask for the rest of your change
 scene-shop-count-start = The same clerk, the same comic. You hold up the one note he gave you.
@@ -77,7 +77,7 @@ scene-shop-buy-start = The clerk waves you in without looking up.
 scene-shop-buy-end = He bags it without looking up.
 
 scene-stall-intro = Sit down at the stall
-scene-stall-intro-start = A young woman in an apron runs the stall alone. Three customers on plastic stools are all calling to her at once.
+scene-stall-intro-start = The woman who fed you runs the stall alone today. If she remembers Min-jun's ID, she doesn't show it. Three customers on plastic stools are all calling to her at once.
 scene-stall-intro-end = Ji-woo waves your money away, nods at the customers still waiting, and hands you an apron.
 scene-stall-shift = Work a shift
 scene-stall-shift-start = Customers call their orders over the hiss of the pan.
@@ -86,8 +86,8 @@ scene-stall-family = Take a break with Ji-woo
 scene-stall-family-start = Between customers, Ji-woo takes a photo out of her apron pocket.
 scene-stall-family-end = She puts the photo away and doesn't take it out again. The face in it looked familiar.
 
-scene-room-rent = See what the landlady wants
-scene-room-rent-start = The landlady is waiting outside your door with a ledger.
+scene-room-rent = The landlady is back
+scene-room-rent-start = The landlady is back, as she said she would be, with a ledger.
 scene-room-rent-end = The landlady writes 50,000 on a slip of paper and tapes it to your door.
 
 scene-room-letter = Take the letter
@@ -100,7 +100,7 @@ scene-room-creditor = Answer the knock
 scene-room-creditor-start = Three hard knocks. A man in a suit fills the doorway, looking past you into the room.
 scene-room-creditor-end = He writes something in a little notebook and goes down the stairs slowly, as if he has all the time in the world.
 scene-copy-intro = Look in at the copy shop
-scene-copy-intro-start = The man at the copiers waves you in over the noise.
+scene-copy-intro-start = The man at the copiers is buried in orders. He waves you in over the noise.
 scene-copy-intro-end = He hands you a stack of paper still warm from the machine. You start tomorrow.
 scene-copy-shift = Work at the copy shop
 scene-copy-shift-start = Students come in with books, letters and photos: copy what they ask for, as many as they ask.
@@ -207,12 +207,11 @@ notebook-topic-papers = Things
 
 scene-stall-lead = Go to the food stall
 scene-stall-lead-start = The food stall is busy. A woman works the counter alone.
-scene-stall-lead-end = When you take out the ID, she sees the face on it and goes still. She hands it back without a word.
+scene-stall-lead-end = As you get up, Min-jun's ID falls out of the Book. She picks it up, sees the face on it, and goes still. She hands it back without a word.
 scene-street-introductions = Go back to the old man's bench
-scene-street-introductions-start = On your way back, the old man pats the bench beside him.
-scene-street-introductions-end = You have a full stomach, a rent you can't pay, and a face at the stall that went still at Min-jun's ID. As you stand, Park asks you something, quick as anything.
+scene-street-introductions-start = The old man is on his bench again, and pats the space beside him.
+scene-street-introductions-end = You have a room that isn't yours, a rent you can't pay, and a face at the stall that went still at Min-jun's ID.
 
-asked-idcard = The old man recognised Min-jun on the ID.
 asked-recognition = The woman acknowledged Min-jun.
 
 
@@ -232,12 +231,12 @@ door-street-introductions-park-reply-reaction = He beams at hearing his name.
 door-street-introductions-park-alt1-reaction = He nods and taps his chest: Park.
 door-street-introductions-park-silence-reaction = He taps his chest: Park.
 door-street-introductions-ask-reply-reaction = He repeats your name slowly.
-door-street-introductions-ask-alt1-reaction = He laughs. The landlady was right about you.
+door-street-introductions-ask-alt1-reaction = He laughs. A stranger with no name, then.
 door-street-introductions-ask-silence-reaction = He lets it go.
 door-street-introductions-sit-reply-reaction = You sit.
 door-street-introductions-sit-alt1-reaction = He shrugs. The seat stays free.
 door-street-introductions-sit-silence-reaction = He pats the bench until you sit.
-door-street-introductions-understand-reply-reaction = He nods. He'll remember that.
+door-street-introductions-understand-reply-reaction = He nods. An honest answer.
 door-street-introductions-understand-alt1-reaction = He tries a fast sentence. You catch none of it.
 door-street-introductions-understand-silence-reaction = He points at your textbook and nods.
 door-street-introductions-bye-reply-reaction = He smiles at the right goodbye and waves you off.
@@ -248,9 +247,10 @@ door-street-introductions-bye-silence-reaction = He waves you off anyway.
 door-room-wake-who-reply-reaction = She repeats your name under her breath, trying it out.
 door-room-wake-who-alt1-reaction = She stares. You don't know who you are, either?
 door-room-wake-who-silence-reaction = She sighs and stops asking.
-door-room-wake-rent-reply-reaction = She holds up one finger: one day. Then she nods.
-door-room-wake-rent-alt1-reaction = She says it again, louder, and holds up one finger: one day. It wasn't a question.
-door-room-wake-rent-silence-reaction = She presses the bill into your hand and holds up one finger: one day.
+door-room-wake-who-named-later = Your name is in the ledger now. You never told her. Ji-woo must have.
+door-room-wake-rent-reply-reaction = She nods once. She'll be back for it.
+door-room-wake-rent-alt1-reaction = She says it again, louder. She'll be back for it either way.
+door-room-wake-rent-silence-reaction = She presses the bill into your hand. She'll be back for it.
 door-street-hello-rent-reply-reaction = He nods. He knows that landlady.
 door-street-hello-rent-alt1-reaction = He raises an eyebrow. He heard her.
 door-street-hello-rent-silence-reaction = He reads your face and nods anyway.

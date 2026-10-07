@@ -13,16 +13,12 @@ who-reply-intent = Give your name
 who-alt1 = I'm Min-jun's friend.
 who-alt1-intent = Say you're his friend
 who-alt1-answer = A friend? Right…
-who-alt2 = I'm hungry.
-who-alt2-intent = Say you're hungry
 
 borrowed = Min-jun borrowed money.
 borrowed-reply = He borrowed money?
 borrowed-reply-intent = Check what he did
 borrowed-alt1 = He paid money?
 borrowed-alt1-intent = Say he paid
-borrowed-alt2 = Hungry?
-borrowed-alt2-intent = Ask if he's hungry
 
 debt = It's a hundred thousand won.
 debt-reply = A hundred thousand won?
