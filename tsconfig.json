@@ -23,6 +23,7 @@
   ],
   "exclude": [
     "packages/web-common",
-    "packages/quiet-web"
+    "packages/quiet-web",
+    "packages/market-web"
   ]
 }

@@ -1,0 +1,772 @@
+{
+  "id": "merchant-town",
+  "version": 1,
+  "title": "Silver Tongue",
+  "subtitle": "A place in the town",
+  "locale": "ko",
+  "currency": "₩",
+  "intro": [
+    "You fell asleep over a textbook. You wake in a room that is not yours.",
+    "On the desk, a name: Kim Min-jun. Someone is knocking."
+  ],
+  "cast": {
+    "friend": "Min-jun",
+    "landlord": "The landlady",
+    "elder": "Grandpa Park",
+    "cook": "Ji-woo",
+    "shopkeeper": "The clerk",
+    "trader": "The merchant"
+  },
+  "places": {
+    "home": "Min-jun’s room",
+    "lane": "The alley",
+    "stall": "Ji-woo’s stall",
+    "shop": "Corner shop",
+    "square": "Market square"
+  },
+  "ui": {
+    "name": "What should they call you?",
+    "begin": "Open the door",
+    "continue": "Continue",
+    "next": "What happens next",
+    "journal": "Story so far",
+    "help": "Phrase help",
+    "close": "Close",
+    "send": "Say it",
+    "draft": "Type what you want to say…",
+    "readings": "Show pronunciation",
+    "meanings": "Show meanings",
+    "storySupport": "Story support",
+    "independent": "Independent practice",
+    "supportHint": "Help is part of the game. You can change it at any time.",
+    "prepTitle": "The merchant comes tomorrow",
+    "prepIntro": "A few days pass. You have a friend, a first wage, and a reason to stay. Ji-woo’s stall needs a dependable supply route. Two useful preparations remain before market morning.",
+    "prepLeft": "preparation actions left",
+    "prepEstimate": "Two useful preparations before morning. Reading and looking up words take no extra actions.",
+    "arrive": "Wait for market morning",
+    "waitExplanation": "Advance the game calendar. No real-time wait or extra food/rent charge in this experiment.",
+    "talk": "Talk to the merchant",
+    "leave": "Leave the conversation",
+    "leaveHint": "A conversation that changed something uses one action. Asking several questions does not use extra actions.",
+    "confirm": "Agree to these terms",
+    "offerTitle": "Your proposed deal",
+    "offerHint": "Check the terms before agreeing. Nothing has been paid or reserved yet.",
+    "item": "Work / goods",
+    "quantity": "Quantity",
+    "price": "Merchant pays",
+    "cost": "Your cost",
+    "profit": "Your earnings",
+    "deadline": "By today",
+    "rival": "The rival can offer",
+    "rivalHint": "Match or beat the rival’s price and deliver today. Your resources must make the promise possible.",
+    "marketToday": "Market day",
+    "lastCall": "Last call: one action remains. Finish your current offer before departure.",
+    "visitEstimate": "One game day. Four actions before evening; reading and typing do not run down a timer.",
+    "actions": "actions left today",
+    "fulfill": "Complete your delivery",
+    "fulfillHint": "Carry out your reserved agreement. The merchant honors it even after leaving.",
+    "skipVisit": "End this market day",
+    "nextVisit": "Wait for the next weekly visit",
+    "departed": "The merchant has left",
+    "returnHint": "Your contacts, resources and story progress stay. The next visit is a game-calendar jump, not a week of real waiting.",
+    "tryPhrase": "Use this phrase",
+    "phraseHint": "Insert an editable phrase. It is only spoken when you send it.",
+    "currentNeed": "The current opportunity",
+    "oldTopic": "Ask what happened to the chairs",
+    "noScript": "Understandable questions and offers work. If something is unclear, the merchant asks.",
+    "saved": "Saved in this experiment",
+    "unsaved": "Saving is unavailable. Keep this tab open to continue.",
+    "recovered": "The saved experiment could not be read. It is kept as a backup; a fresh visit is ready.",
+    "newGame": "Start a fresh experiment",
+    "newConfirm": "Start over? Your current experiment is kept as a backup.",
+    "recap": "Where you left off",
+    "resultTitle": "You have a place here",
+    "resultBody": "You helped the town, negotiated a real agreement, and kept your promise. Min-jun still has questions about your English. The next town has questions for you.",
+    "nextTown": "Next: the road beyond town",
+    "nextTownHint": "First town complete. Traveling competitors join the story in the next experiment.",
+    "practiceAgain": "Play another first-town visit",
+    "assistRecord": "You used phrase support. Your story reward is the same.",
+    "soloRecord": "You composed this offer independently.",
+    "unknown": "Ask about the need, price or deadline; then make an offer.",
+    "money": "Wallet",
+    "day": "Day",
+    "parts": [
+      "morning",
+      "midday",
+      "afternoon",
+      "evening"
+    ],
+    "resources": "Things you can offer",
+    "notice": "Town notice",
+    "restartCancel": "Keep playing",
+    "objective": "Your next step",
+    "listen": "Hear this line",
+    "history": "This conversation",
+    "newRequest": "A changed opportunity",
+    "hintQuestions": "Useful questions",
+    "hintOffers": "A possible offer",
+    "restart": "Start over",
+    "cancel": "Keep playing",
+    "loading": "Opening the town…",
+    "loadError": "The town could not load. Reload to try again.",
+    "resumeOffer": "Resume your offer",
+    "pausedOffer": "Your unfinished offer is saved. Resume it to agree, revise, or decline before moving on.",
+    "audioFailed": "This clip could not play. You can keep reading or try it again.",
+    "sound": "Play spoken lines"
+  },
+  "resources": {
+    "chairs": "Used chairs",
+    "cart": "A borrowed delivery cart",
+    "boxes": "Packing boxes"
+  },
+  "story": [
+    {
+      "id": "papers",
+      "place": "home",
+      "text": "The book has Korean phrases with English in the margins. Its owner is learning your language. On the ID: Kim Min-jun. Remember the name; you do not need to memorize the whole page.",
+      "objective": "Recognize whose room this is."
+    },
+    {
+      "id": "knock",
+      "place": "home",
+      "npc": "landlord",
+      "context": "A woman in slippers peers through the doorway. She expected somebody else.",
+      "text": {
+        "text": "민준 씨?",
+        "reading": "Minjun ssi?",
+        "meaning": "Min-jun?"
+      },
+      "choices": [
+        {
+          "id": "honest",
+          "text": "아니요.",
+          "reading": "Aniyo.",
+          "meaning": "No.",
+          "reaction": "She looks past you, then nods. You are not Min-jun. She taps the bill: “방세.” Rent. Somebody owes it."
+        },
+        {
+          "id": "quiet",
+          "text": "…",
+          "reading": "",
+          "meaning": "Stay quiet.",
+          "reaction": "She puts on her glasses, looks again, and laughs at her mistake. She taps the bill: “방세.” Rent. The name on it is Min-jun’s."
+        }
+      ],
+      "words": [
+        {
+          "text": "아니요",
+          "reading": "aniyo",
+          "meaning": "no"
+        },
+        {
+          "text": "방세",
+          "reading": "bangse",
+          "meaning": "rent"
+        }
+      ],
+      "objective": "Answer the woman at the door."
+    },
+    {
+      "id": "first-friend",
+      "place": "home",
+      "npc": "friend",
+      "context": "Keys turn in the door. The man from the ID freezes. Then he sees his book in your hand.",
+      "text": {
+        "text": "누구세요?",
+        "reading": "Nuguseyo?",
+        "meaning": "Who are you?"
+      },
+      "choices": [
+        {
+          "id": "name",
+          "text": "{player}입니다.",
+          "reading": "{player}-imnida.",
+          "meaning": "I’m {player}.",
+          "reaction": "He repeats your name. “My book. You… English?” His surprise turns into an idea."
+        },
+        {
+          "id": "unsure",
+          "text": "몰라요.",
+          "reading": "Mollayo.",
+          "meaning": "I don’t know.",
+          "reaction": "“No name?” he asks in English, almost laughing. You point at yourself and tell him. Then he sees the English in his book."
+        }
+      ],
+      "words": [
+        {
+          "text": "몰라요",
+          "reading": "mollayo",
+          "meaning": "I don’t know"
+        }
+      ],
+      "objective": "Introduce yourself to Min-jun."
+    },
+    {
+      "id": "exchange",
+      "place": "home",
+      "npc": "friend",
+      "context": "“You teach English. I teach Korean,” Min-jun says, tapping the book and then himself.",
+      "text": {
+        "text": "같이 해요?",
+        "reading": "Gachi haeyo?",
+        "meaning": "Shall we do it together?"
+      },
+      "choices": [
+        {
+          "id": "together",
+          "text": "네!",
+          "reading": "Ne!",
+          "meaning": "Yes!",
+          "reaction": "You shake on it. Neither of you has to know everything to be useful to the other."
+        },
+        {
+          "id": "careful",
+          "text": "천천히 해요.",
+          "reading": "Cheoncheonhi haeyo.",
+          "meaning": "Let’s go slowly.",
+          "reaction": "“Slow. Good,” he says. He makes the same request about his English. This is a deal between friends."
+        }
+      ],
+      "words": [
+        {
+          "text": "같이",
+          "reading": "gachi",
+          "meaning": "together"
+        },
+        {
+          "text": "천천히",
+          "reading": "cheoncheonhi",
+          "meaning": "slowly"
+        }
+      ],
+      "objective": "Make a deal between friends."
+    },
+    {
+      "id": "welcome",
+      "place": "lane",
+      "npc": "elder",
+      "context": "Min-jun takes you downstairs. An old man moves his newspaper so you can sit.",
+      "text": {
+        "text": "안녕하세요.",
+        "reading": "Annyeonghaseyo.",
+        "meaning": "Hello."
+      },
+      "choices": [
+        {
+          "id": "hello",
+          "text": "안녕하세요.",
+          "reading": "Annyeonghaseyo.",
+          "meaning": "Hello.",
+          "reaction": "“Grandpa Park,” Min-jun whispers. Park smiles and points down the alley to the food stall. You have an introduction now."
+        },
+        {
+          "id": "thanks",
+          "text": "감사합니다.",
+          "reading": "Gamsahamnida.",
+          "meaning": "Thank you.",
+          "reaction": "Park pats the bench, pleased. Min-jun tells you his name and points out the food stall."
+        }
+      ],
+      "words": [
+        {
+          "text": "감사합니다",
+          "reading": "gamsahamnida",
+          "meaning": "thank you"
+        }
+      ],
+      "objective": "Meet the neighbor who can help."
+    },
+    {
+      "id": "meal",
+      "place": "stall",
+      "npc": "cook",
+      "context": "Ji-woo runs the stall alone. Min-jun introduces you. She sees you staring at the pan.",
+      "text": {
+        "text": "김밥 먹어요?",
+        "reading": "Gimbap meogeoyo?",
+        "meaning": "Would you like some gimbap?"
+      },
+      "choices": [
+        {
+          "id": "food",
+          "text": "네, 주세요.",
+          "reading": "Ne, juseyo.",
+          "meaning": "Yes, please.",
+          "reaction": "She sets a roll down and waves away payment. Min-jun laughs: “My sister.” Your first useful sentence has got you a meal."
+        },
+        {
+          "id": "help",
+          "text": "김밥이 뭐예요?",
+          "reading": "Gimbap-i mwoyeyo?",
+          "meaning": "What is gimbap?",
+          "reaction": "Ji-woo points to a rice roll, cuts it, and gives you a piece. Asking a question got you what you needed."
+        }
+      ],
+      "words": [
+        {
+          "text": "주세요",
+          "reading": "juseyo",
+          "meaning": "please give me"
+        },
+        {
+          "text": "김밥",
+          "reading": "gimbap",
+          "meaning": "a rice roll"
+        }
+      ],
+      "objective": "Get something to eat."
+    },
+    {
+      "id": "change",
+      "place": "shop",
+      "npc": "shopkeeper",
+      "context": "Later, you buy bread. The clerk hands back too little change. Park notices and holds up three fingers.",
+      "text": {
+        "text": "얼마예요?",
+        "reading": "Eolmayeyo?",
+        "meaning": "How much is it?"
+      },
+      "choices": [
+        {
+          "id": "check",
+          "text": "삼천 원이에요?",
+          "reading": "Samcheon won-ieyo?",
+          "meaning": "Is it three thousand won?",
+          "reaction": "The clerk puts his comic down, checks the price and returns the missing note. Knowing the amount changed the transaction."
+        },
+        {
+          "id": "again",
+          "text": "다시 말해 주세요.",
+          "reading": "Dasi malhae juseyo.",
+          "meaning": "Please say it again.",
+          "reaction": "He says the price slowly. Park shows the amount on your receipt. You ask for the missing change and get it back."
+        }
+      ],
+      "words": [
+        {
+          "text": "삼천 원",
+          "reading": "samcheon won",
+          "meaning": "3,000 won"
+        },
+        {
+          "text": "다시",
+          "reading": "dasi",
+          "meaning": "again"
+        }
+      ],
+      "objective": "Check the price and get your change."
+    },
+    {
+      "id": "useful",
+      "place": "stall",
+      "npc": "cook",
+      "context": "Ji-woo has customers waiting. She asks you to help for one short shift.",
+      "text": {
+        "text": "김밥 두 개 주세요.",
+        "reading": "Gimbap du gae juseyo.",
+        "meaning": "Two gimbap, please."
+      },
+      "choices": [
+        {
+          "id": "two",
+          "text": "두 개요.",
+          "reading": "Du gaeyo.",
+          "meaning": "Two.",
+          "reaction": "You carry over two rolls. When the rush ends, Ji-woo counts out your first wage. You helped, rather than just reciting a sentence."
+        },
+        {
+          "id": "check",
+          "text": "두 개예요?",
+          "reading": "Du gaeyeyo?",
+          "meaning": "Is it two?",
+          "reaction": "She holds up two fingers; you check, then bring the order. The job is done, and she pays you the same wage."
+        }
+      ],
+      "reward": 10000,
+      "words": [
+        {
+          "text": "두 개",
+          "reading": "du gae",
+          "meaning": "two items"
+        }
+      ],
+      "objective": "Help Ji-woo with one order."
+    },
+    {
+      "id": "need-route",
+      "place": "stall",
+      "npc": "cook",
+      "context": "At closing, a chair wobbles. Ji-woo needs supplies delivered reliably. Min-jun reads a notice: the weekly merchant will be here soon.",
+      "text": {
+        "text": "오늘 필요해요.",
+        "reading": "Oneul piryohaeyo.",
+        "meaning": "I need it today."
+      },
+      "choices": [
+        {
+          "id": "ask",
+          "text": "뭐가 필요해요?",
+          "reading": "Mwoga piryohaeyo?",
+          "meaning": "What do you need?",
+          "reaction": "Chairs, delivery, packing: different needs, one problem. The merchant can give the town a route for supplies. The clerk and copy-shop man want the same opportunity."
+        },
+        {
+          "id": "time",
+          "text": "언제 필요해요?",
+          "reading": "Eonje piryohaeyo?",
+          "meaning": "When do you need it?",
+          "reaction": "“Today,” Ji-woo says, showing the wobbling chair. Min-jun explains that reliability can matter as much as price."
+        }
+      ],
+      "words": [
+        {
+          "text": "오늘",
+          "reading": "oneul",
+          "meaning": "today"
+        },
+        {
+          "text": "필요해요",
+          "reading": "piryohaeyo",
+          "meaning": "need"
+        }
+      ],
+      "objective": "Find out what the town needs."
+    },
+    {
+      "id": "practice",
+      "place": "lane",
+      "npc": "friend",
+      "context": "Min-jun helps you prepare a real offer. You can ask for help during the merchant conversation too.",
+      "text": {
+        "text": "오늘 배달할 수 있어요.",
+        "reading": "Oneul baedalhal su isseoyo.",
+        "meaning": "I can deliver today."
+      },
+      "choices": [
+        {
+          "id": "try",
+          "text": "오늘 배달할 수 있어요.",
+          "reading": "Oneul baedalhal su isseoyo.",
+          "meaning": "I can deliver today.",
+          "reaction": "“Good. Ask what he needs first,” Min-jun says. The merchant’s stock may change; the useful thing is knowing how to ask and adapt."
+        },
+        {
+          "id": "slow",
+          "text": "다시 말해 주세요.",
+          "reading": "Dasi malhae juseyo.",
+          "meaning": "Please say it again.",
+          "reaction": "He says it slowly and writes it in your Book. Looking up a phrase is part of keeping a conversation going."
+        }
+      ],
+      "words": [
+        {
+          "text": "배달",
+          "reading": "baedal",
+          "meaning": "delivery"
+        },
+        {
+          "text": "할 수 있어요",
+          "reading": "hal su isseoyo",
+          "meaning": "can do"
+        }
+      ],
+      "objective": "Try a phrase you can use with the merchant."
+    }
+  ],
+  "preparation": [
+    {
+      "id": "stock",
+      "resource": "chairs",
+      "count": 2,
+      "text": "Inspect the used chairs",
+      "description": "The clerk points out two sturdy chairs you can supply. Learn the item and condition.",
+      "result": "You can supply two chairs. Min-jun adds 의자 (uija, chair) to your notes. This is an opportunity, not a stock guarantee."
+    },
+    {
+      "id": "cart",
+      "resource": "cart",
+      "count": 1,
+      "text": "Ask Park about delivery",
+      "description": "Borrow his cart and discover why same-day delivery matters.",
+      "result": "Park lends you a cart. Delivery is possible. The merchant’s rivals can deliver today; a promise for tomorrow will lose."
+    },
+    {
+      "id": "boxes",
+      "resource": "boxes",
+      "count": 2,
+      "text": "Visit the copy shop",
+      "description": "Get packing boxes and learn about another town competitor.",
+      "result": "The copy-shop man gives you two boxes. 포장 (pojang) means packing. He is fast, but you can take a small urgent job."
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "chairs",
+      "label": "Chairs for the stall",
+      "item": "의자",
+      "quantity": 2,
+      "resource": "chairs",
+      "cost": 2000,
+      "budget": 6000,
+      "rivalPrice": 5500,
+      "rival": "The clerk",
+      "text": {
+        "text": "의자 두 개 필요해요. 오늘 주세요.",
+        "reading": "Uija du gae piryohaeyo. Oneul juseyo.",
+        "meaning": "I need two chairs. Please bring them today."
+      },
+      "changed": "The clerk has filled the chair order. The merchant now needs somebody to move them. Your earlier question is still remembered.",
+      "hints": [
+        "오늘 오천 원에 할 수 있어요.",
+        "오늘 사천 원에 할 수 있어요."
+      ],
+      "hintMeanings": [
+        "I can do it today for 5,000 won.",
+        "I can do it today for 4,000 won."
+      ]
+    },
+    {
+      "id": "delivery",
+      "label": "Get the chairs to the stall",
+      "item": "배달",
+      "quantity": 1,
+      "resource": "cart",
+      "reusable": true,
+      "cost": 1000,
+      "budget": 5000,
+      "rivalPrice": 4500,
+      "rival": "The clerk",
+      "text": {
+        "text": "오늘 배달할 수 있어요?",
+        "reading": "Oneul baedalhal su isseoyo?",
+        "meaning": "Can you deliver today?"
+      },
+      "changed": "The delivery is arranged. A new customer needs an order packed. The copy-shop man is making an offer.",
+      "hints": [
+        "오늘 삼천 원에 배달할 수 있어요.",
+        "오늘 사천 원에 배달할 수 있어요."
+      ],
+      "hintMeanings": [
+        "I can deliver today for 3,000 won.",
+        "I can deliver today for 4,000 won."
+      ]
+    },
+    {
+      "id": "packaging",
+      "label": "Pack the new order",
+      "item": "포장",
+      "quantity": 2,
+      "resource": "boxes",
+      "cost": 1000,
+      "budget": 5000,
+      "rivalPrice": 4500,
+      "rival": "The copy-shop man",
+      "text": {
+        "text": "포장 두 개 필요해요. 오늘 할 수 있어요?",
+        "reading": "Pojang du gae piryohaeyo. Oneul hal su isseoyo?",
+        "meaning": "I need two packages packed. Can you do it today?"
+      },
+      "changed": "The urgent packing order has been filled. A new chair customer has arrived; this is a new order, not a canceled earlier deal.",
+      "hints": [
+        "오늘 삼천 원에 할 수 있어요.",
+        "오늘 사천 원에 할 수 있어요."
+      ],
+      "hintMeanings": [
+        "I can do it today for 3,000 won.",
+        "I can do it today for 4,000 won."
+      ]
+    }
+  ],
+  "lexicon": {
+    "intents": {
+      "offer": [
+        "할 수 있어요",
+        "할게요",
+        "배달해요",
+        "원에",
+        "원으로"
+      ],
+      "price": [
+        "얼마",
+        "가격"
+      ],
+      "need": [
+        "뭐가 필요",
+        "무엇",
+        "필요해요",
+        "필요한"
+      ],
+      "when": [
+        "언제"
+      ],
+      "recall": [
+        "의자",
+        "가구"
+      ],
+      "decline": [
+        "아니요",
+        "안 할게요"
+      ],
+      "greet": [
+        "안녕하세요"
+      ]
+    },
+    "today": [
+      "오늘"
+    ],
+    "tomorrow": [
+      "내일"
+    ],
+    "negations": [
+      "못",
+      "안 해",
+      "안 할",
+      "안 돼",
+      "없어요",
+      "아니에요",
+      "않",
+      "아니",
+      "없"
+    ],
+    "numbers": [
+      {
+        "text": "삼천 원",
+        "value": 3000
+      },
+      {
+        "text": "사천 원",
+        "value": 4000
+      },
+      {
+        "text": "오천 원",
+        "value": 5000
+      },
+      {
+        "text": "육천 원",
+        "value": 6000
+      },
+      {
+        "text": "팔천 원",
+        "value": 8000
+      },
+      {
+        "text": "만 원",
+        "value": 10000
+      }
+    ],
+    "counts": [
+      {
+        "text": "한 개",
+        "value": 1
+      },
+      {
+        "text": "두 개",
+        "value": 2
+      },
+      {
+        "text": "세 개",
+        "value": 3
+      }
+    ],
+    "countUnits": [
+      "개"
+    ]
+  },
+  "responses": {
+    "greet": {
+      "text": "안녕하세요. 뭘 할 수 있어요?",
+      "reading": "Annyeonghaseyo. Mwol hal su isseoyo?",
+      "meaning": "Hello. What can you do?"
+    },
+    "need": {
+      "text": "오늘 필요해요.",
+      "reading": "Oneul piryohaeyo.",
+      "meaning": "I need it today."
+    },
+    "price": {
+      "text": "{price} 원까지 가능해요.",
+      "reading": "{price} won-kkaji ganeunghaeyo.",
+      "meaning": "I can pay up to {price} won. The rival is asking less."
+    },
+    "when": {
+      "text": "오늘이에요.",
+      "reading": "Oneur-ieyo.",
+      "meaning": "Today."
+    },
+    "clarify": {
+      "text": "얼마예요? 오늘 할 수 있어요?",
+      "reading": "Eolmayeyo? Oneul hal su isseoyo?",
+      "meaning": "Tell me your price and whether you can do it today. Ask for phrase help if you need it."
+    },
+    "negative": {
+      "text": "다시 말해 주세요.",
+      "reading": "Dasi malhae juseyo.",
+      "meaning": "I heard a negative. Please clarify before I reserve anything. You can decline or propose something else."
+    },
+    "unavailable": "You understand the request, but you do not have what you need for this promise. Check your resources, arrange them in town, or ask about the next opportunity.",
+    "late": {
+      "text": "오늘 필요해요. 내일은 안 돼요.",
+      "reading": "Oneul piryohaeyo. Naeireun an dwaeyo.",
+      "meaning": "I need it today. The rival can do today; tomorrow will not work."
+    },
+    "expensive": {
+      "text": "{price} 원에 할 수 있어요?",
+      "reading": "{price} won-e hal su isseoyo?",
+      "meaning": "The rival can do it for {price} won today. Can you match that or offer less?"
+    },
+    "cheap": "That price would not cover your costs. Ask for an amount that lets you keep your promise.",
+    "quantity": {
+      "text": "{quantity} 개 필요해요.",
+      "reading": "{quantity} gae piryohaeyo.",
+      "meaning": "I need {quantity} items. Please check your quantity."
+    },
+    "offer": {
+      "text": "오늘 {price} 원. 맞아요?",
+      "reading": "Oneul {price} won. Majayo?",
+      "meaning": "Today, for {price} won. Is that your offer? Check the written terms below."
+    },
+    "recall": {
+      "text": "그건 끝났어요. 지금은 다른 일이 있어요.",
+      "reading": "Geugeon kkeunnasseoyo. Jigeumeun dareun iri isseoyo.",
+      "meaning": "That earlier order is settled. There is a different job now."
+    },
+    "decline": {
+      "text": "괜찮아요. 다음에 봐요.",
+      "reading": "Gwaenchanayo. Daeume bwayo.",
+      "meaning": "That is all right. See you next time."
+    },
+    "lost": "The merchant packs up at evening. Your progress stays. A weekly return or your reserved delivery is still available.",
+    "success": "Agreed. Your contract is reserved. Later market changes cannot cancel it. Complete the delivery to receive your earnings.",
+    "ready": "The merchant is in the square until evening. You can prepare in town, talk to him, or fulfill your agreement.",
+    "preparation": "The merchant visits tomorrow. Choose two useful preparations, or wait for morning when you are ready.",
+    "fulfilled": "You complete the agreed work. Ji-woo receives her supplies; your earnings arrive. The town has a dependable route now.",
+    "ending": "Min-jun is waiting at the stall.",
+    "reservedUpdate": "Your earlier agreement is reserved. This new opportunity is separate; the merchant still expects you to fulfill your promise.",
+    "night": "The alley quiets for the night. Morning comes: day {day}. Your next step is still waiting."
+  },
+  "ending": [
+    "Ji-woo sets a meal in front of you. “감사합니다,” she says this time. Thank you. The chairs, deliveries and orders are part of a route the town can depend on. Your conversation made it possible.",
+    "Min-jun opens his book. The English sentence he has written is simple: “My friend helped us.” You understand him before he explains. He asks you to tell him, in your new language, how you arrived.",
+    "The merchant leaves an invitation to the next town. Beyond this alley, traveling competitors have their own needs and advantages. For now, you have earned a place here—and a reason to continue."
+  ],
+  "uiLocale": "en",
+  "phrases": [
+    {
+      "text": "뭐가 필요해요?",
+      "reading": "Mwoga piryohaeyo?",
+      "meaning": "What do you need?"
+    },
+    {
+      "text": "얼마예요?",
+      "reading": "Eolmayeyo?",
+      "meaning": "How much is it?"
+    },
+    {
+      "text": "언제 필요해요?",
+      "reading": "Eonje piryohaeyo?",
+      "meaning": "When do you need it?"
+    }
+  ],
+  "voice": "ko-KR-SunHiNeural",
+  "endingPlace": "stall"
+}

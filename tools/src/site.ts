@@ -23,7 +23,7 @@ export function setMeta(html: string, name: string, content: string): string {
 
 /** site/: the quiet terminal at / (a first visit picks Korean, Chinese or Japanese) and those courses, ready for GitHub Pages.
  * `lab`: also site/ko/, the same page one directory down, starting on Korean with the lab flag on (the lab build serves it at /lab/ko/). */
-export function buildSite(repo: string, opts: { lab?: boolean } = {}): void {
+export function buildSite(repo: string, opts: { lab?: boolean; merchant?: boolean } = {}): void {
   const out = join(repo, "site");
   const quietDist = join(repo, "packages", "quiet-web", "dist");
   const courses = join(quietDist, "courses");
@@ -39,9 +39,10 @@ export function buildSite(repo: string, opts: { lab?: boolean } = {}): void {
     page = setMeta(page, "st-courses", "../courses/");
     writeFileSync(join(out, "ko", "index.html"), page);
   }
+  if (opts.merchant) cpSync(join(repo, 'packages', 'market-web', 'dist'), join(out, 'merchant'), { recursive: true });
   writeFileSync(join(out, "courses", "index.json"), JSON.stringify(catalog));
   for (const { id } of catalog) cpSync(join(courses, id), join(out, "courses", id), { recursive: true });
   console.log(`site/: the quiet terminal at /, courses ${SITE_COURSES.join(", ")} at /courses/${opts.lab ? ", lab Korean at /ko/" : ""}`);
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) buildSite(resolve(fileURLToPath(new URL("../..", import.meta.url))), { lab: process.argv.includes("--lab") });
+if (process.argv[1] === fileURLToPath(import.meta.url)) buildSite(resolve(fileURLToPath(new URL("../..", import.meta.url))), { lab: process.argv.includes("--lab"), merchant: process.argv.includes("--merchant") });

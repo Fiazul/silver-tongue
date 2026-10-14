@@ -16,6 +16,11 @@
     "playtest": "tsx tools/src/playtest.ts",
     "audio": "tsx tools/src/audio.ts",
     "build:quiet": "npm run build -w @silver-tongue/quiet-web",
+    "build:merchant": "node packages/market-web/build.mjs",
+    "audio:merchant": "tsx tools/src/merchant-audio.ts",
+    "typecheck:merchant": "tsc -p packages/market-web",
+    "typecheck:experiment": "npm run typecheck && npm run typecheck:merchant",
+    "build:experiment": "npm run build:quiet && npm run build:merchant && tsx tools/src/site.ts --lab --merchant",
     "build:site": "npm run build:quiet && tsx tools/src/site.ts",
     "play": "tsx packages/tui-node/src/main.ts"
   },

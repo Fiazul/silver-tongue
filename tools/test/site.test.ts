@@ -44,4 +44,17 @@ describe("lab site", () => {
     expect(ko).toContain('<meta name="st-courses" content="../courses/" />');
     expect(readFileSync(join(dir, "site", "index.html"), "utf8")).toBe(PAGE);
   });
+
+  it("adds a separate merchant route without replacing either original page", () => {
+    const dir = repo();
+    const experiment = join(dir, 'packages', 'market-web', 'dist');
+    mkdirSync(experiment, { recursive: true });
+    writeFileSync(join(experiment, 'index.html'), '<title>Merchant experiment</title>');
+    writeFileSync(join(experiment, 'content.json'), '{"id":"merchant-town"}');
+    buildSite(dir, { lab: true, merchant: true });
+    expect(readFileSync(join(dir, 'site', 'index.html'), 'utf8')).toBe(PAGE);
+    expect(readFileSync(join(dir, 'site', 'ko', 'index.html'), 'utf8')).toContain('st-lab" content="on');
+    expect(readFileSync(join(dir, 'site', 'merchant', 'index.html'), 'utf8')).toContain('Merchant experiment');
+    expect(readFileSync(join(dir, 'site', 'merchant', 'content.json'), 'utf8')).toBe('{"id":"merchant-town"}');
+  });
 });
