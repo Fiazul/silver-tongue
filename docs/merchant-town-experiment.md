@@ -2,6 +2,8 @@
 
 A separate playable Korean lab: the unfamiliar room, Min-jun's mutual language exchange, food/change/work, preparation, a changing weekly merchant, local competitors, agreed deliveries and the first-town invitation.
 
+Public playable URL: https://fiazul.github.io/silver-tongue/merchant/
+
 Local URL: `http://127.0.0.1:8765/merchant/` when the server below runs. Branch: `lab-merchant-town`. Saves use `silver-tongue-lab-merchant:v1`; main/door lab sessions are not read or written. Restart preserves a backup of this experiment. `/` and `/ko/` still serve their original builds.
 
 ## Build and run

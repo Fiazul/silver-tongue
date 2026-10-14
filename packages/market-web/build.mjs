@@ -1,5 +1,5 @@
 import { build } from 'esbuild';
-import { existsSync, mkdirSync, readFileSync, writeFileSync, cpSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, copyFileSync, rmSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -22,7 +22,13 @@ const contentDir = join(repo, 'content/experiments/merchant-town');
 const content = JSON.parse(readFileSync(join(contentDir, 'ko.json'), 'utf8'));
 if (existsSync(join(contentDir, 'audio.json'))) {
   content.audio = JSON.parse(readFileSync(join(contentDir, 'audio.json'), 'utf8'));
-  cpSync(join(contentDir, 'audio'), join(here, 'dist/audio'), { recursive: true });
+  const audioOut = join(here, 'dist/audio');
+  rmSync(audioOut, { recursive: true, force: true });
+  mkdirSync(audioOut, { recursive: true });
+  for (const file of Object.values(content.audio)) {
+    if (typeof file !== 'string' || !/^[a-f0-9]{16}\.mp3$/.test(file)) throw new Error('Invalid merchant audio filename');
+    copyFileSync(join(contentDir, 'audio', file), join(audioOut, file));
+  }
 }
 writeFileSync(join(here, 'dist/content.json'), JSON.stringify(content));
 console.log('Built isolated merchant experiment; private core source is not included.');
