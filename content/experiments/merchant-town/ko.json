@@ -712,7 +712,7 @@
     "success": "Agreed. Your contract is reserved. Later market changes cannot cancel it. Complete the delivery to receive your earnings.",
     "ready": "The merchant is in the square until evening. You can prepare in town, talk to him, or fulfill your agreement.",
     "preparation": "The merchant visits tomorrow. Choose two useful preparations, or wait for morning when you are ready.",
-    "fulfilled": "I finish the work. Ji-woo gets her supplies. Margin {margin}, bonus {bonus}, total {total}. The town has a dependable route now.",
+    "fulfilled": "The work is done and Ji-woo has her supplies. Margin {margin} won, bonus {bonus} won, total {total} won. The town has a dependable route now.",
     "ending": "Min-jun is waiting at the stall.",
     "reservedUpdate": "Your earlier agreement is reserved. This new opportunity is separate; the merchant still expects you to fulfill your promise.",
     "night": "The alley quiets for the night. Morning comes: day {day}. Your next step is still waiting."

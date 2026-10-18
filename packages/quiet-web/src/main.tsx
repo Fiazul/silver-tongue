@@ -40,7 +40,9 @@ try {
 }
 // Lab page only: all storage under its own prefix (the page shares an origin with the real game).
 const lab = labMode();
-if (lab) kv = labKeyValue(kv, embeddedJourney() ? 'silver-tongue-journey-door:' : DOOR_LAB_PREFIX);
+/** Embedded in the story room (`?journey=1`): a lab page only; the public page ignores the parameter. */
+const journey = lab && embeddedJourney();
+if (lab) kv = labKeyValue(kv, journey ? 'silver-tongue-journey-door:' : DOOR_LAB_PREFIX);
 installPageStorage(kv);
 
 interface Loaded { course: Course; t: Text; sessions: WebSessions; audio: ReturnType<typeof createWebAudio> }
@@ -149,13 +151,13 @@ function play(opened: Opened, prepare?: (q: Quiet) => void) {
     openingChoice: doorExperimentOn(l.course, lab) ? openingStore(l.course, opened.id) : undefined,
   });
   prepare?.(quiet);
-  if (embeddedJourney()) {
+  if (journey) {
     quiet.subscribe(() => reportJourney(doorSnapshot(quiet, opened.id)));
     reportJourney(doorSnapshot(quiet, opened.id));
   }
   current = { id: opened.id, readOnly: opened.readOnly, state: () => core.state };
   const page: Page = {
-    catalog: embeddedJourney() ? catalog.filter(entry => entry.id === l.course.id) : catalog,
+    catalog: journey ? catalog.filter(entry => entry.id === l.course.id) : catalog,
     audioAvailable: l.audio.available,
     get speed() { return speed; },
     setSpeed: (s) => {
@@ -191,7 +193,7 @@ function play(opened: Opened, prepare?: (q: Quiet) => void) {
   };
   render(<App key={`${l.course.id}/${l.course.learner}/${opened.id}/${jumpNonce}`} q={quiet} page={page} />, root);
   setSkipCrawl(false); // taken (or not wanted) by now
-  if (lab && !embeddedJourney()) {
+  if (lab && !journey) {
     devRoot ??= document.body.appendChild(document.createElement("div"));
     render(<DevBadge key={opened.id} q={quiet} jump={jumpTo} />, devRoot);
   }
@@ -240,7 +242,7 @@ function title(courses?: { label: string; pick: () => void }[], error?: string) 
   // Lab page: ?screen=N lands on that screen, whatever was saved.
   const asked = lab && l && !courses && !error ? Number.parseInt(new URLSearchParams(location.search).get("screen") ?? "", 10) : NaN;
   if (asked >= 1) return jumpTo(asked);
-  if (embeddedJourney() && l && !courses && !error && l.sessions.list().length > 0) return play(l.sessions.continueLast());
+  if (journey && l && !courses && !error && l.sessions.list().length > 0) return play(l.sessions.continueLast());
   // A book course's first game starts on its story as the page loads: "New game" would be the only choice.
   if (l && !courses && !error && opensOnStory(l.course, l.sessions.list().length > 0)) return play(l.sessions.startNew());
   const t = l?.t ?? Object.assign((id: string) => id, { has: () => false });

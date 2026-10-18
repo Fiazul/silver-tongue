@@ -28,22 +28,19 @@ def build():
     if not (REPO / 'package.json').is_file():
         raise RuntimeError(f'No silver-tongue checkout at {REPO}: this app must stay in experiments/story-room/.')
     core = merchant_core()
-    candidates = [shutil.which('node'), str(Path.home() / '.local/node22/bin/node')]
-    node = None
-    for candidate in candidates:
-        if candidate and Path(candidate).is_file():
-            version = subprocess.run([candidate, '--version'], capture_output=True, text=True, check=True).stdout.strip()
-            if int(version.lstrip('v').split('.')[0]) >= 22:
-                node = Path(candidate)
-                break
-    if node is None:
-        raise RuntimeError('Building the game requires Node 22 or newer.')
-    env = dict(os.environ, PATH=str(node.parent) + os.pathsep + os.environ.get('PATH', ''), MERCHANT_CORE_DIST=str(core))
-    npm = shutil.which('npm', path=env['PATH'])
+    node = shutil.which('node')
+    if not node:
+        raise RuntimeError('Building the game requires Node 22 or newer on PATH; no node was found.')
+    version = subprocess.run([node, '--version'], capture_output=True, text=True, check=True).stdout.strip()
+    if int(version.lstrip('v').split('.')[0]) < 22:
+        raise RuntimeError(f'Building the game requires Node 22 or newer on PATH; found {version} at {node}.')
+    env = dict(os.environ, MERCHANT_CORE_DIST=str(core))
+    npm = shutil.which('npm')
     if not npm:
         raise RuntimeError('Building the game requires npm.')
     if not (REPO / 'node_modules/esbuild/package.json').exists():
-        # The public core package comes from GitHub Packages: GITHUB_PACKAGES_TOKEN must be set (see CLAUDE.md).
+        # The private core package (@silver-tongue/core) comes from GitHub Packages:
+        # GITHUB_PACKAGES_TOKEN must be set (see the root CLAUDE.md).
         subprocess.run([npm, 'ci', '--ignore-scripts'], cwd=REPO, env=env, check=True)
     for script in ('build:course', 'build:experiment'):
         subprocess.run([npm, 'run', script], cwd=REPO, env=env, check=True)
