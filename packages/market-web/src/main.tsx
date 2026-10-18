@@ -1,3 +1,5 @@
+import { embeddedJourney, reportJourney, type Handoff } from '../../journey/src/bridge';
+import { createContinuedMarket, marketSnapshot } from '../../journey/src/market';
 import { render } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { createMarketGame, restoreMarketState, type MarketContent, type MarketInput, type MarketLine, type MarketMessage, type MarketScenario, type MarketStory } from '@silver-tongue/core/market';
@@ -15,13 +17,15 @@ interface Content extends MarketContent {
   scenarios: (MarketScenario & { label: string; rival: string; hintMeanings: string[] })[];
 }
 const root = document.getElementById('app')!;
-const store = createExperimentStore({ getItem: k => localStorage.getItem(k), setItem: (k, v) => localStorage.setItem(k, v) });
+let handoff: Handoff | undefined;
+let store = createExperimentStore({ getItem: k => localStorage.getItem(k), setItem: (k, v) => localStorage.setItem(k, v) });
 
 function App({ c }: { c: Content }) {
   const initial = useRef(store.load());
   const invalid = useRef(!!initial.current.save && !restoreMarketState(c, initial.current.save.state));
-  const game = useRef(createMarketGame(c, initial.current.save?.state));
+  const game = useRef(handoff ? createContinuedMarket(c, handoff, initial.current.save?.state) : createMarketGame(c, initial.current.save?.state));
   const [s, setState] = useState(game.current.state);
+  useEffect(() => { if (handoff) reportJourney(marketSnapshot(c, s, handoff.session)); }, [s]);
   const [support, setSupport] = useState(initial.current.save?.support ?? true);
   const [pronunciation, setPronunciation] = useState(initial.current.save?.pronunciation ?? true);
   const [sound, setSound] = useState(initial.current.save?.sound ?? true);
@@ -95,7 +99,7 @@ function App({ c }: { c: Content }) {
   };
   const reset = () => {
     store.backup();
-    game.current = createMarketGame(c);
+    game.current = handoff ? createContinuedMarket(c, handoff) : createMarketGame(c);
     setState(game.current.state); setName(''); setOpen(null);
   };
 
@@ -250,6 +254,16 @@ function Modal({ label, closeLabel, onClose, children }: { label: string; closeL
 fetch('content.json', { cache: 'no-cache' }).then(res => {
   if (!res.ok) throw new Error(`Content: ${res.status}`);
   return res.json();
-}).then((content: Content) => render(<App c={content} />, root)).catch(() => {
+}).then(async (content: Content) => {
+  if (embeddedJourney()) {
+    const response=await fetch('/api/journey');
+    if(!response.ok) throw new Error('The saved journey could not load.');
+    const journey=await response.json();
+    if(!journey.handoff) throw new Error('Finish the arrival chapter first.');
+    handoff=journey.handoff;
+    store=createExperimentStore({getItem:k=>localStorage.getItem(k),setItem:(k,v)=>localStorage.setItem(k,v)}, 'silver-tongue-journey-merchant:'+handoff!.session);
+  }
+  render(<App c={content} />,root);
+}).catch(() => {
   root.textContent = 'The town could not load. Reload to try again.';
 });

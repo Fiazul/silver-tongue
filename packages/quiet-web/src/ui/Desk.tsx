@@ -35,7 +35,7 @@ export function Desk({ q, papers, covered, onBook, onSettings }: { q: Quiet; pap
 
   // Back on the desk with every paper read: the desk fades, then the one line.
   useEffect(() => {
-    if (paper || !allRead || leaving) return;
+    if (paper || !allRead) return;
     setLeaving("fade");
     const id = setTimeout(() => setLeaving("knock"), still ? 0 : FADE_MS);
     return () => clearTimeout(id);

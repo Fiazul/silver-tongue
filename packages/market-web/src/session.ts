@@ -4,29 +4,29 @@ export interface ExperimentSave { state: Readonly<MarketState>; support: boolean
 interface StoragePort { getItem(key: string): string | null; setItem(key: string, value: string): void }
 const KEY = 'silver-tongue-lab-merchant:v1';
 
-export function createExperimentStore(storage: StoragePort) {
+export function createExperimentStore(storage: StoragePort, key = KEY) {
   let memory: ExperimentSave | null = null;
   return {
     load(): { save: ExperimentSave | null; recovered: boolean } {
       try {
-        const raw = storage.getItem(KEY);
+        const raw = storage.getItem(key);
         if (!raw) return { save: memory, recovered: false };
         try {
           const value: unknown = JSON.parse(raw);
           if (!value || typeof value !== 'object' || !('state' in value) || typeof (value as ExperimentSave).support !== 'boolean' || typeof (value as ExperimentSave).pronunciation !== 'boolean') throw new Error('Invalid experiment save');
           return { save: value as ExperimentSave, recovered: false };
         } catch {
-          storage.setItem(`${KEY}:backup`, raw);
+          storage.setItem(`${key}:backup`, raw);
           return { save: memory, recovered: true };
         }
       } catch { return { save: memory, recovered: false }; }
     },
     backup() {
-      try { const raw = storage.getItem(KEY); if (raw) storage.setItem(`${KEY}:backup`, raw); } catch { /* The current memory state stays playable. */ }
+      try { const raw = storage.getItem(key); if (raw) storage.setItem(`${key}:backup`, raw); } catch { /* The current memory state stays playable. */ }
     },
     save(value: ExperimentSave): boolean {
       memory = value;
-      try { storage.setItem(KEY, JSON.stringify(value)); return true; }
+      try { storage.setItem(key, JSON.stringify(value)); return true; }
       catch { return false; }
     },
   };

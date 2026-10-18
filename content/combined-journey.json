@@ -1,0 +1,24 @@
+{
+  "arrivalScene": "room-minjun",
+  "marketStart": "welcome",
+  "cast": {
+    "landlady": "The Landlady",
+    "minjun": "Kim Min-jun",
+    "oldman": "Grandpa Park",
+    "jiwoo": "Ji-woo",
+    "clerk": "The Corner Shop Clerk",
+    "labmate": "Su-jin",
+    "copyman": "The Copy Shop Man",
+    "creditor": "The Man in a Suit",
+    "merchant": "The Merchant"
+  },
+  "merchantActors": {
+    "landlord": "landlady",
+    "friend": "minjun",
+    "elder": "oldman",
+    "cook": "jiwoo",
+    "shopkeeper": "clerk",
+    "trader": "merchant"
+  },
+  "traderId": "merchant"
+}

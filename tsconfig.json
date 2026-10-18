@@ -24,6 +24,7 @@
   "exclude": [
     "packages/web-common",
     "packages/quiet-web",
-    "packages/market-web"
+    "packages/market-web",
+    "packages/journey"
   ]
 }

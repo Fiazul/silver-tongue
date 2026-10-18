@@ -19,7 +19,8 @@
     "build:merchant": "node packages/market-web/build.mjs",
     "audio:merchant": "tsx tools/src/merchant-audio.ts",
     "typecheck:merchant": "tsc -p packages/market-web",
-    "typecheck:experiment": "npm run typecheck && npm run typecheck:merchant",
+    "typecheck:journey": "tsc -p packages/journey",
+    "typecheck:experiment": "npm run typecheck && npm run typecheck:merchant && npm run typecheck:journey",
     "build:experiment": "npm run build:quiet && npm run build:merchant && tsx tools/src/site.ts --lab --merchant",
     "build:site": "npm run build:quiet && tsx tools/src/site.ts",
     "play": "tsx packages/tui-node/src/main.ts"
