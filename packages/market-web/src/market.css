@@ -55,6 +55,9 @@ button:hover:not(:disabled) { border-color: var(--accent); }
 .reply .reading, .reply .meaning { color: var(--reading); }
 .message { margin: 0 0 1.2rem; }
 .message.player { color: var(--accent); margin-left: 1.5rem; }
+.message.self { margin-left: .5rem; }
+.inner { font-style: italic; color: var(--muted); font-size: .95rem; padding-left: .8rem; border-left: 2px solid var(--rule); }
+.payout { max-width: 360px; margin: 1.2rem 0; }
 .message.world { color: var(--muted); font-size: .95rem; }
 .message.npc .spoken-text { font-size: 1.15rem; }
 .reaction-beat .message:last-child { margin-top: 2rem; }

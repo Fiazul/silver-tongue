@@ -2,7 +2,7 @@
 
 A separate playable Korean lab: the unfamiliar room, Min-jun's mutual language exchange, food/change/work, preparation, a changing weekly merchant, local competitors, agreed deliveries and the first-town invitation.
 
-Public playable URL: https://fiazul.github.io/silver-tongue/merchant/
+Playable route: `/merchant/` on the lab Pages build.
 
 Local URL: `http://127.0.0.1:8765/merchant/` when the server below runs. Branch: `lab-merchant-town`. Saves use `silver-tongue-lab-merchant:v1`; main/door lab sessions are not read or written. Restart preserves a backup of this experiment. `/` and `/ko/` still serve their original builds.
 
@@ -19,13 +19,13 @@ npm run build:experiment
 python3 -m http.server 8765 --bind 127.0.0.1 --directory site
 ```
 
-`MERCHANT_CORE_DIST=/absolute/path/to/private/core/dist npm run build:merchant` can select another compiled core directory. The experiment's TypeScript config currently points to the sibling checkout's declarations. This is local compiled integration, not a published core release. Normal production typechecks do not require this unpublished entry; `npm run typecheck:experiment` checks it explicitly.
+`MERCHANT_CORE_DIST=/absolute/path/to/private/core/dist npm run build:merchant` selects the compiled core directory for the build only. Typecheck and the flow test use the sibling `st-merchant-core` path. This is local compiled integration, not a published core release. Normal production typechecks do not require this unpublished entry; `npm run typecheck:experiment` checks it explicitly.
 
 ## Play
 
 - Enter a name. Read/answer the compact town story; outcomes stay until you continue.
 - Choose two useful preparations. Chairs/cart is a straightforward supply strategy; cart/boxes supports delivery/packing. Waiting is a voluntary game-calendar jump.
-- Talk to the merchant. Ask about the need, price or deadline; type an offer using Korean script. Phrase help inserts editable text and never sends it automatically.
+- Talk to the merchant. Ask about the need, price or deadline; type an offer using Korean script. Help never suggests an answer: it gives the meaning of the merchant's current line and the Korean words met so far. Opening it during a negotiation marks the turn as assisted. Feedback on a wrong or failed move is your own inner voice (English, dim), never the merchant.
 - A substantive completed encounter uses one action. Returning exposes materially different needs: chairs → delivery → packing → a new chair order. Questions within one encounter do not advance the day.
 - A proposed agreement is checked before commitment. Leaving with an unfinished proposal pauses it; returning or reloading resumes it. Decline with `아니요.` to close it and move on.
 - The rival's price and same-day capability are visible. Quantity, price, available resources and timing matter. A grammar score does not decide victory.
@@ -36,7 +36,7 @@ python3 -m http.server 8765 --bind 127.0.0.1 --directory site
 
 Four actions make one game day. Visits occur on days 7, 14, 21…; two prep activities and one visit day are the chosen calendar model. Approximately 10/30 minutes are unmeasured play-duration targets from the design, not displayed countdown promises. Reading, typing, help, tab switching and offline time do not consume actions. Lost visits can be retried by advancing to the next weekly market without a real-world wait or a rent/food grind.
 
-Meaning, pronunciation and sound support are adjustable. Help gives the same story reward; assisted offers are recorded as assisted rather than independent retrieval. Korean clips are prerecorded local assets; there is no runtime speech service or generated conversation dependency.
+Meaning, pronunciation and sound support are adjustable. Help gives meanings, not answers; assisted offers are recorded as assisted rather than independent retrieval. Finishing the deal pays margin plus a completion bonus (100,000), shown on the result screen. Korean clips are prerecorded local assets; there is no runtime speech service or generated conversation dependency.
 
 ## Audio regeneration
 
@@ -50,7 +50,7 @@ The script excludes personalized player-name utterances from speech synthesis, s
 
 ## Validation and limits
 
-Automated coverage includes alternative successful offers, changed requests, stable active turns, pending/reserved deals, negative/ambiguous/malformed amounts, explicit numeric counts, departures/retries, draft persistence, invalid saves, route isolation and IME Enter guards. The ordinary content builder still checks the existing three courses; experiment content also runs against its compiled core in its own integration tests.
+Automated coverage includes alternative successful offers, changed requests, stable active turns, pending/reserved deals, negative/ambiguous/malformed amounts (Korean numerals are parsed as whole numbers; ambiguous amounts ask for clarification), explicit numeric counts, departures/retries, draft persistence, invalid saves, route isolation and IME Enter guards. The ordinary content builder still checks the existing three courses; experiment content also runs against its compiled core in its own integration tests.
 
 The Korean dialogue and romanization are an authored draft and have not had a native speaker review. The compact experiment is not certified TOPIK coverage or evidence of language retention. Browser width tests do not replace an actual phone keyboard/IME or screen-reader test.
 

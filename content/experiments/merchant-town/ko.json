@@ -30,7 +30,7 @@
     "continue": "Continue",
     "next": "What happens next",
     "journal": "Story so far",
-    "help": "Phrase help",
+    "help": "Help",
     "close": "Close",
     "send": "Say it",
     "draft": "Type what you want to say…",
@@ -85,7 +85,7 @@
     "nextTown": "Next: the road beyond town",
     "nextTownHint": "First town complete. Traveling competitors join the story in the next experiment.",
     "practiceAgain": "Play another first-town visit",
-    "assistRecord": "You used phrase support. Your story reward is the same.",
+    "assistRecord": "You opened help during a negotiation. This offer is recorded as assisted, not as an unaided one.",
     "soloRecord": "You composed this offer independently.",
     "unknown": "Ask about the need, price or deadline; then make an offer.",
     "money": "Wallet",
@@ -103,8 +103,6 @@
     "listen": "Hear this line",
     "history": "This conversation",
     "newRequest": "A changed opportunity",
-    "hintQuestions": "Useful questions",
-    "hintOffers": "A possible offer",
     "restart": "Start over",
     "cancel": "Keep playing",
     "loading": "Opening the town…",
@@ -112,7 +110,15 @@
     "resumeOffer": "Resume your offer",
     "pausedOffer": "Your unfinished offer is saved. Resume it to agree, revise, or decline before moving on.",
     "audioFailed": "This clip could not play. You can keep reading or try it again.",
-    "sound": "Play spoken lines"
+    "sound": "Play spoken lines",
+    "helpMeaning": "Meaning",
+    "helpWords": "Words so far",
+    "helpNoLine": "The merchant has not said anything yet.",
+    "payoutTitle": "Your payout",
+    "margin": "Margin on the deal",
+    "bonus": "Completion bonus",
+    "total": "Total",
+    "helpHeard": "The merchant said"
   },
   "resources": {
     "chairs": "Used chairs",
@@ -516,14 +522,7 @@
         "meaning": "I need two chairs. Please bring them today."
       },
       "changed": "The clerk has filled the chair order. The merchant now needs somebody to move them. Your earlier question is still remembered.",
-      "hints": [
-        "오늘 오천 원에 할 수 있어요.",
-        "오늘 사천 원에 할 수 있어요."
-      ],
-      "hintMeanings": [
-        "I can do it today for 5,000 won.",
-        "I can do it today for 4,000 won."
-      ]
+      "hints": []
     },
     {
       "id": "delivery",
@@ -542,14 +541,7 @@
         "meaning": "Can you deliver today?"
       },
       "changed": "The delivery is arranged. A new customer needs an order packed. The copy-shop man is making an offer.",
-      "hints": [
-        "오늘 삼천 원에 배달할 수 있어요.",
-        "오늘 사천 원에 배달할 수 있어요."
-      ],
-      "hintMeanings": [
-        "I can deliver today for 3,000 won.",
-        "I can deliver today for 4,000 won."
-      ]
+      "hints": []
     },
     {
       "id": "packaging",
@@ -567,14 +559,7 @@
         "meaning": "I need two packages packed. Can you do it today?"
       },
       "changed": "The urgent packing order has been filled. A new chair customer has arrived; this is a new order, not a canceled earlier deal.",
-      "hints": [
-        "오늘 삼천 원에 할 수 있어요.",
-        "오늘 사천 원에 할 수 있어요."
-      ],
-      "hintMeanings": [
-        "I can do it today for 3,000 won.",
-        "I can do it today for 4,000 won."
-      ]
+      "hints": []
     }
   ],
   "lexicon": {
@@ -693,17 +678,9 @@
       "reading": "Oneur-ieyo.",
       "meaning": "Today."
     },
-    "clarify": {
-      "text": "얼마예요? 오늘 할 수 있어요?",
-      "reading": "Eolmayeyo? Oneul hal su isseoyo?",
-      "meaning": "Tell me your price and whether you can do it today. Ask for phrase help if you need it."
-    },
-    "negative": {
-      "text": "다시 말해 주세요.",
-      "reading": "Dasi malhae juseyo.",
-      "meaning": "I heard a negative. Please clarify before I reserve anything. You can decline or propose something else."
-    },
-    "unavailable": "You understand the request, but you do not have what you need for this promise. Check your resources, arrange them in town, or ask about the next opportunity.",
+    "clarify": "I need to say a price in won, and that I can do it today.",
+    "negative": "That sounded like a no. I should say clearly what I will do, or decline.",
+    "unavailable": "I do not have what this job needs. Check my supplies, prepare in town, or wait for the next job.",
     "late": {
       "text": "오늘 필요해요. 내일은 안 돼요.",
       "reading": "Oneul piryohaeyo. Naeireun an dwaeyo.",
@@ -714,12 +691,8 @@
       "reading": "{price} won-e hal su isseoyo?",
       "meaning": "The rival can do it for {price} won today. Can you match that or offer less?"
     },
-    "cheap": "That price would not cover your costs. Ask for an amount that lets you keep your promise.",
-    "quantity": {
-      "text": "{quantity} 개 필요해요.",
-      "reading": "{quantity} gae piryohaeyo.",
-      "meaning": "I need {quantity} items. Please check your quantity."
-    },
+    "cheap": "That price will not cover my costs. I need to ask for more.",
+    "quantity": "That is not the number of items he asked for. I should check the quantity.",
     "offer": {
       "text": "오늘 {price} 원. 맞아요?",
       "reading": "Oneul {price} won. Majayo?",
@@ -739,7 +712,7 @@
     "success": "Agreed. Your contract is reserved. Later market changes cannot cancel it. Complete the delivery to receive your earnings.",
     "ready": "The merchant is in the square until evening. You can prepare in town, talk to him, or fulfill your agreement.",
     "preparation": "The merchant visits tomorrow. Choose two useful preparations, or wait for morning when you are ready.",
-    "fulfilled": "You complete the agreed work. Ji-woo receives her supplies; your earnings arrive. The town has a dependable route now.",
+    "fulfilled": "I finish the work. Ji-woo gets her supplies. Margin {margin}, bonus {bonus}, total {total}. The town has a dependable route now.",
     "ending": "Min-jun is waiting at the stall.",
     "reservedUpdate": "Your earlier agreement is reserved. This new opportunity is separate; the merchant still expects you to fulfill your promise.",
     "night": "The alley quiets for the night. Morning comes: day {day}. Your next step is still waiting."
@@ -750,23 +723,41 @@
     "The merchant leaves an invitation to the next town. Beyond this alley, traveling competitors have their own needs and advantages. For now, you have earned a place here—and a reason to continue."
   ],
   "uiLocale": "en",
-  "phrases": [
+  "voice": "ko-KR-SunHiNeural",
+  "endingPlace": "stall",
+  "merchantWords": [
     {
-      "text": "뭐가 필요해요?",
-      "reading": "Mwoga piryohaeyo?",
-      "meaning": "What do you need?"
+      "text": "얼마",
+      "reading": "eolma",
+      "meaning": "how much"
     },
     {
-      "text": "얼마예요?",
-      "reading": "Eolmayeyo?",
-      "meaning": "How much is it?"
+      "text": "언제",
+      "reading": "eonje",
+      "meaning": "when"
     },
     {
-      "text": "언제 필요해요?",
-      "reading": "Eonje piryohaeyo?",
-      "meaning": "When do you need it?"
+      "text": "뭐",
+      "reading": "mwo",
+      "meaning": "what"
+    },
+    {
+      "text": "원",
+      "reading": "won",
+      "meaning": "won (money)"
+    },
+    {
+      "text": "개",
+      "reading": "gae",
+      "meaning": "item (counter)"
+    },
+    {
+      "text": "의자",
+      "reading": "uija",
+      "meaning": "chair"
     }
   ],
-  "voice": "ko-KR-SunHiNeural",
-  "endingPlace": "stall"
+  "economy": {
+    "completionBonus": 100000
+  }
 }

@@ -37,7 +37,7 @@ describe('continuing into town', () => {
   const resumed=bridge.createContinuedMarket(content,h,g.state);
   expect(resumed.state).toEqual(g.state);
   resumed.send({type:'confirm'});resumed.send({type:'fulfill'});
-  expect(resumed.state.wallet).toBe(30300);
+  expect(resumed.state.wallet).toBe(30300 + 100000);
  });
 });
 

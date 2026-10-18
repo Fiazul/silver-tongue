@@ -10,11 +10,11 @@ interface Content extends MarketContent {
   endingPlace: string;
   ui: Record<string, string> & { parts: string[] };
   cast: Record<string, string>; places: Record<string, string>; resources: Record<string, string>;
-  phrases: Exclude<MarketLine, string>[];
+  merchantWords: Exclude<MarketLine, string>[];
   audio?: Record<string, string>;
   story: (MarketStory & { context?: string; objective: string; words?: Exclude<MarketLine, string>[] })[];
   preparation: (MarketContent['preparation'][number] & { description: string })[];
-  scenarios: (MarketScenario & { label: string; rival: string; hintMeanings: string[] })[];
+  scenarios: (MarketScenario & { label: string; rival: string })[];
 }
 const root = document.getElementById('app')!;
 let handoff: Handoff | undefined;
@@ -83,7 +83,7 @@ function App({ c }: { c: Content }) {
   };
   const messages = (rows: readonly MarketMessage[]) => rows.map((m, i) => <div key={i} class={`message ${m.speaker}`}>
     {m.speaker === 'player' && <span class="speaker">{s.player}</span>}
-    {line(m, false, m.speaker === 'npc')}
+    {m.speaker === 'self' ? <p class="inner" lang={c.uiLocale}>{m.text.replaceAll('{player}', s.player)}</p> : line(m, false, m.speaker === 'npc')}
   </div>);
   const offer = s.pending;
   const submit = () => {
@@ -91,12 +91,11 @@ function App({ c }: { c: Content }) {
     send({ type: 'text', text: composer.current?.value ?? s.draft });
     composer.current?.focus();
   };
-  const insert = (phrase: string) => {
-    send({ type: 'assist' });
-    send({ type: 'draft', text: phrase });
-    setOpen(null);
-    setTimeout(() => composer.current?.focus(), 0);
+  const openHelp = () => {
+    if (s.phase === 'merchant') send({ type: 'assist' });
+    setOpen('help');
   };
+  const heard = [...s.messages].reverse().find(m => m.speaker === 'npc');
   const reset = () => {
     store.backup();
     game.current = handoff ? createContinuedMarket(c, handoff) : createMarketGame(c);
@@ -194,7 +193,7 @@ function App({ c }: { c: Content }) {
               onCompositionStart={() => { composing.current = true; }} onCompositionEnd={() => { composing.current = false; }}
               onInput={e => send({ type: 'draft', text: e.currentTarget.value })}
               onKeyDown={e => { if (!composing.current && shouldSend(e)) { e.preventDefault(); submit(); } }} />
-            <div class="composer-actions"><button type="button" class="secondary" onClick={() => setOpen('help')}>{ui.help}</button><button class="primary" disabled={!s.draft.trim()}>{ui.send} <span aria-hidden="true">→</span></button></div>
+            <div class="composer-actions"><button type="button" class="secondary" onClick={openHelp}>{ui.help}</button><button class="primary" disabled={!s.draft.trim()}>{ui.send} <span aria-hidden="true">→</span></button></div>
           </form>
           <button class="text-action" onClick={() => send({ type: 'leave' })}>{ui.leave}</button>
           <p class="small subtle">{ui.leaveHint}</p>
@@ -208,13 +207,16 @@ function App({ c }: { c: Content }) {
           <p class="context">{ui.resultBody}</p>
           <p class="closing-line">{ui.nextTown}</p>
           <p>{ui.nextTownHint}</p>
+          {s.payout && <dl class="payout" aria-label={ui.payoutTitle}>
+            <dt>{ui.margin}</dt><dd>{money(s.payout.margin)}</dd><dt>{ui.bonus}</dt><dd>{money(s.payout.bonus)}</dd><dt>{ui.total}</dt><dd><strong>{money(s.payout.total)}</strong></dd>
+          </dl>}
           <p class="small subtle">{s.deals.some(d => d.assisted) ? ui.assistRecord : ui.soloRecord}</p>
           <button class="secondary advance" onClick={() => setOpen('restart')}>{ui.practiceAgain}</button>
         </section>}
       </>}
     </main>
     <footer>
-      <div class="footer-actions"><button onClick={() => setOpen('journal')}>{ui.journal}</button>{s.phase !== 'opening' && <button onClick={() => setOpen('help')}>{ui.help}</button>}</div>
+      <div class="footer-actions"><button onClick={() => setOpen('journal')}>{ui.journal}</button>{s.phase !== 'opening' && <button onClick={openHelp}>{ui.help}</button>}</div>
       <span class={saved ? 'save-status subtle' : 'save-status'} role="status">{saved ? ui.saved : ui.unsaved}</span>
     </footer>
     {open && <Modal label={ui[open === 'restart' ? 'restart' : open]} closeLabel={ui.close} onClose={() => setOpen(null)}>
@@ -226,10 +228,14 @@ function App({ c }: { c: Content }) {
         <div class="settings"><label><input type="checkbox" checked={support} onChange={e => setSupport(e.currentTarget.checked)} />{ui.meanings}</label><label><input type="checkbox" checked={pronunciation} onChange={e => setPronunciation(e.currentTarget.checked)} />{ui.readings}</label>{c.audio && <label><input type="checkbox" checked={sound} onChange={e => setSound(e.currentTarget.checked)} />{ui.sound}</label>}</div>
         <p class="small subtle">{ui.supportHint}</p>
         {s.phase === 'merchant' ? <>
-          <h2>{ui.hintQuestions}</h2>
-          <div class="phrase-list">{c.phrases.map(p => <button class="phrase" onClick={() => insert(p.text)}>{line(p)}</button>)}</div>
-          <h2>{ui.hintOffers}</h2>
-          <div class="phrase-list">{scenario.hints.map((text, i) => <button class="phrase" onClick={() => insert(text)}>{line({ text, meaning: scenario.hintMeanings[i] })}</button>)}</div>
+          <h2>{ui.helpHeard}</h2>
+          {heard ? <div class="spoken">
+            <p class="spoken-text" lang={c.locale}>{heard.text.replaceAll('{player}', s.player)}</p>
+            {heard.reading && <p class="reading">{heard.reading}</p>}
+            <p class="meaning">{ui.helpMeaning}: {heard.meaning}</p>
+          </div> : <p class="subtle">{ui.helpNoLine}</p>}
+          <h2>{ui.helpWords}</h2>
+          <div class="word-list">{[...c.story.slice(0, s.storyIndex + 1).flatMap(b => b.words ?? []), ...c.merchantWords].map(word => line(word, false, true))}</div>
         </> : <div class="word-list">{c.story.slice(0, s.storyIndex + 1).flatMap(b => b.words ?? []).map(word => line(word, false, true))}</div>}
       </>}
     </Modal>}

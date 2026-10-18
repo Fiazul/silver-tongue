@@ -28,7 +28,18 @@ describe.skipIf(!existsSync(coreUrl))('authored merchant experiment against its 
     g.send({ type: 'confirm' }); g.send({ type: 'fulfill' });
     for (let i = 0; i < 3; i++) g.send({ type: 'continue' });
     expect(g.state.phase).toBe('complete');
-    expect(g.state.wallet).toBe(33000);
+    expect(g.state.wallet).toBe(33000 + 100000);
+    expect(g.state.payout?.bonus).toBe(100000);
+  });
+  it('says feedback to the player in their own voice, never as the merchant', () => {
+    const g = prepared(); g.send({ type: 'text', text: '오늘 하지 않을게요.' });
+    expect(g.state.messages.at(-1)?.speaker).toBe('self');
+    expect(g.state.messages.at(-1)?.text).toMatch(/^[\x00-\x7F’]+$/);
+  });
+  it('help never offers a ready-made answer: no hints, no composer insertion', () => {
+    expect(content.scenarios.every(s => s.hints.length === 0)).toBe(true);
+    const source = readFileSync(new URL('../src/main.tsx', import.meta.url), 'utf8');
+    expect(source).not.toMatch(/type: 'draft', text: (phrase|text)/);
   });
   it.each(['오늘 오천 원에 하지 않을게요.', '오늘 5000원에 의자 1개 할게요.', '오늘 5000원에 의자 3개 할게요.', '오늘 -5000원에 할게요.', '오늘 5000.5원에 할게요.', '오늘 5000원 또는 500원에 할게요.'])('does not reserve misinterpreted terms: %s', text => {
     const g = prepared(); g.send({ type: 'draft', text }); g.send({ type: 'text', text });
