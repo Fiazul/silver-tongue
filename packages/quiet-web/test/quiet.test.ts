@@ -86,6 +86,20 @@ describe("quiet terminal controller", () => {
     expect(backlog.flatMap((b, i) => (b.speaker === "player" ? [named[i]] : []))).not.toContain(false);
   });
 
+  it("every spoken line carries the scene it was said in, the player's replies too; prose does not", () => {
+    const { q, core } = setup();
+    q.choose(0);
+    q.choose(0);
+    const scene = core.state.run!.scene;
+    q.choose(wrongIndex(core));
+    q.choose(rightIndex(core));
+    const backlog = q.view().backlog;
+    const spoken = backlog.filter((b) => b.speaker);
+    expect(spoken.some((b) => b.speaker === "player")).toBe(true);
+    for (const b of spoken) expect(b.scene).toBe(scene);
+    for (const b of backlog.filter((b) => !b.speaker)) expect(b.scene).toBeUndefined();
+  });
+
   it("a course with the Book stops onboarding once ten words have been heard", () => {
     const rec = { right: 3, wrong: 0, streak: 3, helps: 0, lapsed: false, firstSeen: T0, lastSeen: T0 };
     const { q } = setup(

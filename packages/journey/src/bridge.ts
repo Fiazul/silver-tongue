@@ -17,11 +17,16 @@ export function lineId(text: string): string {
  for (const char of text) hash=Math.imul(hash^char.charCodeAt(0),16777619);
  return (hash>>>0).toString(16);
 }
-/** Attribute player-first exchanges to their known NPC; prose remains narration. */
-export function dialogueObservations(rows: Pick<Beat,'id'|'speaker'|'line'|'text'>[], chapter: string, initialOwner=''): Observation[] {
- let owner=initialOwner;
+export type DialogueRow = Pick<Beat,'id'|'speaker'|'line'|'text'|'scene'>;
+/** Credit each spoken line to its scene's NPC, including a player line that opens a scene before the NPC
+ * speaks; a new scene never inherits the previous scene's NPC. Rows without a scene (the merchant's single
+ * stage) keep the running owner. Prose remains narration. */
+export function dialogueObservations(rows: DialogueRow[], chapter: string, initialOwner='',
+ sceneNpc: (scene: string) => string = () => ''): Observation[] {
+ let owner=initialOwner, scene: string|undefined;
  const result: Observation[]=[];
  for (const row of rows) {
+  if (row.scene!==undefined && row.scene!==scene) { scene=row.scene; owner=sceneNpc(row.scene); }
   if (row.speaker && row.speaker!=='player' && row.speaker!=='Narrator') owner=row.speaker;
   const text=row.line?.text ?? row.text;
   if (!text || !row.speaker || !CAST[owner]) continue;
@@ -35,7 +40,7 @@ export function doorSnapshot(q: Quiet, session: string): Snapshot {
  return {version:1,chapter:'door',session,player:s.player??'',day:s.day,slot:s.slot,wallet:s.wallet,
   phase:q.view().scene??'arrival',ready:!!s.scenesDone[configuration.arrivalScene] && !s.run,
   done:Object.keys(s.scenesDone).filter(id=>s.scenesDone[id]>0),
-  observations:dialogueObservations(q.view().backlog,'door')};
+  observations:dialogueObservations(q.view().backlog,'door','',scene=>q.course.scenes.find(sc=>sc.id===scene)?.npc ?? '')};
 }
 export function embeddedJourney(): boolean {
  return typeof location!=='undefined' && new URLSearchParams(location.search).get('journey')==='1';

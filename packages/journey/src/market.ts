@@ -1,8 +1,7 @@
 // The merchant half of the combined journey. It needs the private merchant core
 // (`@silver-tongue/core/market`), which only the experiment build supplies.
 import { createMarketGame, restoreMarketState, type MarketContent, type MarketState } from '@silver-tongue/core/market';
-import type { Beat } from '../../quiet-web/src/quiet';
-import { JOURNEY, dialogueObservations, lineId, type Handoff, type Snapshot } from './bridge';
+import { JOURNEY, dialogueObservations, lineId, type DialogueRow, type Handoff, type Snapshot } from './bridge';
 
 const MERCHANT_IDS: Record<string,string> = JOURNEY.merchantActors;
 
@@ -21,7 +20,7 @@ export function createContinuedMarket(c: MarketContent, h: Handoff, saved?: unkn
 export function marketSnapshot(c: MarketContent, s: Readonly<MarketState>, session: string): Snapshot {
  const stage=c.story[s.storyIndex];
  const owner=['merchant','town'].includes(s.phase) ? 'merchant' : ['story','reaction'].includes(s.phase) ? MERCHANT_IDS[stage.npc??'']??'' : '';
- const rows: Pick<Beat,'id'|'speaker'|'line'|'text'>[]=[];
+ const rows: DialogueRow[]=[];
  // Source lines become witnessed when displayed, never by importing future story beats.
  if(s.phase==='story' && typeof stage.text!=='string' && owner) rows.push({id:0,speaker:owner,text:stage.text.text.replaceAll('{player}',s.player)});
  if(owner && s.phase!=='story') rows.push(...s.messages.map((m,i)=>{

@@ -24,14 +24,35 @@ describe('continuous door and merchant journey: the door', () => {
  it('keeps actual choices and does not attribute one NPC’s dialogue to another', () => {
   expect(bridge.dialogueObservations).toBeTypeOf('function');
   const rows=bridge.dialogueObservations([
-   {id:1,speaker:'landlady',text:'Rent is due.'},
-   {id:2,speaker:'player',text:'I will tell Min-jun.'},
+   {id:1,speaker:'landlady',text:'Rent is due.',scene:'room-rent'},
+   {id:2,speaker:'player',text:'I will pay tomorrow.',scene:'room-rent'},
    {id:3,text:'A private author note that nobody heard.'},
-   {id:4,speaker:'minjun',text:'I am learning English.'},
-   {id:5,speaker:'player',text:'My name is Nadia.'},
+   {id:4,speaker:'minjun',text:'I am learning English.',scene:'room-minjun'},
+   {id:5,speaker:'player',text:'My name is Nadia.',scene:'room-minjun'},
   ],'door');
-  expect(rows.filter(r=>r.owner==='landlady').map(r=>r.text)).toEqual(['Rent is due.','I will tell Min-jun.']);
+  expect(rows.filter(r=>r.owner==='landlady').map(r=>r.text)).toEqual(['Rent is due.','I will pay tomorrow.']);
   expect(rows.filter(r=>r.owner==='minjun').map(r=>r.text)).toEqual(['I am learning English.','My name is Nadia.']);
   expect(JSON.stringify(rows)).not.toContain('author note');
+ });
+ it('credits a scene that opens with the player to that scene’s NPC, never the previous one', () => {
+  const sceneNpc=(scene: string)=>course.scenes.find(s=>s.id===scene)?.npc ?? '';
+  const backlog=[
+   {id:1,speaker:'landlady',text:'Rent is due.',scene:'room-rent'},
+   {id:2,speaker:'player',text:'I will pay tomorrow.',scene:'room-rent'},
+   {id:3,text:'The landlady goes downstairs.'},
+   {id:4,speaker:'player',text:'Hello? Is anyone here?',scene:'room-minjun'},
+   {id:5,speaker:'minjun',text:'Who are you?',scene:'room-minjun'},
+  ];
+  const rows=bridge.dialogueObservations(backlog,'door','',sceneNpc);
+  expect(rows.map(r=>[r.owner,r.speaker,r.text])).toEqual([
+   ['landlady','The Landlady','Rent is due.'],
+   ['landlady','Mystery','I will pay tomorrow.'],
+   ['minjun','Mystery','Hello? Is anyone here?'],
+   ['minjun','Kim Min-jun','Who are you?'],
+  ]);
+  // Without a way to name the new scene's NPC, the opening line is withheld rather than misattributed.
+  const unknown=bridge.dialogueObservations(backlog,'door');
+  expect(unknown.find(r=>r.text==='Hello? Is anyone here?')).toBeUndefined();
+  expect(unknown.filter(r=>r.owner==='landlady').map(r=>r.text)).toEqual(['Rent is due.','I will pay tomorrow.']);
  });
 });

@@ -46,6 +46,8 @@ export interface Beat {
   day?: number;
   /** an NPC's line: the scene run it was said in (the run's first beat id), for speakerNamed */
   run?: number;
+  /** a spoken line (an NPC's or the player's): the scene it was said in, so the journey bridge credits it to that scene's NPC */
+  scene?: string;
   /** an NPC's line said in the onboarding window (see onboarding): its reading and meaning show under it */
   onboard?: boolean;
 }
@@ -260,7 +262,13 @@ export function createQuiet(opts: QuietOptions): Quiet {
   const book = bookOn(course);
   const push = (b: Omit<Beat, "id">, s?: Speech): Beat => {
     const npc = book && b.speaker && b.speaker !== "player";
-    const beat: Beat = { id: nextId++, ...b, ...(npc && scene ? { run: sceneFrom } : {}), ...(npc && onboard ? { onboard } : {}) };
+    const beat: Beat = {
+      id: nextId++,
+      ...b,
+      ...(npc && scene ? { run: sceneFrom } : {}),
+      ...(npc && onboard ? { onboard } : {}),
+      ...(b.speaker && scene ? { scene } : {}),
+    };
     queue.push(beat);
     if (s) speeches.push(s);
     return beat;
