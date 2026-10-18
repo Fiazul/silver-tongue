@@ -1,0 +1,618 @@
+{
+  "constants": {
+    "c_m_s": 299792458.0,
+    "year_s": 31557600.0,
+    "ly_m": 9460730472580800.0,
+    "a_m_s2": 9.81,
+    "a_ly_yr2": 1.0326479127103325,
+    "c_over_a_years": 0.968384274728602,
+    "G": 6.6743e-11,
+    "solar_mass_kg": 1.98847e+30,
+    "proton_MeV": 938.27208816,
+    "joule_per_eV": 1.602176634e-19,
+    "tonne_TNT_J": 4184000000.0,
+    "sigma": 5.670374419e-08
+  },
+  "trip1": {
+    "earth_years": 60,
+    "ship_years": 13.303136419026218,
+    "peak_gamma": 15.521964602318434,
+    "peak_beta": 0.9979225624790672,
+    "turnaround_ly": 28.125684318101136,
+    "path_ly": 56.25136863620227,
+    "rapidity_per_burn": 3.4343640139020577,
+    "one_way_delta_eta": 6.868728027804115,
+    "round_trip_delta_eta": 13.73745605560823,
+    "awake_years": 3.0,
+    "cryo_years": 10.303136419026218,
+    "earth_body_ratio": 20.0,
+    "earth_ship_ratio": 4.510214592266202
+  },
+  "trip2": {
+    "earth_years": 109,
+    "ship_years": 15.61284350787712,
+    "peak_gamma": 28.157418533817044,
+    "peak_beta": 0.9993691569261168,
+    "turnaround_ly": 52.59763410074302,
+    "path_ly": 105.19526820148604,
+    "rapidity_per_burn": 4.030642564970593,
+    "one_way_delta_eta": 8.061285129941187,
+    "round_trip_delta_eta": 16.122570259882373,
+    "awake_years": 3.0,
+    "cryo_years": 12.61284350787712,
+    "earth_body_ratio": 36.333333333333336,
+    "earth_ship_ratio": 6.981431662016367
+  },
+  "catalog": {
+    "proxima": {
+      "distance_ly": 4.24,
+      "ra_deg": 217.429,
+      "dec_deg": -62.679,
+      "xyz_ly": [
+        -1.5453760320122927,
+        -1.182769082683884,
+        -3.7670240531126247
+      ]
+    },
+    "alpha": {
+      "distance_ly": 4.34,
+      "ra_deg": 219.902,
+      "dec_deg": -60.834,
+      "xyz_ly": [
+        -1.62255482176259,
+        -1.3567626472130196,
+        -3.7897375858365825
+      ]
+    },
+    "luhman": {
+      "distance_ly": 6.51,
+      "ra_deg": 162.329,
+      "dec_deg": -53.319,
+      "xyz_ly": [
+        -3.70531613623241,
+        1.1804511107988547,
+        -5.220849308837545
+      ]
+    }
+  },
+  "route": {
+    "legs": {
+      "proxima": {
+        "distance_ly": 4.24,
+        "earth_years": 5.8652704370213895,
+        "ship_years": 3.539217706212634,
+        "peak_gamma": 3.1892135749459047,
+        "peak_beta": 0.949569405111806,
+        "arrival_earth_elapsed": 5.8652704370213895,
+        "arrival_ship_elapsed": 3.539217706212634
+      },
+      "alpha": {
+        "distance_ly": 0.19169306365561958,
+        "earth_years": 0.882766347528201,
+        "ship_years": 0.8547483849558088,
+        "peak_gamma": 1.0989757210325122,
+        "peak_beta": 0.41474384226134886,
+        "arrival_earth_elapsed": 6.7480367845495905,
+        "arrival_ship_elapsed": 4.393966091168442
+      },
+      "luhman": {
+        "distance_ly": 3.5809815847903455,
+        "earth_years": 5.166671474926802,
+        "ship_years": 3.3075472231706726,
+        "peak_gamma": 2.848946579493944,
+        "peak_beta": 0.9363728601732662,
+        "arrival_earth_elapsed": 11.914708259476392,
+        "arrival_ship_elapsed": 7.701513314339115
+      },
+      "turn": {
+        "distance_ly": 30.0,
+        "earth_years": 31.877987906507407,
+        "ship_years": 6.768935519836789,
+        "peak_gamma": 16.48971869065499,
+        "peak_beta": 0.998159468048285,
+        "arrival_earth_elapsed": 43.7926961659838,
+        "arrival_ship_elapsed": 14.470448834175905
+      },
+      "binary": {
+        "distance_ly": 60.0,
+        "earth_years": 61.9064796764835,
+        "ship_years": 8.05307539855273,
+        "peak_gamma": 31.979437381309975,
+        "peak_beta": 0.9995109710486507,
+        "arrival_earth_elapsed": 105.6991758424673,
+        "arrival_ship_elapsed": 22.523524232728633
+      }
+    },
+    "earth_years": 109.0,
+    "travel_earth_years": 105.6991758424673,
+    "local_dwell_years": 3.300824157532702,
+    "ship_years": 25.824348390261335,
+    "awake_years": 3.0,
+    "cryo_years": 22.824348390261335,
+    "path_ly": 98.01267464844597,
+    "peak_gamma": 31.979437381309975,
+    "binary_offset_from_luhman_ly": 30.0,
+    "probe_offset_from_luhman_ly": 30.0,
+    "salvage_to_transit_days": 30.0,
+    "reentry_months": 5.0
+  },
+  "rocket": {
+    "trip1": {
+      "chemical": {
+        "exhaust_beta": 1.5010384283916842e-05,
+        "one_way_ln_R": 457598.41306419735,
+        "round_trip_ln_R": 915196.8261283947,
+        "one_way_log10_R": 198732.4657214658,
+        "round_trip_log10_R": 397464.9314429316,
+        "one_way_R": null,
+        "round_trip_R": null
+      },
+      "orion": {
+        "exhaust_beta": 0.03,
+        "one_way_ln_R": 228.95760092680385,
+        "round_trip_ln_R": 457.9152018536077,
+        "one_way_log10_R": 99.43502267231776,
+        "round_trip_log10_R": 198.8700453446355,
+        "one_way_R": 2.722843450249063e+99,
+        "round_trip_R": 7.413876454564223e+198
+      },
+      "daedalus": {
+        "exhaust_beta": 0.04,
+        "one_way_ln_R": 171.7182006951029,
+        "round_trip_ln_R": 343.4364013902058,
+        "one_way_log10_R": 74.57626700423832,
+        "round_trip_log10_R": 149.15253400847664,
+        "one_way_R": 3.769354676792492e+74,
+        "round_trip_R": 1.4208034679457435e+149
+      },
+      "best_fusion": {
+        "exhaust_beta": 0.1,
+        "one_way_ln_R": 68.68728027804114,
+        "round_trip_ln_R": 137.3745605560823,
+        "one_way_log10_R": 29.83050680169532,
+        "round_trip_log10_R": 59.66101360339064,
+        "one_way_R": 6.768723936617224e+29,
+        "round_trip_R": 4.581562373013497e+59
+      },
+      "photon": {
+        "exhaust_beta": 1.0,
+        "one_way_ln_R": 6.868728027804115,
+        "round_trip_ln_R": 13.73745605560823,
+        "one_way_log10_R": 2.9830506801695327,
+        "round_trip_log10_R": 5.966101360339065,
+        "one_way_R": 961.724500663687,
+        "round_trip_R": 924914.015176818
+      }
+    },
+    "trip2": {
+      "chemical": {
+        "exhaust_beta": 1.5010384283916842e-05,
+        "one_way_ln_R": 537047.2186097595,
+        "round_trip_ln_R": 1074094.437219519,
+        "one_way_log10_R": 233236.64356370788,
+        "round_trip_log10_R": 466473.28712741577,
+        "one_way_R": null,
+        "round_trip_R": null
+      },
+      "orion": {
+        "exhaust_beta": 0.03,
+        "one_way_ln_R": 268.7095043313729,
+        "round_trip_ln_R": 537.4190086627458,
+        "one_way_log10_R": 116.69905496607319,
+        "round_trip_log10_R": 233.39810993214638,
+        "one_way_R": 5.000978253833067e+116,
+        "round_trip_R": 2.5009783495311228e+233
+      },
+      "daedalus": {
+        "exhaust_beta": 0.04,
+        "one_way_ln_R": 201.53212824852966,
+        "round_trip_ln_R": 403.0642564970593,
+        "one_way_log10_R": 87.52429122455489,
+        "round_trip_log10_R": 175.04858244910977,
+        "one_way_R": 3.3441921612085776e+87,
+        "round_trip_R": 1.1183621211088898e+175
+      },
+      "best_fusion": {
+        "exhaust_beta": 0.1,
+        "one_way_ln_R": 80.61285129941186,
+        "round_trip_ln_R": 161.22570259882372,
+        "one_way_log10_R": 35.00971648982195,
+        "round_trip_log10_R": 70.0194329796439,
+        "one_way_R": 1.022625198152566e+35,
+        "round_trip_R": 1.0457622958965752e+70
+      },
+      "photon": {
+        "exhaust_beta": 1.0,
+        "one_way_ln_R": 8.061285129941187,
+        "round_trip_ln_R": 16.122570259882373,
+        "one_way_log10_R": 3.5009716489821954,
+        "round_trip_log10_R": 7.001943297964391,
+        "one_way_R": 3169.360558433115,
+        "round_trip_R": 10044846.349351466
+      }
+    }
+  },
+  "medium": {
+    "trip1": {
+      "gamma": 15.521964602318434,
+      "density_low_cm3": 0.1,
+      "density_high_cm3": 1.0,
+      "proton_GeV": 13.62555405160292,
+      "flux_low_m2_s": 464370084000000.06,
+      "flux_high_m2_s": 4643700840000001.0,
+      "energy_flux_low_W_m2": 1013745.1702793587,
+      "energy_flux_high_W_m2": 10137451.702793589,
+      "dose_low_Gy_day": 1285637.007939985,
+      "dose_high_Gy_day": 12856370.079399852,
+      "stopping_MeV_per_g_cm2": 2.0,
+      "dust_mass_kg": 1e-09,
+      "dust_microgram": 1.0,
+      "dust_J": 1305169089.1766443,
+      "dust_tonnes_TNT": 0.31194289894279265,
+      "proton_rigidity_Tm": 48.47877360841358
+    },
+    "trip2": {
+      "gamma": 28.157418533817044,
+      "density_low_cm3": 0.1,
+      "density_high_cm3": 1.0,
+      "proton_GeV": 25.4810477967596,
+      "flux_low_m2_s": 843605652600000.0,
+      "flux_high_m2_s": 8436056526000000.0,
+      "energy_flux_low_W_m2": 3444031.8357422757,
+      "energy_flux_high_W_m2": 34440318.35742276,
+      "dose_low_Gy_day": 2335573.897757639,
+      "dose_high_Gy_day": 23355738.977576394,
+      "stopping_MeV_per_g_cm2": 2.0,
+      "dust_mass_kg": 1e-09,
+      "dust_microgram": 1.0,
+      "dust_J": 2440787054.83913,
+      "dust_tonnes_TNT": 0.5833621067971152,
+      "proton_rigidity_Tm": 88.06977205528464
+    },
+    "route": {
+      "gamma": 31.979437381309975,
+      "density_low_cm3": 0.1,
+      "density_high_cm3": 1.0,
+      "proton_GeV": 29.067141401783672,
+      "flux_low_m2_s": 958250572250431.2,
+      "flux_high_m2_s": 9582505722504312.0,
+      "energy_flux_low_W_m2": 4462639.491451805,
+      "energy_flux_high_W_m2": 44626394.91451804,
+      "dose_low_Gy_day": 2652975.3767790576,
+      "dose_high_Gy_day": 26529753.76779058,
+      "stopping_MeV_per_g_cm2": 2.0,
+      "dust_mass_kg": 1e-09,
+      "dust_microgram": 1.0,
+      "dust_J": 2784292978.08053,
+      "dust_tonnes_TNT": 0.665461992849075,
+      "proton_rigidity_Tm": 100.03834043766999
+    }
+  },
+  "tidal": {
+    "ns_mass_solar": 1.4,
+    "ship_span_m": 10.0,
+    "at_1000_km_g": 378.80333230173284,
+    "at_50_km_g": 3030426.6584138623,
+    "rated_g": 1.0,
+    "minimum_radius_km": 7235.545245364379,
+    "planned_radius_km": 12000.0,
+    "actual_radius_km": 800.0,
+    "planned_g": 0.21921489137831762,
+    "actual_g": 739.8502584018219,
+    "binary_separation_km": 100000.0,
+    "binary_component_speed_km_s": 963.8543315615694,
+    "schwarzschild_radius_km": 4.134675134893629
+  },
+  "sling": {
+    "jupiter": {
+      "orbital_km_s": 13.07,
+      "ideal_newtonian_gain_km_s": 26.14,
+      "incoming_beta": 0.1,
+      "ideal_outgoing_beta": 0.10008632096511184
+    },
+    "ordinary_binary": {
+      "orbital_km_s": 30.0,
+      "ideal_newtonian_gain_km_s": 60.0,
+      "incoming_beta": 0.1,
+      "ideal_outgoing_beta": 0.10019813310515824
+    },
+    "white_dwarf": {
+      "orbital_km_s": 1500.0,
+      "ideal_newtonian_gain_km_s": 3000.0,
+      "incoming_beta": 0.1,
+      "ideal_outgoing_beta": 0.10989670231348356
+    },
+    "neutron_binary": {
+      "orbital_km_s": 29979.2458,
+      "ideal_newtonian_gain_km_s": 59958.4916,
+      "incoming_beta": 0.1,
+      "ideal_outgoing_beta": 0.2922330097087379
+    },
+    "note": "Ideal reversing scatter off a moving body; real deflection and tidal feasibility are separate."
+  },
+  "sirius": {
+    "reference_ra_deg": 101.28708333333333,
+    "reference_dec_deg": -16.71611111111111,
+    "observed_ra_deg": 124.13083333333334,
+    "observed_dec_deg": -19.672027777777778,
+    "angle_deg": 21.884790354881442,
+    "distance_ly": 8.6,
+    "catalog_distance_ly": 8.71,
+    "proper_motion_arcsec_yr": 1.3,
+    "comparison_years": 2000.0,
+    "proper_motion_deg": 0.7222222222222222,
+    "minimum_displacement_ly": 3.2055766206975043,
+    "fixed_transverse_displacement_ly": 3.4545262464965334
+  },
+  "signal": {
+    "impact_after_departure_days": 11.0,
+    "received_after_departure_days": 11.176538033310635,
+    "delay_days": 0.1765380333106343,
+    "receiver_distance_ly": 0.00048333479345827324,
+    "receiver_distance_AU": 30.566612930602577,
+    "earth_to_proxima_years": 4.24,
+    "earth_to_luhman_years": 6.51,
+    "probe_to_luhman_years": 30.0,
+    "sirius_light_years": 8.6
+  },
+  "air": {
+    "service_hours": 3700.0,
+    "service_days": 154.16666666666666,
+    "oxygen_kg_person_day": 0.84,
+    "crew_initial": 5,
+    "crew_salvage": 1,
+    "oxygen_one_kg": 129.5,
+    "oxygen_five_kg": 647.5,
+    "same_oxygen_five_hours": 740.0,
+    "survival_days_after_salvage": 30.0,
+    "oxygen_thirty_days_kg": 25.2
+  },
+  "field": {
+    "max_k": 1000000.0,
+    "idle_W": 1000000.0,
+    "W_per_k": 10.0,
+    "ramp_seconds": 300.0,
+    "cruise_k": 1000000.0,
+    "ship_dry_kg": 100000.0,
+    "fusion_efficiency": 0.003,
+    "fusion_power_W": 1000000000000.0,
+    "field_tidal_limit_g": 1.0,
+    "max_control_W": 10999990.0,
+    "effective_dry_kg": 0.1,
+    "peak_effective_kinetic_J": 2.78429297808053e+17,
+    "restore_at_peak_J": 2.7842901937875513e+23,
+    "control_voyage_J": 8964490874821055.0,
+    "mechanical_work_J": 9.096533392885322e+17,
+    "minimum_fusion_fuel_kg": 3407.000600743694,
+    "fusion_energy_per_kg_J": 269626553621045.3
+  },
+  "shield": {
+    "reference_W": 100000000.0,
+    "event_percent": 117.0,
+    "rated_percent": 150.0,
+    "event_seconds": 120.0,
+    "residual_fraction": 0.01,
+    "frontal_m2": 10.0,
+    "magnetic_B_T": 10.0,
+    "magnetic_length_m": 12.0,
+    "event_W": 117000000.0,
+    "rated_W": 150000000.0,
+    "event_J": 14040000000.0,
+    "rated_utilization_percent": 78.0,
+    "rated_margin_W": 33000000.0,
+    "rigidity_Tm": 120.0,
+    "peak_residual_heat_W": 4462639.4914518045
+  },
+  "radiator": {
+    "emissivity": 0.9,
+    "temperature_K": 2000.0,
+    "waste_heat_W": 200000000000.0,
+    "surface_W_m2": 816533.916336,
+    "emitting_area_m2": 244937.7741679758
+  },
+  "canon": {
+    "birth_year": 2010,
+    "first_departure_year": 2030,
+    "first_return_year": 2090,
+    "registry_year": 2198,
+    "transit_year": 2199,
+    "calendar_span": 189,
+    "claimed_span": 340,
+    "departure_age": 20,
+    "return_age": 23,
+    "transit_age": 26,
+    "possible_local_age": 16,
+    "impactor_km": 3.2,
+    "rover_passengers": 3,
+    "YR4_size_low_m": 53,
+    "YR4_size_high_m": 67,
+    "YR4_historical_percent": 4.3,
+    "solar_superflare_erg": 1e+34,
+    "ozone_model_percent": 94.0,
+    "supernova_pc": 8.0,
+    "supernova_ly": 26.09248,
+    "registry": "AX-2198-047",
+    "departure_date": "2090-02-01",
+    "impact_date": "2090-02-12",
+    "arrival_local": "2026-05-15",
+    "room_date": "2026-10-15",
+    "moon_strike_date": "2032-12-22",
+    "first_departure_date": "2030-02-01",
+    "transit_date": "2199-02-02"
+  },
+  "schedule": {
+    "V006": {
+      "earth_date": "2090-02-01",
+      "ship_time": "V+0.000000 yr (nominal)"
+    },
+    "V007": {
+      "earth_date": "2090-02-12",
+      "ship_time": "V+0.030595 yr (nominal)"
+    },
+    "V008": {
+      "earth_date": "2090-02-16",
+      "ship_time": "V+0.041055 yr (nominal)"
+    },
+    "V009": {
+      "earth_date": "2095-12-14",
+      "ship_time": "V+3.539218 yr (nominal)"
+    },
+    "V010": {
+      "earth_date": "2095-12-14",
+      "ship_time": "V+3.539218 yr (nominal)"
+    },
+    "V011": {
+      "earth_date": "2096-10-31",
+      "ship_time": "V+4.393966 yr (nominal)"
+    },
+    "V012": {
+      "earth_date": "2102-01-01",
+      "ship_time": "V+7.701513 yr (nominal)"
+    },
+    "V013": {
+      "earth_date": "2102-01-01",
+      "ship_time": "V+7.701513 yr (nominal)"
+    },
+    "V014": {
+      "earth_date": "2164-10-31",
+      "ship_time": "V+18.496987 yr (nominal)"
+    },
+    "V015": {
+      "earth_date": "2195-10-15",
+      "ship_time": "V+22.523524 yr (nominal)"
+    },
+    "V016": {
+      "earth_date": "2195-10-16",
+      "ship_time": "V+22.526262 yr (nominal)"
+    },
+    "V017": {
+      "earth_date": "2195-10-17",
+      "ship_time": "V+22.529000 yr (nominal)"
+    },
+    "V018": {
+      "earth_date": "2197-11-01",
+      "ship_time": "V+24.569728 yr (nominal)"
+    },
+    "V019": {
+      "earth_date": "2198-01-01",
+      "ship_time": "V+24.736737 yr (nominal)"
+    },
+    "V020": {
+      "earth_date": "2199-01-03",
+      "ship_time": "V+25.742213 yr (nominal)"
+    },
+    "V021": {
+      "earth_date": "2199-01-04",
+      "ship_time": "V+25.744951 yr (nominal)"
+    },
+    "V022": {
+      "earth_date": "2199-01-13",
+      "ship_time": "V+25.769591 yr (nominal)"
+    },
+    "V023": {
+      "earth_date": "2199-01-23",
+      "ship_time": "V+25.796970 yr (nominal)"
+    },
+    "V024": {
+      "earth_date": "2199-02-02",
+      "ship_time": "V+25.824348 yr (nominal)"
+    },
+    "V001": {
+      "earth_date": "2089-02-01",
+      "ship_time": "commissioning"
+    },
+    "V002": {
+      "earth_date": "2030-02-01",
+      "ship_time": "first flight departure"
+    },
+    "V003": {
+      "earth_date": "2090-02-01",
+      "ship_time": "first flight +13.303136 yr"
+    },
+    "V004": {
+      "earth_date": "2031-06-01",
+      "ship_time": "historical archive"
+    },
+    "V005": {
+      "earth_date": "2032-12-22",
+      "ship_time": "historical archive"
+    },
+    "V025": {
+      "earth_date": "2026-05-15 (local; scene dates approximate)",
+      "ship_time": "V+25.824348 yr (nominal)"
+    },
+    "V026": {
+      "earth_date": "2026-05-19 (local; scene dates approximate)",
+      "ship_time": "V+25.835300 yr (nominal)"
+    },
+    "V027": {
+      "earth_date": "2026-10-14 (local; scene dates approximate)",
+      "ship_time": "V+26.240502 yr (nominal)"
+    },
+    "V028": {
+      "earth_date": "2026-10-15 (local; scene dates approximate)",
+      "ship_time": "V+26.243240 yr (nominal)"
+    },
+    "V029": {
+      "earth_date": "2026-10-15 (local; scene dates approximate)",
+      "ship_time": "V+26.243240 yr (nominal)"
+    },
+    "V030": {
+      "earth_date": "2026-10-15 (local; scene dates approximate)",
+      "ship_time": "V+26.243240 yr (nominal)"
+    },
+    "V031": {
+      "earth_date": "2026-10-15 (local; scene dates approximate)",
+      "ship_time": "V+26.243240 yr (nominal)"
+    },
+    "V032": {
+      "earth_date": "2026-10-15 (local; scene dates approximate)",
+      "ship_time": "V+26.243240 yr (nominal)"
+    },
+    "V033": {
+      "earth_date": "2026-10-15 (local; scene dates approximate)",
+      "ship_time": "V+26.243240 yr (nominal)"
+    },
+    "V034": {
+      "earth_date": "2026-10-15 (local; scene dates approximate)",
+      "ship_time": "V+26.243240 yr (nominal)"
+    },
+    "V035": {
+      "earth_date": "2026-10-15 (local; scene dates approximate)",
+      "ship_time": "V+26.243240 yr (nominal)"
+    },
+    "V036": {
+      "earth_date": "2026-10-15 (local; scene dates approximate)",
+      "ship_time": "V+26.243240 yr (nominal)"
+    },
+    "V037": {
+      "earth_date": "2026-10-15 (local; scene dates approximate)",
+      "ship_time": "V+26.243240 yr (nominal)"
+    },
+    "V038": {
+      "earth_date": "2026-10-15 (local; scene dates approximate)",
+      "ship_time": "V+26.243240 yr (nominal)"
+    },
+    "V039": {
+      "earth_date": "2197-12-01",
+      "ship_time": "V+24.651864 yr (nominal)"
+    }
+  },
+  "flower": {
+    "eva_window_minutes": 40,
+    "discovery_minute": 22,
+    "breach_minute": 31,
+    "ingress_air_minutes": 9,
+    "ship_years_to_arrival": 1.172484599589339
+  },
+  "assumptions": {
+    "trips": "Four equal constant-proper-acceleration burns: outward accel/brake, inward accel/brake; no dwell. Reference clocks, not the multi-system itinerary.",
+    "route": "Each catalogue leg and fictional detour is rest-to-rest at 1g; remaining time is local dwell/repairs. Turn point is 30 ly opposite the binary along a line through Luhman, so the last leg is 60 ly and binary/probe are 30 ly from Luhman.",
+    "dose": "Ship-frame flux; 2 MeV/(g/cm²) illustrative ionisation stopping power. Gy, not Sv; ignores nuclear cascades, composition, shielding and biological response. Not a transport calculation.",
+    "field": "Fictional constitutive law Ekin=(gamma-1)mc²/k while active. No validated covariant stress-energy theory. State changes pay kinetic-energy difference; no free-energy loop permitted. Not a derivation from known relativity.",
+    "cryo": "Biological aging assumed suspended in cryo; reversible long-duration human cryo is unproved. Awake time is an input, not predicted by relativity.",
+    "shield": "Rigidity is necessary, not sufficient; neutral gas must be ionised first, grains dispersed far upstream, secondaries transported. No guarantee against an arbitrary grain.",
+    "tidal": "Newtonian radial gradient approximation outside a single component. Binary perturbations and GR require better modeling; no tidal cancellation by the inertia field.",
+    "sling": "Ideal head-on reversal, energy/momentum extracted from moving binary orbital reservoir; near-merger orbit and geometry not generally survivable."
+  }
+}

@@ -1,0 +1,19 @@
+/* Shared, compact invitation controls; matches the existing room palette. */
+#meetups{font-size:13px;line-height:1.6;overflow-wrap:anywhere}
+body:not(.scenes-page)>#meetups{max-width:1240px;margin:18px auto 0;padding:0 40px}
+#meetups:has(>p:only-child:empty){display:none}
+#meetups h2{font-size:20px;margin:16px 0 8px}
+#meetups article{padding:12px 0;border-bottom:1px solid var(--line)}
+#meetups article strong{display:block;font-size:13px}
+#meetups article p{margin:5px 0 10px}
+#meetups a{color:#914e52;text-underline-offset:3px}
+#meetups button{min-height:40px;border:1px solid #bca99c;border-radius:8px;background:transparent;color:#674d45;padding:8px 14px;margin:0 8px 4px 0;font:inherit}
+#meetups button:hover{background:#efe4dc}
+#meetups details{margin:12px 0;font-size:12px}
+#meetups summary{cursor:pointer;padding:8px 0}
+#meetups .form-status{font-size:12px;color:#794848;margin:8px 0}
+#meetup-badge{display:block;color:#914e52;letter-spacing:0;margin-top:5px}
+#meetup-badge[hidden]{display:none}
+.scene-heading{flex-wrap:wrap}
+.scene-heading>div{flex:1 1 180px}
+@media(max-width:600px){body:not(.scenes-page)>#meetups{padding:0 20px}}

@@ -8,3 +8,15 @@ site/
 tsconfig.tsbuildinfo
 .playwright-mcp/
 .claude/worktrees/
+
+# Lab story room (experiments/story-room/): runtime state, logs and local output stay out of git
+experiments/story-room/data/
+experiments/story-room/logs/
+experiments/story-room/output/
+experiments/story-room/archive/
+experiments/story-room/.env
+experiments/story-room/.*.json.lock
+experiments/story-room/characters/.*.lock
+experiments/story-room/.playwright-*/
+experiments/story-room/**/__pycache__/
+experiments/story-room/**/*.pyc

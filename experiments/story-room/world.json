@@ -1,0 +1,79 @@
+{
+  "title": "Make It in China · A Place in Town",
+  "setting": "Seoul in 2000, three years after the IMF crisis. A steep alley connects Min-jun’s narrow rented room, Grandpa Park’s bench, a snack stall, and a corner shop; farther on are the university gate and copy shop. Jobs are scarce, rooms small, and everyone counts change. Period objects include paper bills, newspapers, photographs, books, landlines, phone booths, pagers, and PC bangs. No smartphones or instant translation technology. A market square hosts a weekly visiting merchant and competing local suppliers.",
+  "premise": "The player falls asleep over a textbook and wakes in a stranger’s room with a book belonging to Kim Min-jun. They cannot understand Korean. After the landlady leaves a rent message, Min-jun returns carrying shopping and finds them there. He is learning English; they need Korean. They agree to teach each other. He introduces them to Grandpa Park before leaving for class. Food, work, rent, counting change, and language connect the player to the neighborhood. The cause of their arrival is unknown in this opening. The stable door opening continues into the town story: Grandpa Park’s welcome, Ji-woo’s stall, counting change, a first wage, and preparations for a weekly market. The player negotiates feasible supplies or services and fulfills a real agreement to earn a place in town. The merchant’s next-town invitation closes the authored first-town story.",
+  "unknowns": [
+    "How the player arrived. The newest script leaves this unexplained and plans for the player to explain it mid-story once able to speak Korean.",
+    "Older README says Min-jun vanished and swapped places with the player. This is superseded/unresolved planning material, not active truth or a current secret known to Min-jun.",
+    "Retained stall-family “not here now,” room-rent “paid up to March,” university letter, Su-jin “hasn’t come since March / took his books,” and creditor debt await reconciliation. The newest script and build notes explicitly flag those later scenes as contradictory with Min-jun being home.",
+    "Older four-act outline proposes a deliberate departure, journal, professor, way home, and go/stay ending. These are legacy proposals, not implemented present facts.",
+    "Exact ages, birthdays, most surnames, detailed looks, families beyond the stated sibling relationship, and histories before authored scenes are unspecified.",
+    "Min-jun checks his phone in the source. Preserve the year 2000 with a period phone; no smartphone or translator capabilities.",
+    "Only the landlady, Min-jun, and Grandpa Park participate in the revised opening. All eight world NPCs remain in this cast with later-scene provenance and contradictions disclosed."
+  ],
+  "player": {
+    "name": "Player",
+    "backstory": "You fell asleep over a textbook and woke in an unfamiliar rented room, unable to understand the voices outside. The book is not yours: Kim Min-jun’s name is inside and on the ID at the desk. You initially speak no Korean. His broken English and your language exchange give you a way to begin. Your name is chosen by you; age, gender, home, occupation, and explanation for arriving are not specified.",
+    "role": "You control the newcomer. Chat routing uses Mystery; the cast learns the name you introduce.",
+    "sources": [
+      "docs/superpowers/specs/2026-10-07-minjun-opening-script.md"
+    ]
+  },
+  "public_context": "Seoul in 2000, three years after the IMF crisis. A steep alley connects Min-jun’s narrow rented room, Grandpa Park’s bench, a snack stall, and a corner shop; farther on are the university gate and copy shop. Jobs are scarce, rooms small, and everyone counts change. Period objects include paper bills, newspapers, photographs, books, landlines, phone booths, pagers, and PC bangs. No smartphones or instant translation technology. The weekly market brings requests for chairs, delivery, and packing. Orders and rival offers can change. No contract or payment exists until it is actually agreed and fulfilled in the game.",
+  "author_notes": "The combined game preserves lab-landlady-door at 3fd96785 and continues into lab-merchant-town at c2cd52a0. Skip the repeated merchant opening after the stable Min-jun sequence. Use only played events as present truth. Existing contradictory legacy disappearance/debt scenes remain unresolved; do not turn them into automatic current facts.",
+  "source": {
+    "branch": "lab-landlady-door",
+    "commit": "3fd96785949ed919ff6c65887456185ba6583d84",
+    "paths": [
+      "content/learner/en/narration-seoul-city.ftl",
+      "content/settings/seoul-city/README.md",
+      "docs/superpowers/specs/2026-10-07-minjun-opening-script.md",
+      "docs/superpowers/specs/2026-09-29-story-and-book-design.md",
+      "docs/superpowers/specs/2026-10-07-landlady-door-script.md",
+      "docs/superpowers/specs/2026-10-07-landlady-door-audit.md",
+      "docs/superpowers/specs/2026-10-07-landlady-door-lab.md",
+      "content/settings/seoul-city/world.json",
+      "content/settings/seoul-city/opening.json",
+      "content/settings/seoul-city/groups.json",
+      "content/languages/ko/lines/room-wake.ftl",
+      "content/learner/en/lines-ko/room-wake.ftl",
+      "content/languages/ko/lines/room-rent.ftl",
+      "content/learner/en/lines-ko/room-rent.ftl",
+      "content/languages/ko/lines/room-letter.ftl",
+      "content/learner/en/lines-ko/room-letter.ftl",
+      "content/languages/ko/lines/room-minjun.ftl",
+      "content/learner/en/lines-ko/room-minjun.ftl",
+      "content/languages/ko/lines/street-introductions.ftl",
+      "content/learner/en/lines-ko/street-introductions.ftl",
+      "content/languages/ko/lines/stall-intro.ftl",
+      "content/learner/en/lines-ko/stall-intro.ftl",
+      "content/languages/ko/lines/stall-family.ftl",
+      "content/learner/en/lines-ko/stall-family.ftl",
+      "content/languages/ko/lines/shop-prices.ftl",
+      "content/learner/en/lines-ko/shop-prices.ftl",
+      "content/languages/ko/lines/shop-count.ftl",
+      "content/learner/en/lines-ko/shop-count.ftl",
+      "content/languages/ko/lines/campus-labmate.ftl",
+      "content/learner/en/lines-ko/campus-labmate.ftl",
+      "content/languages/ko/lines/copy-intro.ftl",
+      "content/learner/en/lines-ko/copy-intro.ftl",
+      "content/languages/ko/lines/room-creditor.ftl",
+      "content/learner/en/lines-ko/room-creditor.ftl"
+    ],
+    "combined": {
+      "door": "3fd96785",
+      "merchant": "c2cd52a0",
+      "core": "b01ebd6"
+    }
+  },
+  "starter": {
+    "title": "A knock at the door",
+    "kind": "hangout",
+    "location": "Min-jun’s rented room, Seoul, 2000",
+    "participants": [
+      "The Landlady",
+      "Kim Min-jun"
+    ],
+    "opening": "*I wake in an unfamiliar room with someone else’s textbook in my hands. A knock comes from the door. I open it, trying to understand the woman in slippers outside.*"
+  }
+}

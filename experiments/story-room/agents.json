@@ -1,0 +1,74 @@
+{
+  "quiet_on_start": true,
+  "mystery": {
+    "gender": "unknown"
+  },
+  "meetups": {
+    "enabled": true,
+    "max_per_day": 6,
+    "min_exchanges": 4,
+    "max_exchanges": 12,
+    "pace_seconds": 5
+  },
+  "interval_seconds": 15,
+  "score_step_max": 10,
+  "like_max": 1500,
+  "timeout_seconds": 100,
+  "session_turns": 24,
+  "fallback": [
+    {
+      "provider": "cursor",
+      "model": "auto"
+    }
+  ],
+  "provider_timeouts": {
+    "codex": 60,
+    "cursor": 90
+  },
+  "agents": [
+    {
+      "id": "landlady",
+      "name": "The Landlady"
+    },
+    {
+      "id": "minjun",
+      "name": "Kim Min-jun"
+    },
+    {
+      "id": "oldman",
+      "name": "Grandpa Park"
+    },
+    {
+      "id": "jiwoo",
+      "name": "Ji-woo"
+    },
+    {
+      "id": "clerk",
+      "name": "The Corner Shop Clerk"
+    },
+    {
+      "id": "labmate",
+      "name": "Su-jin"
+    },
+    {
+      "id": "copyman",
+      "name": "The Copy Shop Man"
+    },
+    {
+      "id": "creditor",
+      "name": "The Man in a Suit"
+    },
+    {
+      "id": "merchant",
+      "name": "The Merchant"
+    }
+  ],
+  "embeddings": {
+    "enabled": false
+  },
+  "memory_sweep": {
+    "enabled": true
+  },
+  "timezone": "Asia/Seoul",
+  "story_arcs": []
+}

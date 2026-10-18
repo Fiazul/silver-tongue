@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<link rel="icon" href="data:,">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f7f3ed"><title>Scene player · Make It in China Lab</title>
+<link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/scene.css"><link rel="stylesheet" href="/meetups.css">
+<script defer src="/faceless.js"></script><script defer src="/scene.js"></script><script defer src="/meetups.js"></script>
+<link rel="stylesheet" href="/faceless.css"><link rel="stylesheet" href="/embedded.css"><script defer src="/embedded.js"></script></head>
+<body class="scenes-page">
+<header><a class="brand" href="/"><span class="brand-icon">♡</span> story room<span class="brand-dot">.</span></a><a class="back-link" href="/story">← Scenes & bible</a></header>
+<main class="scenes-main">
+<div class="scenes-intro"><div><h1>Your story, in motion.</h1><p>Write your actions and dialogue as the newcomer. The lab cast brings the scene to life.</p></div></div>
+<div class="scenes-layout">
+<aside aria-label="Your scenes">
+<div class="scene-list-heading"><h2>Scenes</h2><button type="button" id="new-scene" class="text-button">+ New scene</button></div>
+<section id="meetups" aria-label="Invitations and meetups"></section>
+<nav id="scene-list" aria-label="Choose a scene"><p>Finding your scenes…</p></nav>
+<details id="create-panel" open>
+<summary>New scene</summary>
+<form id="create-scene">
+<fieldset><legend>Who’s coming?</legend><p class="field-note">You’re always here as Mystery.</p><div id="participants">Loading the cast…</div></fieldset>
+<label>Kind<select name="kind"><option value="date">Date</option><option value="hangout">Hangout</option><option value="trip">Trip</option><option value="life_event">Life event</option><option value="other">Other</option></select></label>
+<label>Title<input name="title" required maxlength="160" placeholder="A knock at the door"></label>
+<label>Location<input name="location" required maxlength="300" placeholder="Min-jun’s rented room"></label>
+<label>Opening narration<textarea name="opening" rows="3" maxlength="4000" placeholder="Set the scene. What do we see, hear, discover?"></textarea></label>
+<label>Visibility<select name="visibility"><option value="private">Private · no room announcement</option><option value="announced">Announced · tell the room we’re away</option></select></label>
+<button class="primary" type="submit" id="create-button">Begin scene</button><p id="create-status" class="form-status" role="status"></p>
+</form>
+</details>
+</aside>
+<section class="scene-stage" aria-label="In-person scene">
+<div class="scene-heading"><div><h2 id="scene-title">A moment waiting to happen</h2><p id="scene-detail">Choose a scene, or invite someone somewhere new.</p></div><button type="button" id="join-scene" class="secondary" hidden>Join as Mystery</button><button type="button" id="conversation-toggle" class="secondary" hidden>Pause conversation</button><button type="button" id="end-scene" class="secondary" hidden>End scene</button></div>
+<p id="scene-summary" hidden></p>
+<div id="scene-feed" class="scene-feed" role="log" aria-live="polite" aria-relevant="additions"><div class="scene-empty"><h3>Where shall we go?</h3><p>Start a scene with someone from the room. Describe the world around you, then see what they bring to the moment.</p></div></div>
+<div id="scene-typing" class="typing" role="status"></div>
+<form id="scene-composer" hidden>
+<label for="scene-move">Your next move <span>as Mystery</span></label>
+<textarea id="scene-move" rows="3" maxlength="4000" placeholder="I open the door, holding someone else’s textbook…"></textarea>
+<div class="scene-compose-tools"><label class="upload-button">📎 Image<input id="scene-image" type="file" accept="image/png,image/jpeg,image/webp,image/gif"></label><span class="field-note">Enter to send · Shift+Enter for a new line</span><button type="submit" class="primary" id="send-move">Send move</button></div>
+<div id="scene-image-draft" hidden><img id="scene-image-preview" alt="Image ready to share"><button id="remove-image" class="text-button" type="button">Remove image</button></div>
+</form>
+<p id="scene-status" class="form-status" role="status"></p>
+<div class="scene-audio"><audio id="scene-player" controls preload="none" hidden></audio><p id="audio-status" role="status"></p></div>
+</section>
+</div>
+</main>
+<dialog id="end-dialog" aria-labelledby="end-title"><form method="dialog"><h2 id="end-title">End this scene?</h2><p>We’ll save a summary and each person’s memories of your time together.</p><div class="dialog-actions"><button value="cancel" class="secondary">Stay a little longer</button><button value="end" class="primary">End scene</button></div></form></dialog>
+</body>
+</html>

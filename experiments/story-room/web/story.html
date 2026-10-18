@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f7f3ed"><title>Scenes & bible · Make It in China Lab</title>
+<link rel="icon" href="data:,"><link rel="stylesheet" href="/story.css">
+<script defer src="/faceless.js"></script><script defer src="/story.js"></script><script defer src="/bible-editor.js"></script>
+<link rel="stylesheet" href="/faceless.css"><link rel="stylesheet" href="/embedded.css"><script defer src="/embedded.js"></script></head>
+<body>
+<a class="skip" href="#main">Skip to story desk</a>
+<header><a class="brand" href="/">Story room<span class="dot">.</span></a><nav class="workspace-nav" aria-label="Workspace"><a href="/room">Chat room</a><a href="/story" aria-current="page">Scenes</a><a href="/story#bible">Editable bible</a></nav><span class="edition">Seoul, 2000 · a place in town</span></header>
+<nav class="tabs" aria-label="Story workspace"><button id="desk-tab" aria-pressed="true">Story desk</button><button id="bible-tab" aria-pressed="false">Character bible</button><span>Your story, from here.</span></nav>
+<main id="main">
+<p id="load-status" class="notice" role="status">Opening your story…</p>
+<button id="retry" class="secondary" hidden>Try loading again</button>
+<section id="desk" aria-labelledby="desk-title">
+<div class="intro"><div><h1 id="desk-title">A new chapter.</h1><p>Familiar people. Somewhere new to take them.<br>Choose who’s coming, set the scene, and step inside.</p></div><div class="continuity-mark"><span>♡</span><p>Their history comes with them.<br>What happens next is yours.</p></div></div>
+<div class="desk-layout">
+<section class="new-chapter" aria-labelledby="new-title">
+<div class="section-heading"><h2 id="new-title">Set the scene</h2><span id="selection-count">Choose your cast</span></div>
+<form id="chapter-form">
+<fieldset><legend>Who’s coming?</legend><p class="hint">You control the newcomer. Pick one or more characters.</p><div id="cast" class="cast-strip" aria-live="polite"></div></fieldset>
+<div class="form-row"><label>Chapter title<input name="title" maxlength="160" required placeholder="A morning with no plans"></label><label>Kind<select name="kind"><option value="hangout">Time together</option><option value="date">Date</option><option value="trip">Adventure</option><option value="life_event">Life event</option><option value="other">Something else</option></select></label></div>
+<label>Where are we?<input name="location" maxlength="300" required placeholder="Grandpa Park’s bench in the alley, just after sunrise"></label>
+<label>Opening narration<textarea name="opening" rows="5" maxlength="4000" placeholder="A kettle whistles behind a doorway. I sit beside Grandpa Park with my notebook…"></textarea></label>
+<p class="hint">Write what you do, say, or see. The characters answer in their own voices.</p>
+<div class="form-actions"><button type="submit" class="primary" id="begin">Begin chapter <span aria-hidden="true">↗</span></button><span id="chapter-status" role="status"></span></div>
+</form>
+</section>
+<aside class="story-aside">
+<section class="starter"><div id="starter-people" class="starter-portraits"></div><h2 id="starter-title">A knock at the door.</h2><p id="starter-description">The landlady arrives. Someone else’s book is still in your hands.</p><button id="quick-play" class="primary">Play the opening ↗</button><p class="hint">From the selected landlady-door experiment.</p></section>
+<section class="where-left"><h2>Where the story begins</h2><p id="opening-memory">Loading the selected experiment’s premise…</p><button id="read-opening" class="text-button">Open the character bible →</button></section>
+</aside>
+</div>
+<section class="chapters" aria-labelledby="chapters-title"><div class="section-heading"><h2 id="chapters-title">Your chapters</h2><a href="/scenes">Open scene player ↗</a></div><p class="hint">Earlier scenes are here too. New chapters save as you play.</p><div id="chapters"><p>Finding your chapters…</p></div></section>
+</section>
+<section id="bible" aria-labelledby="bible-title" hidden>
+<div class="bible-heading"><div><h1 id="bible-title">Character bible.</h1><p>Edit the cast’s backstories, voices and instructions. Your changes drive their next reply.</p></div><button id="edit-world" class="secondary" type="button">Edit world & player</button><a class="secondary download" href="/character-bible.md" download="Character Bible.md">Download Markdown ↓</a></div>
+<p id="bible-save-status" role="status"></p><p class="bible-note">Profiles are authored identity. Recollections belong to the character who remembers them; they may be incomplete or uncertain.</p>
+<div class="bible-layout"><aside><label class="search-label">Find a character<input type="search" id="character-search" placeholder="Name, personality, or interest…"></label><nav id="bible-cast" aria-label="Character profiles"></nav><details class="mysteries"><summary>Unanswered questions</summary><ul id="unknowns"></ul></details></aside><article id="character-profile" aria-live="polite"></article></div>
+</section>
+</main>
+<footer><span>Make It in China · your combined story</span><a href="/character-bible.md" download="Character Bible.md">Keep a copy of the bible ↓</a></footer>
+<dialog id="bible-editor" aria-labelledby="editor-title"></dialog></body>
+</html>

@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0b0e10"><title>Make It in China · A Place in Town</title>
+<link rel="icon" href="data:,"><link rel="stylesheet" href="/journey.css"><script type="module" src="/journey.js"></script>
+</head>
+<body>
+<header class="journey-header">
+ <div class="identity"><a href="/" aria-label="Make It in China, your game">Make It in China</a><span id="chapter-label">The arrival</span></div>
+ <nav aria-label="Story tools">
+  <button id="open-room" type="button" data-panel="room" aria-controls="room-panel" aria-expanded="false"><span class="person-icon" aria-hidden="true"></span>Private room</button>
+  <button type="button" data-panel="bible" aria-controls="room-panel" aria-expanded="false">Bible</button>
+  <button type="button" data-panel="scenes" aria-controls="room-panel" aria-expanded="false">Scenes</button>
+ </nav>
+</header>
+<section id="continuation" class="continuation" aria-label="Continue the story" hidden>
+ <div><strong>You have someone to learn with.</strong><p>Min-jun takes you down to meet Grandpa Park. The neighborhood is waiting.</p></div>
+ <button id="continue-story" type="button">Continue into town <span aria-hidden="true">→</span></button>
+</section>
+<div id="sync-notice" class="sync-notice" role="status" hidden><span id="sync-message"></span><button id="retry-sync" type="button">Retry</button></div>
+<main id="workspace" class="workspace">
+ <section id="game-stage" class="game-stage" aria-label="Your game">
+  <p id="game-loading" class="loading" role="status">Opening your story…</p>
+  <iframe id="game-frame" title="Your story: the arrival" allow="autoplay"></iframe>
+ </section>
+ <aside id="room-panel" class="room-panel" aria-labelledby="panel-title" hidden>
+  <div class="panel-heading"><h1 id="panel-title">Private room</h1><button id="close-panel" type="button">Back to game <span aria-hidden="true">×</span></button></div>
+  <iframe id="room-frame" title="Private room"></iframe>
+ </aside>
+</main>
+<noscript>This game needs JavaScript. Enable it and reload to play.</noscript>
+</body>
+</html>
