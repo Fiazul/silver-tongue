@@ -1,8 +1,11 @@
 import { readFileSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { MarketContent } from '@silver-tongue/core/market';
 
-const coreUrl = new URL('../../../../st-merchant-core/dist/market.js', import.meta.url);
+// The compiled private core, found as vitest.config.ts and build.mjs find it: MERCHANT_CORE_DIST or a sibling checkout.
+const coreUrl = pathToFileURL(join(process.env.MERCHANT_CORE_DIST || fileURLToPath(new URL('../../../../st-merchant-core/dist', import.meta.url)), 'market.js'));
 const content = JSON.parse(readFileSync(new URL('../../../content/experiments/merchant-town/ko.json', import.meta.url), 'utf8')) as MarketContent;
 let create: typeof import('@silver-tongue/core/market').createMarketGame;
 
