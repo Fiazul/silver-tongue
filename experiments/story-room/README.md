@@ -6,6 +6,8 @@ A lab experiment inside the Silver Tongue repo: the app lives in `experiments/st
 
 You need Python 3, Node 22+ and npm, a `GITHUB_PACKAGES_TOKEN` that can read the private core package (see the root `CLAUDE.md`), and the compiled private merchant core (`silver-tongue-core` built to its `dist/`; a sibling `st-merchant-core/dist` is found on its own, anywhere else is named with `MERCHANT_CORE_DIST`):
 
+Clone this branch (`lab-story-room`) until it merges into `lab`; after that, use `--branch lab`.
+
 ```bash
 git clone --branch lab-story-room https://github.com/Bannerless-Studio/silver-tongue.git
 cd silver-tongue/experiments/story-room
@@ -55,7 +57,7 @@ npm run typecheck:experiment
 npm test
 ```
 
-`tools/build_game.py` stops with a clear message when the compiled merchant core is missing. Without it the public parts still check: `npm run typecheck` and `npm test` skip the tests that need the private core. Game content comes from `lab-merchant-town` (`c2cd52a0`), whose door opening is the stable `lab-landlady-door` commit `3fd96785`; the merchant core was `silver-tongue-core` `b01ebd6` when this was put together. See `docs/story-room-experiment.md` at the repo root for what was verified.
+`tools/build_game.py` stops with a clear message when the compiled merchant core is missing. Without it the public parts still check: `npm run typecheck` (including the door bridge) passes and `npm test` skips the 18 town tests that need the private core. `npm run typecheck:experiment` and the town tests honour `MERCHANT_CORE_DIST` too. Game content starts from `lab-merchant-town` (`c2cd52a0`), whose door opening is the stable `lab-landlady-door` commit `3fd96785`; this branch has since changed the town's content (help meanings, the inner-voice feedback, the completion reward and its narration). It is built and tested against `silver-tongue-core` `6284e4e`, on branch `lab-merchant-town` of Bannerless-Studio/silver-tongue-core. See `docs/story-room-experiment.md` at the repo root for what was verified.
 
 ## Working on it
 
