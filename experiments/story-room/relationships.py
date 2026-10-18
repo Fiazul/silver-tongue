@@ -249,7 +249,8 @@ def award_scene(scene_id, gains, participants, agents, config=None, message_coun
 
 
 def preference(agent):
-    return agent.get('attracted_to', ['female' if agent['gender'] == 'male' else 'male'])
+    """Romance is opt-in: only genders named in attracted_to; absent or empty means none."""
+    return list(agent.get('attracted_to') or [])
 
 
 def mystery_gender(config=None):
@@ -281,7 +282,7 @@ def mystery_guard(agent, config=None):
     if not characters.is_human(agent) or mystery_romantic(agent, config):
         return ''
     return ('Mystery is outside your romantic preference: any bond with Mystery stays platonic friendship — '
-            'no flirting, romantic gestures, dates or love confessions toward Mystery at any score.')
+            'no romantic advances, dates or love confessions toward Mystery at any score.')
 
 
 def romantic_names(agent, agents):
@@ -337,7 +338,7 @@ def tone_guidance(agent, scores, agents, config=None):
             if name == 'Mystery':
                 style = 'close; show personal warmth, curiosity, initiative and vulnerability; do not invent their age, identity, consent or reciprocal feelings'
             elif name in romantic:
-                style = 'close attraction; show personal warmth, original flirtation, initiative and vulnerability when welcomed'
+                style = 'close attraction; show personal warmth, original affection, initiative and vulnerability when welcomed'
             else:
                 style = 'close friendship; warm and engaged, without romantic reciprocation outside your preference'
         elif net >= 40:

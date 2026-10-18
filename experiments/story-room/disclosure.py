@@ -1,4 +1,8 @@
-"""Captain-private lore classification and audience-specific sharing policy.
+"""Private-history classification and audience-specific sharing policy.
+
+Applies only to a character configured with protect_private_lore, who holds
+private history about Mystery and shares it by tier, trust and Mystery's own
+locks/unlocks.
 
 Pure policy functions; only migrate() writes, and never touches text or vectors.
 """
@@ -7,20 +11,15 @@ import json
 
 TIERS = ('public', 'ship', 'personal', 'core')
 DEFAULTS = dict(ship=30, personal=60, core=100)
-# Classify log payloads, not their calendar/location envelope.
-LOG_TIERS = {**{f'V{i:03}': 'ship' for i in (1, 9, 10, 11, 12, 13, 14, 27, 28, 29, 30, 31, 32, 33, 34, 38)},
-             **{f'V{i:03}': 'personal' for i in (15, 20, 21, 22, 23, 26, 35, 39)},
-             **{f'V{i:03}': 'core' for i in (2, 3, 4, 5, 6, 7, 8, 16, 17, 18, 19, 24, 25, 36, 37)},
-             **{f'R{i:03}': 'core' for i in range(1, 16)}, 'R011': 'personal', 'R014': 'ship'}
-CORE = re.compile(r"\b(?:crew|hana|imani|pavel|leena|sole survivor|five voices|five aboard|birth|born|twenty.six|twenty.three|real age|(?:ryoma|captain)(?:['’]s)? (?:age|birth|timeline|identity)|ryoma (?:is|was) (?:aged? )?\d+|real identity|his identity|captain.s identity|ryoma tachibana|captain rook|mystery is|callsign|2030|2032|2090|2199|yr4|ba1|ozone|famine|old Earth|earth destroyed|earth.s fall|first (?:flight|voyage)|first profile|trip1|canon|schedule|earth/body|earth.s destruction|earth impact|lunar strike|old human era|actual multi.star trip|old.world lunar|biological (?:age|aging))\b", re.I)
+CORE = re.compile(r"\b(?:birth|born|real age|real name|real identity|(?:his|her|their) identity|mystery is|biological (?:age|aging))\b", re.I)
 PRIVATE_MARKER = re.compile(r'captain[\s_-]*private|protect[\s_-]*private[\s_-]*lore', re.I)
 PRIVATE_FLAGS = ('private', 'captain_private', 'protect_private_lore', 'protect', 'protected', 'secret')
 
-PERSONAL = re.compile(r'\b(?:salvage|probe|neutron|nsb|assist|voyager|near.death|nearly killed|woman|rock|3700|3,700)\b', re.I)
+PERSONAL = re.compile(r'\b(?:near.death|nearly killed|personal)\b', re.I)
 
 
 def protected(agent):
-    return bool(agent and (agent.get('kind') == 'ship_ai' or agent.get('protect_private_lore')))
+    return bool(agent and agent.get('protect_private_lore'))
 
 
 def settings(agent):
@@ -44,12 +43,6 @@ def authored(record):
     return record.get('retrieval_only') and (source.startswith(('lore:', 'lore/')) or '/lore/' in source)
 
 
-def public_science(record):
-    source = str(record.get('source_id', '')).replace('\\', '/')
-    return (source == 'lore:physics' or source.endswith(
-        ('/systems.md', '/faq.md', '/skeptic_questions.md')))
-
-
 def private_marked(record):
     """Explicit content/metadata restrictions always dominate source defaults."""
     marker_text = ' '.join([str(record.get('text', ''))] +
@@ -62,29 +55,18 @@ def private_marked(record):
 
 
 def classify(record):
-    source, text = str(record.get('source_id', '')).replace('\\', '/'), record.get('text', '')
-    # Calendar envelopes are log metadata, not a disclosure of the captain's full timeline.
+    text = record.get('text', '')
+    # Classify log payloads, not their calendar/location envelope.
     payload = re.sub(r'^LOG \w+ \[.*?\]:\s*', '', text, flags=re.I)
-    if CORE.search(payload) or '/ryoma/' in source:
+    if CORE.search(payload):
         return 'core'
-    # An explicit captain-private/protect marker fails closed, including continuation chunks.
+    # An explicit private/protect marker fails closed, including continuation chunks.
     if PRIVATE_MARKER.search(' '.join([text] + [str(t) for t in record.get('tags', [])])):
         return 'core'
-    marked = private_marked(record)
-    if marked:
-        if PERSONAL.search(payload):
-            return 'personal'
-        return 'ship'
-    if public_science(record):
-        return 'public'
-    match = re.search(r'\b(?:LOG )?([VR]\d{3})\b', source + ' ' + text)
-    if match and match[1] in LOG_TIERS:
-        return 'public' if match[1] in ('V031', 'V032', 'V033', 'R014') else LOG_TIERS[match[1]]
+    if private_marked(record):
+        return 'personal' if PERSONAL.search(payload) else 'ship'
     if PERSONAL.search(payload):
         return 'personal'
-    if ('/vella/backstory.md' in source and
-            (text.startswith('Vella was assembled') or 'tracker cannot reconcile the sky' in text.lower())):
-        return 'public'
     return 'ship' if authored(record) else 'core'
 
 
@@ -107,13 +89,8 @@ def topics(text):
     words = re.sub(r'^LOG \w+ \[.*?\]:\s*', '', text, flags=re.I).lower()
     result = []
     for topic, pattern in (
-        ('crew', r'\b(?:crew|hana|imani|pavel|leena|losses)\b'),
-        ('timeline', r'\b(?:timeline|age|identity|birth|born|2030|2032|2090|2199|yr4|moon|earth|wormhole)\b'),
-        ('personal', r'\bpersonal\b'), ('ship', r'\bship\b'), ('core', r'\bcore\b'),
-        ('salvage', r'\b(?:salvage|probe|luhman)\b'),
-        ('assist', r'\b(?:assist|neutron|nsb)\b'), ('voyager', r'\bvoyager\b'),
-        ('woman', r'\b(?:woman|rock)\b'), ('shield', r'\b(?:shield|117)\b'),
-        ('sky', r'\b(?:sky|sirius)\b')):
+        ('timeline', r'\b(?:timeline|age|identity|birth|born)\b'),
+        ('personal', r'\bpersonal\b'), ('ship', r'\bship\b'), ('core', r'\bcore\b')):
         if re.search(pattern, words):
             result.append(topic)
     return result
@@ -244,7 +221,7 @@ def listener_knowledge(store, records, listeners, messages=()):
             for row in rows:
                 source = str(record.get('source_id', ''))
                 same_source = (source not in ('', 'core-note') and source == str(row.get('source_id', '')) and
-                               (not authored(record) or re.fullmatch(r'lore:[VR]\d{3}', source)))
+                               (not authored(record) or re.fullmatch(r'lore:[A-Z]\d{3}', source)))
                 origin = sources.get(str(row.get('source_id', '')), {})
                 if (row.get('id') == record['id'] or same_source or
                         _contains_fact(row.get('text', ''), record) or
@@ -264,21 +241,23 @@ def marker(agent, listeners, record, scores, controls=(), known=()):
 def prompt(agent, listeners, scores, controls=()):
     if not protected(agent):
         return ''
-    lines = ['CAPTAIN LOG DISCLOSURE: Share at most one relevant log excerpt at a time; never dump logs. '
-             'PUBLIC: Freely explain and defend WHAT YOU ARE, your ship-AI identity, personality, drive, shield, cryosleep, unmarked ship physics, public FAQ/skeptic explanations and sky/parallax hypotheses to anyone, regardless of friendship. Never refuse science explanations for lack of trust. Only unmarked science is public. Explicit private markers, crew losses and captain story canon remain private even inside science sources; explain the public mechanism without quoting those private details. Facts a listener already witnessed or was told are also shareable with that listener regardless of tier; this reveals nothing new to them. In groups every listener must be allowed. Captain locks/unlocks govern new private disclosures and override friendship; '
-             'a topic exception changes only that topic. A withheld fact may be hinted at without revealing it, '
-             'or say "that’s the captain’s to tell". These lore permissions are an exception to the generic '
+    lines = ['PRIVATE HISTORY DISCLOSURE: Share at most one relevant private detail at a time; never dump your records. '
+             'PUBLIC: Your own identity, personality and unmarked public facts are free to share with anyone, regardless of friendship. '
+             'Explicit private markers remain private. Facts a listener already witnessed or was told are also shareable with that listener '
+             'regardless of tier; this reveals nothing new to them. In groups every listener must be allowed. Mystery’s locks/unlocks '
+             'govern new private disclosures and override friendship; a topic exception changes only that topic. A withheld fact may be '
+             'hinted at without revealing it, or say "that’s theirs to tell". These lore permissions are an exception to the generic '
              'no-permission-from-scores rule; other secrets stay private. Any outgoing DM must obey its actual recipient’s permissions.']
     for listener in listeners:
         tiers = [t for t in DEFAULTS if allowed(agent, listener, t, scores, controls)]
         withheld = [t for t in DEFAULTS if t not in tiers]
-        lines.append(f'With {listener}, discuss public science and facts they already know freely. ' +
+        lines.append(f'With {listener}, discuss public facts and facts they already know freely. ' +
                      ('New private lore permitted: ' + ', '.join(tiers) + '. ' if tiers else '') +
-                     ('Captain-private until permitted or already known: ' + ', '.join(withheld) + '.'
+                     ('Private until permitted or already known: ' + ', '.join(withheld) + '.'
                       if withheld else 'All private tiers permitted.'))
         for c in controls:
             if c['listener'] == listener:
-                lines.append(f"Captain instruction for {listener}: {c['action']} {c['topic']} (later matching instructions win).")
+                lines.append(f"Mystery’s instruction for {listener}: {c['action']} {c['topic']} (later matching instructions win).")
     return '\n'.join(lines)
 
 

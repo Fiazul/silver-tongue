@@ -86,7 +86,7 @@ def marker(record, audience, messages, owner, extra_known=()):
     return ' '.join(parts)
 
 
-# Explicit introductions/alias statements only; merely saying "Ryoma" never
+# Explicit introductions/alias statements only; merely saying a name never
 # teaches its association with Mystery. This applies equally to any cast label.
 PERSONAL_NAME = r"[A-Z][a-z]+(?:[ -][A-Z][a-z]+){0,2}"
 

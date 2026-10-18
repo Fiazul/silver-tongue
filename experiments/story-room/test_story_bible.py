@@ -65,8 +65,8 @@ class EditableBibleTests(unittest.TestCase):
         self.assertIn('A Korean student learning English.', prompt)
         self.assertIn('Seoul, 2000', prompt)
         self.assertIn('A grey coat.', prompt)
-        self.assertNotIn('Iris', prompt)
-        self.assertNotIn('Vella', prompt)
+        self.assertNotIn('Ji-woo', prompt)
+        self.assertNotIn('The Merchant', prompt)
 
     def test_multiword_names_work_in_memory_and_stash_without_path_traversal(self):
         import life_memory

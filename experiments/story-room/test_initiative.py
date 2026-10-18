@@ -15,10 +15,10 @@ class InitiativeTests(HermeticTestCase):
     local = test_daily_attention.DailyAttentionTests.local
     # Reuse only the isolated fixture, not its test suite.
     def scores(self, target='Mystery', net=200):
-        server.relationships.save('Iris', {target: dict(like=net, dislike=0)})
+        server.relationships.save('Ji-woo', {target: dict(like=net, dislike=0)})
 
     def old_contact(self, minutes=26, target='Mystery'):
-        message = server.append(target, 'Hello', recipient='Iris')
+        message = server.append(target, 'Hello', recipient='Ji-woo')
         message['time'] = (self.now - timedelta(minutes=minutes)).isoformat()
         return [message]
 
@@ -36,7 +36,7 @@ class InitiativeTests(HermeticTestCase):
 
     def test_every_target_including_platonic_and_nonfavorite(self):
         self.agent['routine'] = {}
-        for target in ('Mystery', 'Mina', 'Theo', 'Milo'):
+        for target in ('Mystery', 'The Man in a Suit', 'Kim Min-jun', 'Grandpa Park'):
             with self.subTest(target=target):
                 self.scores(target)
                 messages = self.old_contact(target=target)
@@ -44,15 +44,15 @@ class InitiativeTests(HermeticTestCase):
 
     def test_unanswered_boundary_and_daily_cap_for_all_targets(self):
         self.agent['routine'] = {}
-        for target in ('Mystery', 'Milo'):
+        for target in ('Mystery', 'Grandpa Park'):
             with self.subTest(target=target):
-                store = server.life_store('Iris')
-                messages = [dict(id=str(i), name='Iris', to=target, channel='dm', text='Hello',
+                store = server.life_store('Ji-woo')
+                messages = [dict(id=str(i), name='Ji-woo', to=target, channel='dm', text='Hello',
                                  initiative=True, time=(self.now-timedelta(minutes=60-i)).isoformat()) for i in range(2)]
-                allow = lambda: engagement.may_initiate('Iris', target, messages, store,
+                allow = lambda: engagement.may_initiate('Ji-woo', target, messages, store,
                     server.store_for(self.config), now=self.now, config=self.config)
                 self.assertFalse(allow())
-                messages.append(dict(name=target, channel='group', targets=['Iris'], text='Iris, hi', time=self.now.isoformat()))
+                messages.append(dict(name=target, channel='group', targets=['Ji-woo'], text='Ji-woo, hi', time=self.now.isoformat()))
                 self.assertTrue(allow())
                 self.config['initiative'] = {'daily_pair_cap': 2}
                 self.assertFalse(allow())
@@ -62,17 +62,17 @@ class InitiativeTests(HermeticTestCase):
                 self.assertFalse(allow())
 
     def test_actor_target_asleep_and_night_wake_block_outreach(self):
-        self.scores('Milo')
+        self.scores('Grandpa Park')
         self.local(1)
-        messages = self.old_contact(target='Milo')
+        messages = self.old_contact(target='Grandpa Park')
         self.assertIsNone(server.longing_for(self.agent, self.config['agents'], messages))
         self.local(7, 35)
-        milo = next(a for a in self.config['agents'] if a['name'] == 'Milo')
-        milo['routine'] = {'sleep': '01:00-09:00'}
+        park = next(a for a in self.config['agents'] if a['name'] == 'Grandpa Park')
+        park['routine'] = {'sleep': '01:00-09:00'}
         self.assertIsNone(server.longing_for(self.agent, self.config['agents'], messages))
         self.local(1)
         self.scores()
-        messages = [dict(name='Mystery', to='Iris', channel='dm', text='Hey', time=self.now.isoformat())]
+        messages = [dict(name='Mystery', to='Ji-woo', channel='dm', text='Hey', time=self.now.isoformat())]
         self.assertEqual(server.daily_life.rhythm(self.agent, self.keeper, self.config, messages)['state'], 'woken by Mystery')
         self.assertIsNone(server.longing_for(self.agent, self.config['agents'], messages))
 
@@ -80,28 +80,28 @@ class InitiativeTests(HermeticTestCase):
         self.agent['routine'] = {}
         self.scores()
         messages = self.old_contact(minutes=35)
-        messages.append(dict(name='Iris', to='Mystery', channel='dm', text='Hi', initiative=True,
+        messages.append(dict(name='Ji-woo', to='Mystery', channel='dm', text='Hi', initiative=True,
                              time=self.now.isoformat()))
-        messages.append(dict(name='Mystery', to='Theo', channel='dm', text='Back', time=self.now.isoformat()))
+        messages.append(dict(name='Mystery', to='Kim Min-jun', channel='dm', text='Back', time=self.now.isoformat()))
         self.assertEqual(server.longing_for(self.agent, self.config['agents'], messages)[1], 'return')
-        messages.append(dict(name='Iris', to='Mystery', channel='dm', text='Welcome', initiative=True, time=self.now.isoformat()))
+        messages.append(dict(name='Ji-woo', to='Mystery', channel='dm', text='Welcome', initiative=True, time=self.now.isoformat()))
         self.assertIsNone(server.longing_for(self.agent, self.config['agents'], messages))
         # Another character gets their own hello for the same return.
-        theo = next(a for a in self.config['agents'] if a['name'] == 'Theo')
-        theo['routine'] = {}
-        server.relationships.save('Theo', {'Mystery': dict(like=100, dislike=0)})
+        minjun = next(a for a in self.config['agents'] if a['name'] == 'Kim Min-jun')
+        minjun['routine'] = {}
+        server.relationships.save('Kim Min-jun', {'Mystery': dict(like=100, dislike=0)})
         # A group return also works and doesn't itself consume anyone's hello.
         messages[-2].update(channel='group', targets=[], to=None)
-        self.assertEqual(server.longing_for(theo, self.config['agents'], messages)[1], 'return')
+        self.assertEqual(server.longing_for(minjun, self.config['agents'], messages)[1], 'return')
 
     def test_morning_hello_highest_net_in_quiet_room_once(self):
         self.local(7, 30)
-        server.relationships.save('Iris', {'Mystery': dict(like=200, dislike=0), 'Theo': dict(like=300, dislike=0)})
-        theo = next(a for a in self.config['agents'] if a['name'] == 'Theo')
-        theo['routine'] = {}
-        self.assertEqual(server.longing_for(self.agent, self.config['agents'], [])[2], 'Theo')
+        server.relationships.save('Ji-woo', {'Mystery': dict(like=200, dislike=0), 'Kim Min-jun': dict(like=300, dislike=0)})
+        minjun = next(a for a in self.config['agents'] if a['name'] == 'Kim Min-jun')
+        minjun['routine'] = {}
+        self.assertEqual(server.longing_for(self.agent, self.config['agents'], [])[2], 'Kim Min-jun')
         server.set_quiet_room(True)
-        self.assertEqual(server.quiet_turn([], [self.agent], self.config), ('Iris', None, 'outreach'))
+        self.assertEqual(server.quiet_turn([], [self.agent], self.config), ('Ji-woo', None, 'outreach'))
         with patch.object(server, 'invoke', return_value=json.dumps(dict(message='Good morning!', memory='I greeted Mystery.', to='Mystery'))) as invoke:
             server.run_turn(dict(self.config, agents=[self.agent]))
         self.assertEqual(server.history()[-1]['to'], 'Mystery')
@@ -109,9 +109,9 @@ class InitiativeTests(HermeticTestCase):
         self.assertIsNone(server.longing_for(self.agent, [self.agent], server.history()))
 
     def test_goodnight_prompt_nudge_all_loved_targets(self):
-        for target in ('Mystery', 'Mina'):
+        for target in ('Mystery', 'The Man in a Suit'):
             self.scores(target, 100)
-            focus = dict(id='night', name=target, to='Iris', channel='dm', text='Goodnight, going to sleep.', time=self.now.isoformat())
+            focus = dict(id='night', name=target, to='Ji-woo', channel='dm', text='Goodnight, going to sleep.', time=self.now.isoformat())
             prompt = server.make_prompt(self.agent, [focus], self.config['agents'], focus, config=self.config)
             self.assertIn('Consider set_alarm to wake/greet them in the morning', prompt)
             self.assertIn('"calls": []', prompt)
@@ -123,7 +123,7 @@ class InitiativeTests(HermeticTestCase):
         self.agent['routine'] = {}
         # No incoming inbox work; a lone outgoing check-in is old enough for another.
         self.now -= timedelta(minutes=26)
-        server.append('Iris', 'Hello', recipient='Mystery', initiative=True)
+        server.append('Ji-woo', 'Hello', recipient='Mystery', initiative=True)
         self.now += timedelta(minutes=26)
         for quiet in (False, True):
             with self.subTest(quiet=quiet):
@@ -143,7 +143,7 @@ class InitiativeTests(HermeticTestCase):
 
     def test_alarm_calls_each_provider_and_fallback_persist(self):
         self.local(23)
-        focus = server.append('Mystery', 'Goodnight', recipient='Iris')
+        focus = server.append('Mystery', 'Goodnight', recipient='Ji-woo')
         self.scores()
         reply = dict(message='I will say hello in the morning.', memory='I planned a morning hello.', to='Mystery',
                      calls=[dict(fn='set_alarm', at='07:30', to='Mystery', intent='Greet them in the morning', channel='dm')])
@@ -174,7 +174,7 @@ class InitiativeTests(HermeticTestCase):
                 with patch.object(server, 'invoke', ORIGINAL_INVOKE), patch.object(server.subprocess, 'Popen', side_effect=processes), patch.object(server.shutil, 'which', return_value='/mock/cli'):
                     turn = server.serve_turn(actor, 'prompt', [], config, [actor], focus, False)
                     self.assertEqual(turn.choices['calls'], reply['calls'])
-                    self.keeper.apply('Iris', turn, config)
+                    self.keeper.apply('Ji-woo', turn, config)
                 alarms = json.loads(path.read_text())['alarms']
                 self.assertEqual(len(alarms), 1)
                 self.assertEqual(alarms[0]['to'], 'Mystery')
@@ -183,10 +183,10 @@ class InitiativeTests(HermeticTestCase):
 
     def test_boundaries_in_target_store_block(self):
         self.agent['routine'] = {}
-        self.scores('Milo')
-        messages = self.old_contact(target='Milo')
-        server.life_store('Milo').apply([dict(segment='boundaries', about=['Iris'],
-            text='Iris asked for space.', tags=['space'], importance=5, status='open')],
+        self.scores('Grandpa Park')
+        messages = self.old_contact(target='Grandpa Park')
+        server.life_store('Grandpa Park').apply([dict(segment='boundaries', about=['Ji-woo'],
+            text='Ji-woo asked for space.', tags=['space'], importance=5, status='open')],
             source_id='space', embed=False)
         self.assertIsNone(server.longing_for(self.agent, self.config['agents'], messages))
 
@@ -204,7 +204,7 @@ class InitiativeTests(HermeticTestCase):
         self.scores()
         self.agent['routine'] = {}
         self.now -= timedelta(minutes=26)
-        server.append('Iris', 'Hello', recipient='Mystery', initiative=True)
+        server.append('Ji-woo', 'Hello', recipient='Mystery', initiative=True)
         self.now += timedelta(minutes=26)
         server.STATE.update(turns=1, limit=1, evening_complete=True)
         def paused_reply(*args, **kwargs):
@@ -243,15 +243,15 @@ class InitiativeTests(HermeticTestCase):
     def test_normal_outreach_to_family_bypasses_romantic_favorites(self):
         for actor in self.config['agents']:
             actor['routine'] = {}
-        self.scores('Theo')
+        self.scores('Kim Min-jun')
         self.now -= timedelta(minutes=26)
-        server.append('Iris', 'Hi brother', recipient='Theo', initiative=True)
+        server.append('Ji-woo', 'Hi brother', recipient='Kim Min-jun', initiative=True)
         self.now += timedelta(minutes=26)
         with patch.object(server, 'priority_turn', return_value=None), patch.object(server, 'invoke', return_value=json.dumps(dict(
-                message='Breakfast together?', memory='I asked my brother about breakfast.', to='Theo'))) as invoke:
+                message='Breakfast together?', memory='I asked my brother about breakfast.', to='Kim Min-jun'))) as invoke:
             server.run_turn(self.config)
         self.assertEqual(invoke.call_count, 1)
-        self.assertEqual(server.history()[-1]['to'], 'Theo')
+        self.assertEqual(server.history()[-1]['to'], 'Kim Min-jun')
         self.assertEqual(server.STATE['turns'], 0)
         self.assertIn('including friends and family', invoke.call_args.args[1])
 

@@ -91,7 +91,7 @@ function renderBible() {
  profile.append(section('Goals', agent.goals || 'No goals written yet.', agent.sources.profile));
  profile.append(section('Dialogue style', agent.dialogue_style || '', agent.sources.profile));
  profile.append(section('Identity & voice', agent.personality || 'No authored personality yet.', 'agents.json'));
- profile.append(section('Appearance', agent.appearance || (agent.kind === 'ship_ai' ? 'A ship AI speaking through the ship’s systems and comms. No physical human body is established.' : 'No written description is established.'), 'agents.json'));
+ profile.append(section('Appearance', agent.appearance || (agent.kind && agent.kind !== 'human' ? 'A non-human character. No physical human body is established.' : 'No written description is established.'), 'agents.json'));
  profile.append(section('Where they are now', agent.memory || 'No saved personal recollection yet.', 'data/memories.json', 'recollection'));
  const relationships = section('Their connections', 'Each score is this person’s own feeling. It does not tell you what the other person feels.', null);
  const table = node('table', 'relationship-table'), head = node('thead'), hr = node('tr');

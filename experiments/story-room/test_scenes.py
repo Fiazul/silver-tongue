@@ -52,14 +52,14 @@ class SceneTests(HermeticTestCase):
         self.addCleanup(patcher.stop)
         self.addCleanup(server.WAKE.clear)
         server.STATE['speaker'] = None
-        self.agent = next(a for a in self.config['agents'] if a['name'] == 'Iris')
+        self.agent = next(a for a in self.config['agents'] if a['name'] == 'Ji-woo')
         patcher = patch.object(server, 'invoke', side_effect=self.provider)
         self.invoke = patcher.start()
         self.addCleanup(patcher.stop)
 
     def record(self, owner=None, segment='events', text='We visited the observation deck.'):
-        record = dict(segment=segment, about=['Mystery', 'Iris'], text=text,
-                      tags=['ship', 'together'], importance=5, status='resolved')
+        record = dict(segment=segment, about=['Mystery', 'Ji-woo'], text=text,
+                      tags=['market', 'together'], importance=5, status='resolved')
         if owner:
             record['participant'] = owner
         if segment == 'world':
@@ -68,16 +68,16 @@ class SceneTests(HermeticTestCase):
 
     def provider(self, agent, prompt, timeout, images=None):
         if prompt.startswith('Summarize this completed in-person scene:'):
-            records = [self.record(name) for name in ('Iris', 'Nora') if name in prompt.split('Participants: ')[1].split('.')[0]]
-            return json.dumps(dict(message='We explored the ship together. The stars felt close.',
+            records = [self.record(name) for name in ('Ji-woo', 'The Landlady') if name in prompt.split('Participants: ')[1].split('.')[0]]
+            return json.dumps(dict(message='We explored the night market together. The lanterns felt close.',
                                    memory='A shared outing.', remember=records, to=None, scores={}))
-        return json.dumps(dict(message='*I step onto the deck.* Come see the stars with me.',
-                               memory='I feel closer to Mystery after exploring the ship.',
+        return json.dumps(dict(message='*I step onto the rooftop.* Come see the lanterns with me.',
+                               memory='I feel closer to Mystery after exploring the night market.',
                                remember=[self.record()], resolve=[], scores={'Mystery': {'like': 115, 'dislike': 0}}, to=None))
 
     def create(self, **changes):
-        data = dict(participants=['Iris'], kind='date', title='Among the stars',
-                    location='The ship’s observation deck', visibility='private')
+        data = dict(participants=['Ji-woo'], kind='hangout', title='Among the lanterns',
+                    location='The market rooftop', visibility='private')
         data.update(changes)
         return self.manager.create(data)
 
@@ -93,14 +93,14 @@ class SceneTests(HermeticTestCase):
         path = self.manager.root / scene['id']
         self.assertTrue((path / 'meta.json').is_file())
         self.assertTrue((path / 'messages.jsonl').is_file())
-        posted = self.manager.post(scene['id'], {'text': 'The hatch opens onto a sea of stars.'})
+        posted = self.manager.post(scene['id'], {'text': 'The shutter opens onto a street of lanterns.'})
         self.assertTrue(posted['busy'])
         self.assertEqual(posted['messages'][-1]['kind'], 'narration')
         replied = self.drain(scene['id'])
         self.assertFalse(replied['busy'])
-        self.assertEqual([m['name'] for m in replied['messages']], ['Mystery', 'Iris'])
-        self.assertIn('Iris', server.memories())
-        self.assertEqual(server.relationships.load()['Iris']['Mystery']['like'], 115)
+        self.assertEqual([m['name'] for m in replied['messages']], ['Mystery', 'Ji-woo'])
+        self.assertIn('Ji-woo', server.memories())
+        self.assertEqual(server.relationships.load()['Ji-woo']['Mystery']['like'], 115)
         self.assertEqual(server.history(), [])
         self.manager.end(scene['id'])
         ended = self.drain(scene['id'])
@@ -108,7 +108,7 @@ class SceneTests(HermeticTestCase):
         self.assertTrue(ended['summary'])
         self.assertTrue(ended['ended_at'])
         self.assertEqual(server.history(), [])
-        self.assertFalse(self.manager.away_reason('Iris'))
+        self.assertFalse(self.manager.away_reason('Ji-woo'))
         with self.assertRaises(scenes.SceneError):
             self.manager.post(scene['id'], {'text': 'Another step'})
         self.assertEqual(self.manager.end(scene['id'])['status'], 'ended')
@@ -116,16 +116,16 @@ class SceneTests(HermeticTestCase):
     def test_only_one_active_scene_per_character_and_restart_reservations(self):
         first = self.create()
         with self.assertRaises(scenes.SceneError) as error:
-            self.create(participants=['Iris', 'Nora'])
+            self.create(participants=['Ji-woo', 'The Landlady'])
         self.assertEqual(error.exception.code, 409)
         restarted = scenes.Scenes(vars(server))
-        self.assertEqual(restarted.away_reason('Iris'), 'On a date with Mystery')
+        self.assertEqual(restarted.away_reason('Ji-woo'), 'Hanging out with Mystery')
         self.manager.end(first['id'])
         self.drain(first['id'])
         self.assertEqual(self.create()['status'], 'active')
 
     def test_reservation_checks_group_turn_already_in_flight(self):
-        server.STATE['speaker'] = 'Iris'
+        server.STATE['speaker'] = 'Ji-woo'
         try:
             with self.assertRaises(scenes.SceneError) as error:
                 self.create()
@@ -137,15 +137,15 @@ class SceneTests(HermeticTestCase):
     def test_all_group_scheduler_sites_exclude_scene_characters_and_cast_shows_reason(self):
         self.create()
         available = server.available_agents(self.config['agents'], self.config)
-        self.assertNotIn('Iris', [a['name'] for a in available])
+        self.assertNotIn('Ji-woo', [a['name'] for a in available])
         self.assertIsNone(server.choose_next([], [self.agent]))
-        direct = [dict(id='1', name='Mystery', text='Iris, come here', kind='chat', channel='group')]
-        self.assertNotEqual(server.choose_next(direct, self.config['agents']), 'Iris')
+        direct = [dict(id='1', name='Mystery', text='Ji-woo, come here', kind='chat', channel='group')]
+        self.assertNotEqual(server.choose_next(direct, self.config['agents']), 'Ji-woo')
         status = server.character_status(self.agent, self.config)
         self.assertFalse(status['enabled'])
-        self.assertEqual(status['away_reason'], 'On a date with Mystery')
+        self.assertEqual(status['away_reason'], 'Hanging out with Mystery')
         server.PROVIDER_BREAKS['claude'] = server.time.monotonic() + 100
-        self.assertEqual(server.character_status(self.agent, self.config)['away_reason'], 'On a date with Mystery')
+        self.assertEqual(server.character_status(self.agent, self.config)['away_reason'], 'Hanging out with Mystery')
 
     def test_kind_specific_away_reasons(self):
         reasons = {'date': 'On a date', 'hangout': 'Hanging out', 'trip': 'On a trip',
@@ -153,7 +153,7 @@ class SceneTests(HermeticTestCase):
         for kind, prefix in reasons.items():
             with self.subTest(kind=kind):
                 scene = self.create(kind=kind)
-                self.assertTrue(self.manager.away_reason('Iris').startswith(prefix))
+                self.assertTrue(self.manager.away_reason('Ji-woo').startswith(prefix))
                 self.manager.end(scene['id'])
                 self.drain(scene['id'])
 
@@ -163,30 +163,30 @@ class SceneTests(HermeticTestCase):
         self.drain(private['id'])
         self.assertEqual(server.history(), [])
         public = self.create(visibility='announced')
-        self.assertEqual([m['text'] for m in server.history()], ['Iris left with Mystery.'])
+        self.assertEqual([m['text'] for m in server.history()], ['Ji-woo left with Mystery.'])
         self.manager.end(public['id'])
         self.drain(public['id'])
-        self.assertEqual([m['text'] for m in server.history()], ['Iris left with Mystery.', 'Iris is back.'])
+        self.assertEqual([m['text'] for m in server.history()], ['Ji-woo left with Mystery.', 'Ji-woo is back.'])
         self.assertTrue(all(m['name'] == 'Room' and m['kind'] == 'system' for m in server.history()))
         self.manager.end(public['id'])
         self.assertEqual(len(server.history()), 2)
 
     def test_multiple_participants_reply_once_in_order_with_shared_context(self):
-        scene = self.create(participants=['Nora', 'Iris'], opening='We arrive at the ship.')
+        scene = self.create(participants=['The Landlady', 'Ji-woo'], opening='We arrive at the market.')
         self.assertTrue(scene['busy'])
         replied = self.drain(scene['id'])
-        self.assertEqual([m['name'] for m in replied['messages']], ['Mystery', 'Nora', 'Iris'])
+        self.assertEqual([m['name'] for m in replied['messages']], ['Mystery', 'The Landlady', 'Ji-woo'])
         self.assertEqual(self.invoke.call_count, 2)
-        self.assertIn('Nora: *I step onto the deck.*', self.invoke.call_args_list[1].args[1])
+        self.assertIn('The Landlady: *I step onto the rooftop.*', self.invoke.call_args_list[1].args[1])
         self.assertTrue(all(call.args[2] > 0 for call in self.invoke.call_args_list))
 
     def test_scene_prompt_gm_yes_and_warmth_guards_core_and_pinned_memory(self):
-        store = server.life_store('Iris', self.config)
+        store = server.life_store('Ji-woo', self.config)
         for segment in ('world', 'feelings', 'milestones'):
             store.apply([self.record(segment=segment, text=f'Pinned {segment} detail')], embed=False)
-        server.remember('Iris', 'Mystery and I trust one another.')
-        server.relationships.save('Iris', {'Mystery': {'like': 125, 'dislike': 0}})
-        scene = self.create(opening='A starship waits. We can touch it.')
+        server.remember('Ji-woo', 'Mystery and I trust one another.')
+        server.relationships.save('Ji-woo', {'Mystery': {'like': 125, 'dislike': 0}})
+        scene = self.create(opening='A night market waits. We can touch the stalls.')
         self.drain(scene['id'])
         prompt = self.invoke.call_args.args[1]
         for rule in ('physically together, in person', 'game master', 'established fact', 'firsthand experience IS the evidence',
@@ -200,7 +200,7 @@ class SceneTests(HermeticTestCase):
 
     def test_last_30_scene_messages_only_and_no_group_or_dm_leak(self):
         server.append('Mystery', 'GROUP SECRET')
-        server.append('Mystery', 'DM SECRET', recipient='Iris')
+        server.append('Mystery', 'DM SECRET', recipient='Ji-woo')
         scene = self.create()
         for i in range(35):
             self.manager.append(scene['id'], 'Mystery', f'Opening move {i}.', 'narration')
@@ -215,8 +215,8 @@ class SceneTests(HermeticTestCase):
         self.assertNotIn('DM SECRET', prompt)
 
     def test_long_world_pins_cannot_crowd_out_feelings_or_milestones(self):
-        store = server.life_store('Iris', self.config)
-        records = [self.record(segment='world', text=f'World fact {i}: ' + 'stars ' * 120) for i in range(5)]
+        store = server.life_store('Ji-woo', self.config)
+        records = [self.record(segment='world', text=f'World fact {i}: ' + 'lanterns ' * 120) for i in range(5)]
         records.extend([self.record(segment='feelings', text='I feel close to Mystery.'),
                         self.record(segment='milestones', text='Our first flight together.')])
         store.apply(records, limit=7, embed=False)
@@ -227,11 +227,11 @@ class SceneTests(HermeticTestCase):
         self.assertLess(len(pins), 2000)
 
     def test_end_one_summary_call_records_applied_per_participant_and_deduped(self):
-        scene = self.create(participants=['Iris', 'Nora'])
+        scene = self.create(participants=['Ji-woo', 'The Landlady'])
         self.manager.end(scene['id'])
         ended = self.drain(scene['id'])
         self.assertEqual(self.invoke.call_count, 1)
-        for name in ('Iris', 'Nora'):
+        for name in ('Ji-woo', 'The Landlady'):
             store = server.life_store(name)
             rows = store.load_segment('events')
             self.assertEqual(len(rows), 1)
@@ -240,34 +240,34 @@ class SceneTests(HermeticTestCase):
             store.apply([self.record(name, text=rows[0]['text'])], embed=False)
             self.assertEqual(len(store.load_segment('events')), 1)
             agent = next(a for a in self.config['agents'] if a['name'] == name)
-            question = dict(id='question', name='Mystery', text='Do you remember our ship observation deck outing?',
+            question = dict(id='question', name='Mystery', text='Do you remember our market rooftop outing?',
                             time=scenes.now(), kind='chat', channel='group')
             self.assertIn('We met in person:', server.make_prompt(agent, [question], self.config['agents'], question))
         self.assertEqual(ended['status'], 'ended')
 
     def test_per_turn_memory_records_also_marked_in_person(self):
-        scene = self.create(opening='We enter the ship.')
+        scene = self.create(opening='We enter the market.')
         self.drain(scene['id'])
-        self.assertTrue(server.life_store('Iris').load_segment('events')[0]['text'].startswith('We met in person:'))
+        self.assertTrue(server.life_store('Ji-woo').load_segment('events')[0]['text'].startswith('We met in person:'))
 
     def test_summary_does_not_overwrite_core_notes_or_scores(self):
-        server.remember('Iris', 'I am Iris, growing fond of Mystery.')
-        server.relationships.save('Iris', {'Mystery': {'like': 125, 'dislike': 0}})
+        server.remember('Ji-woo', 'I am Ji-woo, growing fond of Mystery.')
+        server.relationships.save('Ji-woo', {'Mystery': {'like': 125, 'dislike': 0}})
         scene = self.create()
         self.manager.end(scene['id'])
         self.drain(scene['id'])
-        self.assertEqual(server.memories()['Iris'], 'I am Iris, growing fond of Mystery.')
-        self.assertEqual(server.relationships.load()['Iris']['Mystery']['like'], 125)
+        self.assertEqual(server.memories()['Ji-woo'], 'I am Ji-woo, growing fond of Mystery.')
+        self.assertEqual(server.relationships.load()['Ji-woo']['Mystery']['like'], 125)
 
     def test_scene_reply_preserves_love_with_mood_and_uses_configured_ceiling(self):
-        server.relationships.save('Iris', {'Mystery': {'like': 210, 'dislike': 2}})
+        server.relationships.save('Ji-woo', {'Mystery': {'like': 210, 'dislike': 2}})
         self.invoke.side_effect = None
         self.invoke.return_value = json.dumps(dict(message='*I pause.* That hurt, but I still care.',
             memory='I love Mystery and feel hurt.', scores={'Mystery': {'like': 62, 'dislike': 90}},
             mood={'Mystery': {'hurt': 10}}, to=None))
-        scene = self.create(opening='We disagree aboard the ship.')
+        scene = self.create(opening='We disagree inside the market.')
         self.drain(scene['id'])
-        scores = server.relationships.load()['Iris']['Mystery']
+        scores = server.relationships.load()['Ji-woo']['Mystery']
         self.assertEqual((scores['like'], scores['dislike']), (207, 12))
         self.assertEqual(scores['mood']['hurt'], 5)
         prompt = self.invoke.call_args.args[1]
@@ -276,17 +276,17 @@ class SceneTests(HermeticTestCase):
             self.assertIn(phrase, prompt)
 
     def test_summary_awards_mutual_scene_gains_once_even_after_metadata_retry(self):
-        server.relationships.save('Iris', {'Mystery': {'like': 210, 'dislike': 2},
-                                          'Nora': {'like': 1490, 'dislike': 1}})
-        server.relationships.save('Nora', {'Iris': {'like': 80, 'dislike': 3}})
+        server.relationships.save('Ji-woo', {'Mystery': {'like': 210, 'dislike': 2},
+                                          'The Landlady': {'like': 1490, 'dislike': 1}})
+        server.relationships.save('The Landlady', {'Ji-woo': {'like': 80, 'dislike': 3}})
         real_provider = self.provider
         def provider(agent, prompt, timeout, images=None):
             result = json.loads(real_provider(agent, prompt, timeout, images))
-            result['bond_gains'] = [dict(names=['Iris', 'Mystery'], like=25),
-                                    dict(names=['Iris', 'Nora'], like=25)]
+            result['bond_gains'] = [dict(names=['Ji-woo', 'Mystery'], like=25),
+                                    dict(names=['Ji-woo', 'The Landlady'], like=25)]
             return json.dumps(result)
         self.invoke.side_effect = provider
-        scene = self.create(participants=['Iris', 'Nora'])
+        scene = self.create(participants=['Ji-woo', 'The Landlady'])
         self.manager.end(scene['id'])
         original_save = self.manager.save
         def save(meta):
@@ -298,24 +298,24 @@ class SceneTests(HermeticTestCase):
         self.manager.end(scene['id'])
         self.assertEqual(self.drain(scene['id'])['status'], 'ended')
         scores = server.relationships.load()
-        self.assertEqual(scores['Iris']['Mystery']['like'], 235)
-        self.assertEqual(scores['Iris']['Mystery']['dislike'], 2)
-        self.assertEqual(scores['Iris']['Nora']['like'], 1500)
-        self.assertEqual(scores['Nora']['Iris']['like'], 105)
-        self.assertEqual(len(server.life_store('Iris').load_segment('events')), 1)
+        self.assertEqual(scores['Ji-woo']['Mystery']['like'], 235)
+        self.assertEqual(scores['Ji-woo']['Mystery']['dislike'], 2)
+        self.assertEqual(scores['Ji-woo']['The Landlady']['like'], 1500)
+        self.assertEqual(scores['The Landlady']['Ji-woo']['like'], 105)
+        self.assertEqual(len(server.life_store('Ji-woo').load_segment('events')), 1)
 
     def test_invalid_summary_gain_is_clamped_and_summary_preserved(self):
         real_provider = self.provider
         def provider(agent, prompt, timeout, images=None):
             result = json.loads(real_provider(agent, prompt, timeout, images))
-            result['bond_gains'] = [dict(names=['Iris', 'Mystery'], like=26)]
+            result['bond_gains'] = [dict(names=['Ji-woo', 'Mystery'], like=26)]
             return json.dumps(result)
         self.invoke.side_effect = provider
         scene = self.create()
         self.manager.end(scene['id'])
         self.assertEqual(self.drain(scene['id'])['status'], 'ended')
-        self.assertTrue(server.life_store('Iris').index())
-        self.assertEqual(server.relationships.load()['Iris']['Mystery']['like'], 25)
+        self.assertTrue(server.life_store('Ji-woo').index())
+        self.assertEqual(server.relationships.load()['Ji-woo']['Mystery']['like'], 25)
 
     def test_scene_provider_failure_uses_existing_fallback_and_timeouts(self):
         real_provider = self.provider
@@ -354,19 +354,19 @@ class SceneTests(HermeticTestCase):
         server.PROVIDER_BREAKS.clear()
         self.invoke.side_effect = self.provider
         self.manager.post(scene['id'], {'text': 'I try another door.'})
-        self.assertEqual(self.drain(scene['id'])['messages'][-1]['name'], 'Iris')
+        self.assertEqual(self.drain(scene['id'])['messages'][-1]['name'], 'Ji-woo')
 
     def test_failed_participant_does_not_skip_other_participants(self):
         real_provider = self.provider
         def provider(agent, prompt, timeout, images=None):
-            if agent['name'] == 'Nora':
+            if agent['name'] == 'The Landlady':
                 raise ValueError('mock invalid output')
             return real_provider(agent, prompt, timeout, images)
         self.invoke.side_effect = provider
-        scene = self.create(participants=['Nora', 'Iris'], opening='We arrive.')
+        scene = self.create(participants=['The Landlady', 'Ji-woo'], opening='We arrive.')
         with self.assertLogs('scenes', level='ERROR'):
             result = self.drain(scene['id'])
-        self.assertEqual([m['name'] for m in result['messages']], ['Mystery', 'Room', 'Iris'])
+        self.assertEqual([m['name'] for m in result['messages']], ['Mystery', 'Room', 'Ji-woo'])
         self.assertFalse(result['busy'])
 
     def test_failed_end_leaves_active_for_retry_and_does_not_announce_return(self):
@@ -377,7 +377,7 @@ class SceneTests(HermeticTestCase):
             failed = self.drain(scene['id'])
         self.assertEqual(failed['status'], 'active')
         self.assertFalse(failed['busy'])
-        self.assertTrue(self.manager.away_reason('Iris'))
+        self.assertTrue(self.manager.away_reason('Ji-woo'))
         self.assertEqual(len(server.history()), 1)
         self.invoke.side_effect = self.provider
         self.manager.end(scene['id'])
@@ -387,13 +387,13 @@ class SceneTests(HermeticTestCase):
     def test_missing_optional_summary_records_preserve_summary(self):
         self.invoke.side_effect = None
         self.invoke.return_value = json.dumps(dict(message='A shared outing.', memory='Summary.',
-                                                   remember=[self.record('Iris')], to=None))
-        scene = self.create(participants=['Iris', 'Nora'])
+                                                   remember=[self.record('Ji-woo')], to=None))
+        scene = self.create(participants=['Ji-woo', 'The Landlady'])
         self.manager.end(scene['id'])
         ended = self.drain(scene['id'])
         self.assertEqual(ended['status'], 'ended')
-        self.assertTrue(server.life_store('Iris').index())
-        self.assertFalse(server.life_store('Nora').index().get('records'))
+        self.assertTrue(server.life_store('Ji-woo').index())
+        self.assertFalse(server.life_store('The Landlady').index().get('records'))
 
     def test_busy_scene_refuses_overlapping_move_and_end(self):
         scene = self.create(opening='We arrive.')
@@ -422,7 +422,7 @@ class SceneTests(HermeticTestCase):
         self.assertEqual(self.invoke.call_args.kwargs['images'], [Path(attachment)])
 
     def test_validation_and_invalid_scene_ids(self):
-        for data in ({'participants': []}, {'participants': ['Iris', 'Iris']}, {'participants': ['Mystery']},
+        for data in ({'participants': []}, {'participants': ['Ji-woo', 'Ji-woo']}, {'participants': ['Mystery']},
                      {'participants': [None]}, {'participants': ['Unknown']}, {'kind': 'wrong'},
                      {'visibility': 'public'}, {'title': ''}, {'location': ''}, {'opening': 'x' * 4001}):
             with self.subTest(data=data), self.assertRaises(scenes.SceneError):
@@ -458,7 +458,7 @@ class SceneTests(HermeticTestCase):
             with self.subTest(path=path):
                 self.assertEqual(self.request(path)[0], 200)
         self.assertEqual(self.request('/api/scenes'), (200, []))
-        data = dict(participants=['Iris'], title='A walk', location='Garden')
+        data = dict(participants=['Ji-woo'], title='A walk', location='Garden')
         self.assertEqual(self.request('/api/scenes', 'POST', data, 'http://elsewhere')[0], 403)
         self.assertEqual(self.request('/api/scenes', 'POST', [])[0], 400)
         code, created = self.request('/api/scenes', 'POST', data)
@@ -482,18 +482,15 @@ class SceneTests(HermeticTestCase):
         self.assertEqual(self.request(path + f'/attachment/{image_id}/0')[0], 200)
         self.assertEqual(self.request(path + f'/attachment/{image_id}/1')[0], 404)
         self.assertEqual(self.request(path + '/attachment/123/0')[0], 404)
-        wav = Path(self.temp.name) / 'test.wav'
-        wav.write_bytes(b'test audio')
-        with patch.object(server.speech, 'audio_for', return_value=wav) as audio:
-            self.assertEqual(self.request(path + f'/audio/{reply_id}.wav')[0], 200)
-            audio.assert_called_once_with(scene['messages'][1]['text'], self.agent['voice'])
+        # The story cast has no character voices; the route reports that instead of audio.
+        self.assertEqual(self.request(path + f'/audio/{reply_id}.wav')[0], 503)
         self.assertEqual(self.request(path + f'/audio/{image_id}.wav')[0], 404)
 
     def test_active_scenes_sort_first(self):
         ended = self.create()
         self.manager.end(ended['id'])
         self.drain(ended['id'])
-        active = self.create(participants=['Nora'])
+        active = self.create(participants=['The Landlady'])
         self.assertEqual([m['id'] for m in self.manager.list()], [active['id'], ended['id']])
 
     def test_background_worker_exposes_speaker_and_releases_reservation(self):
@@ -512,29 +509,29 @@ class SceneTests(HermeticTestCase):
                 finished.set()
         self.invoke.side_effect = provider
         with patch.object(threading.Thread, 'start', THREAD_START), patch.object(self.manager, 'work', side_effect=work):
-            scene = self.create(opening='We enter the ship.')
+            scene = self.create(opening='We enter the market.')
             try:
                 self.assertTrue(entered.wait(2))
                 active = self.manager.get(scene['id'])
                 self.assertTrue(active['busy'])
-                self.assertEqual(active['speaker'], 'Iris')
+                self.assertEqual(active['speaker'], 'Ji-woo')
                 self.assertEqual(len(active['messages']), 1)
                 self.assertEqual(self.request('/api/scenes/' + scene['id'])[0], 200)
             finally:
                 release.set()
                 self.assertTrue(finished.wait(3))
         self.assertFalse(self.manager.get(scene['id'])['busy'])
-        self.assertEqual(self.manager.get(scene['id'])['messages'][-1]['name'], 'Iris')
+        self.assertEqual(self.manager.get(scene['id'])['messages'][-1]['name'], 'Ji-woo')
 
     def test_real_group_turn_selects_only_remaining_available_characters(self):
         self.create()
-        nora = next(a for a in self.config['agents'] if a['name'] == 'Nora')
-        config = dict(self.config, agents=[self.agent, nora])
+        landlady = next(a for a in self.config['agents'] if a['name'] == 'The Landlady')
+        config = dict(self.config, agents=[self.agent, landlady])
         server.ACTIVE.set()
         server.STATE.update(turns=0, limit=12, speaker=None)
         try:
             server.run_turn(config)
-            self.assertEqual(server.history()[-1]['name'], 'Nora')
+            self.assertEqual(server.history()[-1]['name'], 'The Landlady')
             self.assertEqual(self.manager.get(self.manager.list()[0]['id'])['messages'], [])
         finally:
             server.ACTIVE.clear()

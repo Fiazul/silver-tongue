@@ -4,7 +4,7 @@ import json
 import threading
 from datetime import datetime, timedelta, timezone
 import unittest
-from test_support import HermeticTestCase
+from test_support import HermeticTestCase, romance_cast
 from unittest.mock import patch
 
 import meetups
@@ -45,10 +45,10 @@ class MeetupTests(HermeticTestCase):
         # A normal call uses the same structured parser, including optional choices.
         end = self.end_at is not None and sum('AUTONOMOUS IN-PERSON SCENE:' in p for _, p in self.provider_prompts) >= self.end_at
         return json.dumps(dict(message=f'*I take a seat.* Hello from {agent["name"]}.', memory='A shared moment.',
-                               remember=[dict(self.record(), about=['Iris', 'Milo'])],
+                               remember=[dict(self.record(), about=['Ji-woo', 'Grandpa Park'])],
                                resolve=[], to=None, end_scene=end))
 
-    def invite(self, source='Iris', target='Milo', **changes):
+    def invite(self, source='Ji-woo', target='Grandpa Park', **changes):
         data = dict(to=target, kind='hangout', where='The cafe', when='now', note='Coffee together?')
         data.update(changes)
         return self.meetups.invite(source, data, self.config)
@@ -72,54 +72,64 @@ class MeetupTests(HermeticTestCase):
         self.meetups.work(scene_id)
         return self.manager.get(scene_id)
 
+    def test_story_cast_dates_become_hangouts(self):
+        # Romance is opt-in and the story cast never opts in.
+        result = self.invite('Ji-woo', 'Grandpa Park', kind='date')
+        self.assertEqual(result['kind'], 'hangout')
+        self.meetups.answer('Grandpa Park', dict(id=result['id'], answer='decline'))
+        self.advance(20)
+        self.assertEqual(self.invite('Ji-woo', 'Mystery', kind='date')['kind'], 'hangout')
+
     def test_invite_validation_all_eligibility_sites(self):
-        for source, target, expected in [('Iris', 'Theo', 'hangout'), ('Theo', 'Milo', 'hangout'),
-                                          ('Iris', 'Milo', 'date')]:
+        self.config['agents'] = romance_cast()
+        for source, target, expected in [('Blair', 'Avery', 'hangout'), ('Avery', 'Drew', 'hangout'),
+                                          ('Blair', 'Drew', 'date')]:
             with self.subTest(source=source, target=target):
                 result = self.invite(source, target, kind='date')
                 self.assertEqual(result['kind'], expected)
                 self.meetups.answer(target, dict(id=result['id'], answer='decline'))
-        human = next(a for a in self.config['agents'] if a['name'] == 'Milo')
-        human.update(kind='ship_ai', sibling=None)
+        nonhuman = next(a for a in self.config['agents'] if a['name'] == 'Drew')
+        nonhuman.update(kind='station_ai', sibling=None)
         self.advance(20)
-        result = self.invite(kind='date')
+        result = self.invite('Blair', 'Drew', kind='date')
         self.assertEqual(result['kind'], 'hangout')
-        self.meetups.answer('Milo', dict(id=result['id'], answer='decline'))
+        self.meetups.answer('Drew', dict(id=result['id'], answer='decline'))
         self.advance(20)
-        result = self.invite('Milo', 'Mystery', kind='date')
+        result = self.invite('Drew', 'Mystery', kind='date')
         self.assertEqual(result['kind'], 'hangout')
 
     def test_asymmetric_preference_and_sibling_guards(self):
-        other = next(a for a in self.config['agents'] if a['name'] == 'Milo')
+        self.config['agents'] = romance_cast()
+        other = next(a for a in self.config['agents'] if a['name'] == 'Drew')
         other['attracted_to'] = ['male']
-        self.assertEqual(self.invite(kind='date')['kind'], 'hangout')
+        self.assertEqual(self.invite('Blair', 'Drew', kind='date')['kind'], 'hangout')
         self.meetups.save([])
         other['attracted_to'] = ['female']
-        other['sibling'] = 'Iris'
-        self.assertEqual(self.invite(kind='date')['kind'], 'hangout')
+        other['sibling'] = 'Blair'
+        self.assertEqual(self.invite('Blair', 'Drew', kind='date')['kind'], 'hangout')
 
     def test_invalid_unavailable_and_one_open_invite(self):
-        for data in (dict(to='Nobody'), dict(to='Iris'), dict(where=''), dict(where=[]),
+        for data in (dict(to='Nobody'), dict(to='Ji-woo'), dict(where=''), dict(where=[]),
                      dict(kind='wrong'), dict(when='yesterday'), dict(note=[])):
             self.assertIsNone(self.invite(**data))
         first = self.invite()
-        self.assertIsNone(self.invite(target='Nora'))
+        self.assertIsNone(self.invite(target='The Landlady'))
         self.accept(first)
-        self.assertIsNone(self.invite(target='Nora'))
-        self.manager.create(dict(participants=['Nora'], title='Away', location='Garden'))
-        self.assertIsNone(self.invite('Theo', 'Nora'))
-        self.assertIsNone(self.invite('Nora', 'Mystery'))
-        next(a for a in self.config['agents'] if a['name'] == 'Theo')['enabled'] = False
-        self.assertIsNone(self.invite('Theo', 'Mystery'))
+        self.assertIsNone(self.invite(target='The Landlady'))
+        self.manager.create(dict(participants=['The Landlady'], title='Away', location='Garden'))
+        self.assertIsNone(self.invite('Kim Min-jun', 'The Landlady'))
+        self.assertIsNone(self.invite('The Landlady', 'Mystery'))
+        next(a for a in self.config['agents'] if a['name'] == 'Kim Min-jun')['enabled'] = False
+        self.assertIsNone(self.invite('Kim Min-jun', 'Mystery'))
 
     def test_active_boundaries_from_either_perspective_and_resolution(self):
-        for owner, target in [('Iris', 'Milo'), ('Milo', 'Iris'), ('Iris', 'Mystery')]:
+        for owner, target in [('Ji-woo', 'Grandpa Park'), ('Grandpa Park', 'Ji-woo'), ('Ji-woo', 'Mystery')]:
             with self.subTest(owner=owner, target=target):
                 record = dict(segment='boundaries', about=[target], text=f'{target} asked for space.',
                               tags=['space'], importance=5, status='open')
                 store = server.life_store(owner)
                 store.apply([record], source_id=owner + target, embed=False)
-                invite_target = 'Mystery' if target == 'Mystery' else 'Milo'
+                invite_target = 'Mystery' if target == 'Mystery' else 'Grandpa Park'
                 self.assertIsNone(self.invite(target=invite_target))
                 ids = [r['id'] for r in store.load_segment('boundaries')]
                 store.apply(resolve=ids, embed=False)  # Not the stater: stays open.
@@ -133,8 +143,8 @@ class MeetupTests(HermeticTestCase):
     def test_accept_decline_expiry_cooldown_and_identity(self):
         invite = self.invite()
         with self.assertRaises(scenes.SceneError):
-            self.meetups.answer('Nora', dict(id=invite['id'], answer='accept'))
-        self.meetups.answer('Milo', dict(id=invite['id'], answer='decline', note='Not today.'))
+            self.meetups.answer('The Landlady', dict(id=invite['id'], answer='accept'))
+        self.meetups.answer('Grandpa Park', dict(id=invite['id'], answer='decline', note='Not today.'))
         self.assertIsNone(self.invite())
         self.advance(19)
         self.assertIsNone(self.invite())
@@ -161,7 +171,7 @@ class MeetupTests(HermeticTestCase):
         scene = self.manager.get(row['scene_id'])
         self.assertEqual(row['status'], 'started')
         self.assertFalse(scene.get('autonomous', False))
-        self.assertEqual(scene['participants'], ['Iris'])
+        self.assertEqual(scene['participants'], ['Ji-woo'])
         self.manager.post(scene['id'], dict(text='The sky turns silver.'))
         self.manager.work(scene['id'], 'reply')
         prompt = self.invoke.call_args.args[1]
@@ -175,7 +185,7 @@ class MeetupTests(HermeticTestCase):
         self.meetups.tick()
         self.assertFalse(self.manager.list())
         self.advance(1)
-        server.STATE['speaker'] = 'Iris'
+        server.STATE['speaker'] = 'Ji-woo'
         self.meetups.tick()
         self.assertFalse(self.manager.list())
         server.STATE['speaker'] = None
@@ -189,30 +199,30 @@ class MeetupTests(HermeticTestCase):
         for index in range(4):
             scene = self.step(scene_id)
             self.assertEqual(scene['status'], 'ended' if index == 3 else 'active')
-        self.assertEqual([m['name'] for m in scene['messages'] if m['kind'] == 'chat'], ['Iris', 'Milo', 'Iris', 'Milo'])
+        self.assertEqual([m['name'] for m in scene['messages'] if m['kind'] == 'chat'], ['Ji-woo', 'Grandpa Park', 'Ji-woo', 'Grandpa Park'])
         self.assertEqual(scene['exchanges'], 4)
         prompts = [p for _, p in self.provider_prompts if 'AUTONOMOUS IN-PERSON SCENE:' in p]
         self.assertIn('briefly set the place and mood', prompts[0])
-        self.assertIn('Hello from Iris', prompts[1])
+        self.assertIn('Hello from Ji-woo', prompts[1])
         self.assertIn('Mystery is not present', prompts[0])
         self.assertNotIn('like a game master', prompts[0])
-        self.assertFalse(self.manager.away_reason('Iris'))
+        self.assertFalse(self.manager.away_reason('Ji-woo'))
 
     def test_hard_cap_records_and_mutual_bonus(self):
-        self.gains = [dict(names=['Iris', 'Milo'], like=9), dict(names=['Iris', 'Mystery'], like=25)]
+        self.gains = [dict(names=['Ji-woo', 'Grandpa Park'], like=9), dict(names=['Ji-woo', 'Mystery'], like=25)]
         scene_id = self.start()
-        self.assertIn('Milo', self.manager.away_reason('Iris'))
+        self.assertIn('Grandpa Park', self.manager.away_reason('Ji-woo'))
         for _ in range(12):
             scene = self.step(scene_id)
         self.assertEqual(scene['status'], 'ended')
         self.assertEqual(scene['exchanges'], 12)
         scores = server.relationship_state()
-        for owner, target in [('Iris', 'Milo'), ('Milo', 'Iris')]:
+        for owner, target in [('Ji-woo', 'Grandpa Park'), ('Grandpa Park', 'Ji-woo')]:
             self.assertEqual(scores[owner][target]['like'], 9)
             records = server.life_store(owner).load_segment('events')
             self.assertTrue(any(r['source_id'] == scene_id for r in records))
             self.assertTrue(all(r['text'].startswith('We met in person:') for r in records))
-        self.assertNotIn('Mystery', scores['Iris'])
+        self.assertNotIn('Mystery', scores['Ji-woo'])
         self.assertIn('are back', server.history()[-1]['text'])
 
     def test_pause_resume_pacing_and_disabled(self):
@@ -240,13 +250,13 @@ class MeetupTests(HermeticTestCase):
         self.config['meetups']['enabled'] = False
         self.meetups.work(scene_id)
         self.assertEqual(self.manager.meta(scene_id)['exchanges'], 1)
-        self.assertIsNone(self.invite('Nora', 'Theo'))
+        self.assertIsNone(self.invite('The Landlady', 'Kim Min-jun'))
 
     def test_single_concurrency_daily_cap_and_restart(self):
         self.config['meetups']['max_per_day'] = 1
         self.end_at = 4
         scene_id = self.start()
-        self.accept(self.invite('Nora', 'Theo'))
+        self.accept(self.invite('The Landlady', 'Kim Min-jun'))
         for _ in range(3):
             self.meetups.tick()
         self.assertEqual(len(self.manager.list()), 1)
@@ -265,19 +275,19 @@ class MeetupTests(HermeticTestCase):
 
     def test_failure_twice_closes_with_fallback_records(self):
         scene_id = self.start()
-        self.failures.add('Iris')
+        self.failures.add('Ji-woo')
         with self.assertLogs('meetups', level='ERROR'):
             self.step(scene_id)
             self.step(scene_id)
             scene = self.step(scene_id)
         self.assertEqual(scene['status'], 'ended')
-        self.assertEqual(scene['failures'], {'Iris': 2})
-        self.assertIn('Hello from Milo', scene['summary'])
+        self.assertEqual(scene['failures'], {'Ji-woo': 2})
+        self.assertIn('Hello from Grandpa Park', scene['summary'])
         self.assertNotIn('mock provider failure', scene['summary'])
-        for owner in ['Iris', 'Milo']:
+        for owner in ['Ji-woo', 'Grandpa Park']:
             records = server.life_store(owner).load_segment('events')
             self.assertTrue(any(r['source_id'] == scene_id for r in records))
-        self.assertFalse(self.manager.away_reason('Iris'))
+        self.assertFalse(self.manager.away_reason('Ji-woo'))
 
     def test_existing_provider_fallback_used_in_scene(self):
         real_provider = self.provider
@@ -309,26 +319,26 @@ class MeetupTests(HermeticTestCase):
         self.assertIn('Mystery joined', prompt)
         self.assertIn('never a game master', prompt)
         self.assertIn('I take my own seat', prompt)
-        self.assertIn('Mystery', self.manager.away_reason('Iris'))
+        self.assertIn('Mystery', self.manager.away_reason('Ji-woo'))
         self.assertEqual(scene['exchanges'], 1)
 
     def test_optional_turn_choices_survive_parser_and_prompt(self):
-        invite = dict(to='Milo', kind='hangout', where='Garden', when='now', note='A walk?')
+        invite = dict(to='Grandpa Park', kind='hangout', where='Garden', when='now', note='A walk?')
         self.invoke.side_effect = None
         self.invoke.return_value = json.dumps(dict(message='Want a walk?', memory='I want a walk.', to=None, invite=invite))
         agent = self.agent
         turn = server.serve_turn(agent, 'test', [], self.config, self.config['agents'], None, True)
         self.assertEqual(len(turn), 8)
         self.assertEqual(turn.choices['invite'], invite)
-        self.meetups.choices('Iris', turn, self.config)
+        self.meetups.choices('Ji-woo', turn, self.config)
         row = self.meetups.load()[0]
-        milo = next(a for a in self.config['agents'] if a['name'] == 'Milo')
-        prompt = server.make_prompt(milo, [], self.config['agents'], config=self.config)
-        self.assertIn('PENDING INVITATION from Iris', prompt)
+        park = next(a for a in self.config['agents'] if a['name'] == 'Grandpa Park')
+        prompt = server.make_prompt(park, [], self.config['agents'], config=self.config)
+        self.assertIn('PENDING INVITATION from Ji-woo', prompt)
         reply = meetups.Turn((), dict(invite_reply=dict(id=row['id'], answer='accept')))
-        self.meetups.choices('Milo', reply, self.config)
+        self.meetups.choices('Grandpa Park', reply, self.config)
         self.assertEqual(self.meetups.load()[0]['status'], 'accepted')
-        self.meetups.choices('Milo', reply, self.config)  # Stale optional reply ignored.
+        self.meetups.choices('Grandpa Park', reply, self.config)  # Stale optional reply ignored.
 
     def test_real_room_turn_persists_optional_invite(self):
         self.config['agents'] = [self.agent]
@@ -338,7 +348,7 @@ class MeetupTests(HermeticTestCase):
                                                    to=None, invite=dict(to='Mystery', where='Garden', kind='hangout')))
         server.run_turn(self.config)
         self.assertEqual(self.meetups.load()[0]['to'], 'Mystery')
-        self.assertEqual(server.history()[-1]['name'], 'Iris')
+        self.assertEqual(server.history()[-1]['name'], 'Ji-woo')
 
     def request(self, path, method='GET', body=None, origin=None):
         class Handler:
@@ -427,15 +437,15 @@ class MeetupTests(HermeticTestCase):
 
     def test_availability_and_boundaries_rechecked_for_due_promises(self):
         row = self.accept(self.invite())
-        busy = self.manager.create(dict(participants=['Milo'], title='Busy', location='Garden'))
+        busy = self.manager.create(dict(participants=['Grandpa Park'], title='Busy', location='Garden'))
         self.meetups.tick()
         self.assertEqual(len(self.manager.list()), 1)
         self.assertFalse(self.manager.list()[0].get('autonomous'))
         busy.update(status='ended')
         self.manager.save(busy)
-        record = dict(segment='boundaries', about=['Iris'], text='Iris asked for space.',
+        record = dict(segment='boundaries', about=['Ji-woo'], text='Ji-woo asked for space.',
                       tags=['space'], importance=5, status='open')
-        server.life_store('Milo').apply([record], source_id='new-boundary', embed=False)
+        server.life_store('Grandpa Park').apply([record], source_id='new-boundary', embed=False)
         self.meetups.tick()
         self.assertEqual(self.meetups.load()[0]['status'], 'expired')
         self.assertEqual(len(self.manager.list()), 1)
@@ -446,7 +456,7 @@ class MeetupTests(HermeticTestCase):
         scene_id = self.start()
         for _ in range(4):
             self.step(scene_id)
-        self.accept(self.invite('Nora', 'Theo'))
+        self.accept(self.invite('The Landlady', 'Kim Min-jun'))
         self.meetups.tick()
         self.assertEqual(len(self.manager.list()), 1)
         old = self.manager.meta(scene_id)
@@ -458,9 +468,9 @@ class MeetupTests(HermeticTestCase):
     def test_autonomous_participants_excluded_from_room_scheduler(self):
         self.start()
         remaining = server.available_agents(self.config['agents'], self.config)
-        self.assertFalse({'Iris', 'Milo'} & {a['name'] for a in remaining})
+        self.assertFalse({'Ji-woo', 'Grandpa Park'} & {a['name'] for a in remaining})
         for _ in range(8):
-            self.assertNotIn(server.choose_next([], self.config['agents']), ['Iris', 'Milo'])
+            self.assertNotIn(server.choose_next([], self.config['agents']), ['Ji-woo', 'Grandpa Park'])
 
     def test_partial_optional_summary_records_preserve_message_and_valid_records(self):
         self.end_at = 4
@@ -471,14 +481,14 @@ class MeetupTests(HermeticTestCase):
         def provider(agent, prompt, *args, **kwargs):
             if prompt.startswith('Summarize this completed'):
                 return json.dumps(dict(message='A moment together.', memory='Summary.',
-                                       remember=[self.record('Iris')], to=None))
+                                       remember=[self.record('Ji-woo')], to=None))
             return real_provider(agent, prompt, *args, **kwargs)
         self.invoke.side_effect = provider
         scene = self.step(scene_id)
         self.assertEqual(scene['status'], 'ended')
         self.assertEqual(scene['summary'], 'A moment together.')
-        self.assertTrue(any(r['source_id'] == scene_id for r in server.life_store('Iris').load_segment('events')))
-        self.assertFalse(any(r['source_id'] == scene_id for r in server.life_store('Milo').load_segment('events')))
+        self.assertTrue(any(r['source_id'] == scene_id for r in server.life_store('Ji-woo').load_segment('events')))
+        self.assertFalse(any(r['source_id'] == scene_id for r in server.life_store('Grandpa Park').load_segment('events')))
 
     def test_settings_validation(self):
         for invalid in [dict(enabled=1), dict(max_per_day=-1), dict(min_exchanges=3),

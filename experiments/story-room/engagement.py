@@ -189,7 +189,7 @@ def heart(agent, scores, agents, store, config=None):
                         and not any(p in r['text'].lower() for p in ('not yet', 'unspoken', 'has not', "haven't", 'never confessed'))
                         for r in milestones)
         if not confessed:
-            lines.append(f'Unspoken love: you love {name} and have not said it. Show it through care, remembering details, checking in and wanting their time. Saying it aloud is your choice at a moment that feels right. Never assume their feelings, adult status or consent; existing preference and boundary guards still apply.')
+            lines.append(f'Unspoken love: you love {name} and have not said it. Show it through care, remembering details, checking in and wanting their time. Saying it aloud is your choice at a moment that feels right. Never assume their feelings, age or consent; existing preference and boundary guards still apply.')
     return '\n'.join(lines)
 
 

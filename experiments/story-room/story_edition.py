@@ -55,17 +55,17 @@ def build_bible(root, config):
                                relationships=scores.get(name, {}), memories=records,
                                sources={'profile': f"characters/{agent['id']}.json" if agent.get('id') else 'agents.json', 'memory': 'data/memories.json',
                                         'relationships': 'data/relationships.json'}))
-    captain = next((a.get('knows_mystery', {}) for a in config['agents']
-                    if a.get('knows_mystery', {}).get('names')), {})
+    acquaintance = next((a.get('knows_mystery', {}) for a in config['agents']
+                         if a.get('knows_mystery', {}).get('names')), {})
     return dict(edition=EDITION, generated_at=datetime.now(timezone.utc).isoformat(),
                 description='Authored profiles and attributed recollections from this independent story. '
                             'A memory is its owner’s account, not an omniscient fact. '
                             'Other characters do not receive this operator reference.',
                 world=config.get('story_world', {}),
-                player=config.get('story_world', {}).get('player') or dict(name=next(iter(captain.get('names', [])), 'Player'),
-                            aliases=captain.get('names', ['Mystery']),
+                player=config.get('story_world', {}).get('player') or dict(name=next(iter(acquaintance.get('names', [])), 'Player'),
+                            aliases=acquaintance.get('names', ['Mystery']),
                             role='You play as Mystery. Characters use the names they have actually learned.',
-                            sources=['agents.json', 'lore/ryoma/', 'lore/vella/']),
+                            sources=['agents.json']),
                 unknowns=config.get('story_world', {}).get('unknowns', []),
                 characters=characters)
 

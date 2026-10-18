@@ -230,7 +230,7 @@ function stopVoice(){
  voiceGeneration++;voiceAbort?.abort();voiceAbort=null;voiceQueue=[];audioBusy=false;player.pause();
  player.removeAttribute('src');player.load();player.hidden=true;
  if(voiceObjectURL){URL.revokeObjectURL(voiceObjectURL);voiceObjectURL=null;}
- $('#voice-status').textContent='A different voice for every heart.';
+ $('#voice-status').textContent='Character voices are not available in this story.';
 }
 async function playVoice(path,name,automatic=false){
  if(!automatic)stopVoice();
@@ -256,12 +256,12 @@ function drainVoiceQueue(){
  const next=voiceQueue.shift();
  if(next&&visibleForSpeech(next))playVoice(`/api/audio/${encodeURIComponent(next.id)}.wav`,next.name,true);
 }
-player.onended=()=>{audioBusy=false;$('#voice-status').textContent='A different voice for every heart.';drainVoiceQueue();};
+player.onended=()=>{audioBusy=false;$('#voice-status').textContent='Character voices are not available in this story.';drainVoiceQueue();};
 player.onerror=()=>{audioBusy=false;voiceQueue=[];$('#voice-status').textContent='Audio could not be played. Try Listen again.';};
 $('#listen').onclick=()=>{
  listenOn=!listenOn;if(!listenOn)stopVoice();
  $('#listen').textContent=listenOn?'🔊 Auto-listen on':'🔇 Auto-listen off';$('#listen').setAttribute('aria-pressed',String(listenOn));
- $('#voice-status').textContent=listenOn?'New messages in this conversation will play aloud.':'A different voice for every heart.';
+ $('#voice-status').textContent=listenOn?'New messages in this conversation will play aloud.':'Character voices are not available in this story.';
 };
 $('#mystery-form').onsubmit=async event=>{
  event.preventDefault();

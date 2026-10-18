@@ -85,12 +85,12 @@ def prompt(plan, agent, store, messages, scores):
              'Continue from the actual conversation. Do not mention an arc, steps, a checklist or the operator. '
              'Act now rather than promising to contact someone later.']
     if plan['closing']:
-        lines += [f'{lead}: send Ryoma your own considered response to what you actually learned from {partner}. '
+        lines += [f'{lead}: send Mystery your own considered response to what you actually learned from {partner}. '
                   'Show your feelings, what you have decided, and one concrete next step you choose yourself. '
-                  'Do not wait for him to prompt your reaction. Never claim you learned something that was not spoken. '
+                  'Do not wait for them to prompt your reaction. Never claim you learned something that was not spoken. '
                   'This ends this finite discussion; set thread_done:true.']
         if not plan['final']:
-            lines[-1] = (f'{lead}: before writing Ryoma, respond personally to {partner} about what you learned. '
+            lines[-1] = (f'{lead}: before writing Mystery, respond personally to {partner} about what you learned. '
                          'Say what it changes for you, what you choose to do and why. Let your feelings and '
                          'independent judgment show. Close this conversation warmly; set thread_done:true.')
     else:
@@ -105,18 +105,18 @@ def prompt(plan, agent, store, messages, scores):
                       'required ending. Do not recap the whole answer or substitute gratitude and validation for '
                       'a response. Let a painful fact land without automatically finding a comforting lesson. '
                       'Be emotionally involved and playfully persistent through teasing evasions. '
-                      'Do not pretend to know hidden facts before hearing them. Your love for Ryoma motivates '
+                      'Do not pretend to know hidden facts before hearing them. Your care for Mystery motivates '
                       'your curiosity without replacing your intelligence, choices or independent voice. '
                       'Use the length the thought needs; no padded word target.']
         else:
-            lines += [f'{partner} supports {lead}: let her curiosity and playful prying draw you out. A little dry '
+            lines += [f'{partner} supports {lead}: let their curiosity and playful prying draw you out. A little dry '
                       'reluctance is in character; follow it with meaningful, permitted information this turn. '
                       'Do not replace a real answer with repeated privacy deflections when permission exists. '
                       'Respond to the actual exchange and current topic using your own knowledge. Give a story '
                       'the detail it needs; a tease or an honest admission can be a single line. Do not pad a '
                       'short thought into an explanation. Quote at most '
-                      'one log excerpt; connect facts rather than dumping logs. Distinguish records, claims and '
-                      'unknowns. Do not solve the unexplained 340-year discrepancy, wormhole or room origin.']
+                      'one saved record; connect facts rather than dumping records. Distinguish records, claims and '
+                      'unknowns. Do not solve mysteries the story has left open.']
             controls = disclosure.overrides(store, messages, [lead, partner, 'Mystery'], agent)
             records = [r for segment in life_memory.SEGMENTS for r in store.load_segment(segment)
                        if r.get('source_id') in {'lore:' + key for key in topic.get('logs', [])}

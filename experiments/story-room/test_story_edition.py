@@ -18,47 +18,47 @@ class BibleTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         self.data = self.root / 'data'
-        self.life = self.data / 'life' / 'Iris'
+        self.life = self.data / 'life' / 'Ji-woo'
         self.life.mkdir(parents=True)
-        self.config = {'agents': [{'name': 'Iris', 'age': 27, 'personality': 'Precise and curious.',
-                                  'appearance': 'Lavender hair.', 'sibling': 'Theo'}]}
-        self.write(self.data / 'memories.json', {'Iris': 'I remember the observatory.'})
-        self.write(self.data / 'relationships.json', {'Iris': {'Mystery': {'like': 240, 'dislike': 2}},
-                                                     'Theo': {'Mystery': {'like': 20}}})
+        self.config = {'agents': [{'name': 'Ji-woo', 'age': 27, 'personality': 'Precise and curious.',
+                                  'appearance': 'An apron at the stall.', 'sibling': 'Kim Min-jun'}]}
+        self.write(self.data / 'memories.json', {'Ji-woo': 'I remember the stall.'})
+        self.write(self.data / 'relationships.json', {'Ji-woo': {'Mystery': {'like': 240, 'dislike': 2}},
+                                                     'Kim Min-jun': {'Mystery': {'like': 20}}})
 
     def write(self, path, value):
         path.write_text(json.dumps(value))
 
     def test_profile_and_attributed_continuity_have_separate_sources(self):
         bible = story_edition.build_bible(self.root, self.config)
-        iris = bible['characters'][0]
-        self.assertEqual(iris['personality'], 'Precise and curious.')
-        self.assertEqual(iris['memory'], 'I remember the observatory.')
-        self.assertEqual(iris['sources']['profile'], 'agents.json')
-        self.assertEqual(iris['sources']['memory'], 'data/memories.json')
-        self.assertEqual(list(iris['relationships']), ['Mystery'])
-        self.assertEqual(iris['relationships']['Mystery']['like'], 240)
+        jiwoo = bible['characters'][0]
+        self.assertEqual(jiwoo['personality'], 'Precise and curious.')
+        self.assertEqual(jiwoo['memory'], 'I remember the stall.')
+        self.assertEqual(jiwoo['sources']['profile'], 'agents.json')
+        self.assertEqual(jiwoo['sources']['memory'], 'data/memories.json')
+        self.assertEqual(list(jiwoo['relationships']), ['Mystery'])
+        self.assertEqual(jiwoo['relationships']['Mystery']['like'], 240)
         self.assertEqual(bible['player']['name'], 'Player')
 
     def test_superseded_records_and_pre_reset_evidence_are_excluded(self):
-        self.write(self.data / 'character-resets.json', {'Iris': 100})
+        self.write(self.data / 'character-resets.json', {'Ji-woo': 100})
         self.write(self.life / 'index.json', {'boundary': 100})
         self.write(self.life / 'milestones.json', [
             {'id': 'old', 'source_id': '80', 'text': 'Before reset'},
             {'id': 'replaced', 'source_id': '120', 'text': 'Obsolete', 'superseded': True},
             {'id': 'current', 'source_id': '140', 'text': 'New observatory visit', 'importance': 5}])
-        iris = story_edition.build_bible(self.root, self.config)['characters'][0]
-        self.assertEqual([r['id'] for r in iris['memories']], ['current'])
-        self.assertEqual(iris['memories'][0]['source'], 'data/life/Iris/milestones.json')
+        jiwoo = story_edition.build_bible(self.root, self.config)['characters'][0]
+        self.assertEqual([r['id'] for r in jiwoo['memories']], ['current'])
+        self.assertEqual(jiwoo['memories'][0]['source'], 'data/life/Ji-woo/milestones.json')
 
     def test_reset_with_stale_store_excludes_all_old_scene_memories(self):
-        self.write(self.data / 'character-resets.json', {'Iris': 100})
+        self.write(self.data / 'character-resets.json', {'Ji-woo': 100})
         self.write(self.life / 'index.json', {'boundary': 0})
         self.write(self.life / 'events.json', [{'id': 'scene', 'source_id': 'abcdef', 'text': 'Old scene'}])
         self.assertEqual(story_edition.build_bible(self.root, self.config)['characters'][0]['memories'], [])
 
     def test_record_at_reset_boundary_matches_engine_visibility(self):
-        self.write(self.data / 'character-resets.json', {'Iris': 100})
+        self.write(self.data / 'character-resets.json', {'Ji-woo': 100})
         self.write(self.life / 'index.json', {'boundary': 100})
         self.write(self.life / 'milestones.json', [{'id': 'first', 'source_id': '100', 'text': 'First valid memory'}])
         records = story_edition.build_bible(self.root, self.config)['characters'][0]['memories']
@@ -69,7 +69,7 @@ class BibleTests(unittest.TestCase):
         bible = story_edition.build_bible(self.root, self.config)
         self.assertEqual(bible['characters'][0]['memory'], '')
         output = story_edition.markdown(bible)
-        self.assertIn('## Iris', output)
+        self.assertIn('## Ji-woo', output)
         self.assertIn('agents.json', output)
         self.assertIn('not established', output.lower())
 

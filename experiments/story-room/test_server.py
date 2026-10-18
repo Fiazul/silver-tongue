@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
-from test_support import HermeticTestCase
+from test_support import HermeticTestCase, romance_cast
 from unittest.mock import patch
 
 import server
@@ -71,15 +71,15 @@ class RoomTests(HermeticTestCase):
         self.assertEqual(server.classify_failure(RuntimeError('exited 1')), 'crash')
         self.assertEqual(server.classify_failure(ValueError('wrong DM recipient')), 'bad_reply')
 
-    def test_claude_429_marks_exhausted_until_dhaka_reset_and_serves_cursor(self):
+    def test_claude_429_marks_exhausted_until_provider_reset_and_serves_cursor(self):
         from datetime import datetime, timezone
         config = self.fallback_config()
-        now = datetime(2026, 10, 15, 14, 0, tzinfo=timezone.utc)
+        now = datetime(2026, 10, 15, 11, 0, tzinfo=timezone.utc)
         failure = self.provider_process('claude', error={'api_error_status': 429, 'api_error': 'usage_limit_reached',
-            'result': "You've hit your session limit · resets 9:10pm (Asia/Dhaka)"}, returncode=1)
+            'result': "You've hit your session limit · resets 9:10pm (Asia/Seoul)"}, returncode=1)
         reply = {'message': 'Still here.', 'memory': 'I greeted the room.', 'to': None}
         good = self.provider_process('cursor', reply)
-        expected = datetime(2026, 10, 15, 15, 10, tzinfo=timezone.utc).timestamp()
+        expected = datetime(2026, 10, 15, 12, 10, tzinfo=timezone.utc).timestamp()
         with tempfile.TemporaryDirectory() as tmp, patch.object(server, 'LOG', Path(tmp)/'messages.jsonl'), \
              patch.object(server, 'MEMORY', Path(tmp)/'memories.json'), \
              patch.object(server.time, 'time', return_value=now.timestamp()), \
@@ -239,10 +239,10 @@ class RoomTests(HermeticTestCase):
             self.assertNotIn('--effort', launch.call_args.args[0])
 
     def test_effort_and_memory_config_validation(self):
-        iris = dict(name='Iris', provider='claude', model='fixture-sonnet', effort='medium',
+        jiwoo = dict(name='Ji-woo', provider='claude', model='fixture-sonnet', effort='medium',
                     gender='female', personality='A fixture character.', enabled=True)
-        config = dict(agents=[iris], effort='low')
-        self.assertEqual(server.effort_for(iris, config), 'medium')
+        config = dict(agents=[jiwoo], effort='low')
+        self.assertEqual(server.effort_for(jiwoo, config), 'medium')
         for provider, value in (('claude', 'ultra'), ('agy', 'ultra'), ('codex', 'banana')):
             with self.assertRaises(ValueError):
                 server.effort_for(dict(provider=provider, effort=value), {})
@@ -253,7 +253,7 @@ class RoomTests(HermeticTestCase):
                                ('effort', 'banana')):
                 changed = dict(config, **{field: bad})
                 if field == 'effort':
-                    changed['agents'] = [{k: v for k, v in iris.items() if k != 'effort'}]
+                    changed['agents'] = [{k: v for k, v in jiwoo.items() if k != 'effort'}]
                 server.CONFIG.write_text(json.dumps(changed))
                 with self.subTest(field=field), self.assertRaises(ValueError):
                     server.load_config()
@@ -285,12 +285,12 @@ class RoomTests(HermeticTestCase):
 
     def test_codex_five_hour_errors_are_quota_with_reset(self):
         from datetime import datetime, timezone
-        now = datetime(2026, 10, 15, 14, 0, tzinfo=timezone.utc)
-        expected = datetime(2026, 10, 15, 15, 10, tzinfo=timezone.utc).timestamp()
+        now = datetime(2026, 10, 15, 11, 0, tzinfo=timezone.utc)
+        expected = datetime(2026, 10, 15, 12, 10, tzinfo=timezone.utc).timestamp()
         agent = self.fallback_config('codex')['agents'][0]
         for event_type in ('turn.failed', 'error'):
-            for message in ("You've hit your 5-hour limit. Try again at 9:10pm (Asia/Dhaka)",
-                            'Usage-limit reached; resets 2026-10-15T15:10:00Z'):
+            for message in ("You've hit your 5-hour limit. Try again at 9:10pm (Asia/Seoul)",
+                            'Usage-limit reached; resets 2026-10-15T12:10:00Z'):
                 proc = self.provider_process('codex', error=message, returncode=1)
                 proc.communicate.return_value = (json.dumps({'type': event_type, 'error': {'message': message}}),
                                                  'failed to load skill: missing field description')
@@ -306,18 +306,18 @@ class RoomTests(HermeticTestCase):
 
     def test_quota_reset_fallback_and_expiry(self):
         from datetime import datetime, timezone
-        now = datetime(2026, 10, 15, 16, 0, tzinfo=timezone.utc)
+        now = datetime(2026, 10, 15, 13, 0, tzinfo=timezone.utc)
         self.assertEqual(server.quota_reset('quota', now), now.timestamp()+1800)
-        self.assertEqual(server.quota_reset('reset 2026-10-15T17:00:00Z', now), now.timestamp()+3600)
-        self.assertEqual(server.quota_reset('resets 9:10pm (Asia/Dhaka)', now), now.timestamp()+23*3600+10*60)
+        self.assertEqual(server.quota_reset('reset 2026-10-15T14:00:00Z', now), now.timestamp()+3600)
+        self.assertEqual(server.quota_reset('resets 9:10pm (Asia/Seoul)', now), now.timestamp()+23*3600+10*60)
         server.PROVIDER_EXHAUSTED['claude'] = 0
         self.assertTrue(server.provider_ready('claude'))
 
 
     def test_wrong_dm_recipient_falls_back_to_same_dm_sender(self):
         config = self.fallback_config()
-        focus = {'id': '1', 'name': 'Mystery', 'text': 'Hi', 'channel': 'dm', 'to': 'Theo'}
-        bad = json.dumps({'message': 'Hello', 'memory': 'Bad memory', 'to': 'Iris'})
+        focus = {'id': '1', 'name': 'Mystery', 'text': 'Hi', 'channel': 'dm', 'to': 'Kim Min-jun'}
+        bad = json.dumps({'message': 'Hello', 'memory': 'Bad memory', 'to': 'Ji-woo'})
         good = json.dumps({'message': 'Hey', 'memory': 'Good memory', 'to': 'Mystery'})
         with patch.object(server, 'invoke', side_effect=[bad, good]) as invoke:
             result = server.serve_turn(config['agents'][0], 'Prompt', [], config, config['agents'], focus, False)
@@ -331,12 +331,12 @@ class RoomTests(HermeticTestCase):
         good = json.dumps({'message': 'Hello', 'memory': 'I greeted the group', 'to': None})
         with tempfile.TemporaryDirectory() as tmp, patch.object(server, 'LOG', Path(tmp)/'messages.jsonl'), \
              patch.object(server, 'MEMORY', Path(tmp)/'memories.json'), \
-             patch.object(server, 'choose_next', side_effect=['Theo', 'Iris']), \
+             patch.object(server, 'choose_next', side_effect=['Kim Min-jun', 'Ji-woo']), \
              patch.object(server, 'invoke', side_effect=[RuntimeError('primary crashed'), RuntimeError('fallback crashed'), good]) as invoke:
             server.ACTIVE.set()
             server.run_turn(config)
             server.run_turn(config)
-            self.assertEqual(server.history()[-1]['name'], 'Iris')
+            self.assertEqual(server.history()[-1]['name'], 'Ji-woo')
             self.assertEqual(server.history()[-1]['kind'], 'chat')
             self.assertEqual(invoke.call_count, 3)
             self.assertTrue(server.ACTIVE.is_set())
@@ -365,55 +365,55 @@ class RoomTests(HermeticTestCase):
 
 
     def test_mentions_match_whole_names(self):
-        self.assertEqual(server.mentions("@IrisExtra, meet @Nora!", ["Iris", "Nora"]), ["Nora"])
+        self.assertEqual(server.mentions("@Ji-wooExtra, meet @The Landlady!", ["Ji-woo", "The Landlady"]), ["The Landlady"])
 
     def test_complete_reply_is_not_cut_at_a_word_or_character_limit(self):
-        message = "Ryoma, I'm not asking you to fix it alone. Are you safe right now, or still in the engine room? I can wait until you're somewhere quiet."
+        message = "Alex, I'm not asking you to fix it alone. Are you safe right now, or still in the engine room? I can wait until you're somewhere quiet."
         self.assertEqual(server.compact_message(message), message)
 
     def test_everyone_gets_a_turn_before_repeating(self):
-        agents = [{"name": n} for n in ["Theo", "Iris", "Milo"]]
-        messages = [{"name": "Theo", "text": "Hello everyone"}, {"name": "Iris", "text": "How is the evening?"}]
-        self.assertEqual(server.choose_next(messages, agents), "Milo")
+        agents = [{"name": n} for n in ["Kim Min-jun", "Ji-woo", "Grandpa Park"]]
+        messages = [{"name": "Kim Min-jun", "text": "Hello everyone"}, {"name": "Ji-woo", "text": "How is the evening?"}]
+        self.assertEqual(server.choose_next(messages, agents), "Grandpa Park")
 
     def test_direct_mention_overrides_turn_balancing(self):
-        agents = [{'name': n} for n in ['Theo', 'Iris', 'Milo']]
-        messages = [{'id': '1', 'name': 'Theo', 'text': '@Iris hi'},
-                    {'id': '2', 'name': 'Iris', 'text': '@Theo your turn'}]
-        self.assertEqual(server.choose_next(messages, agents), 'Theo')
+        agents = [{'name': n} for n in ['Kim Min-jun', 'Ji-woo', 'Grandpa Park']]
+        messages = [{'id': '1', 'name': 'Kim Min-jun', 'text': '@Ji-woo hi'},
+                    {'id': '2', 'name': 'Ji-woo', 'text': '@Kim Min-jun your turn'}]
+        self.assertEqual(server.choose_next(messages, agents), 'Kim Min-jun')
 
     def test_actor_mention_loop_leaves_room_for_an_independent_turn(self):
-        agents = [{'name': n} for n in ['Theo', 'Iris', 'Milo']]
-        messages = [{'id': str(i), 'name': 'Milo' if i % 2 else 'Theo', 'text': '@Theo hi' if i % 2 else '@Milo hi', 'channel': 'group'} for i in range(1, 4)]
-        self.assertEqual(server.choose_next(messages, agents), 'Theo')
-        messages.append({'id': '4', 'name': 'Mystery', 'text': '@Theo urgent question', 'channel': 'group'})
-        self.assertEqual(server.choose_next(messages, agents), 'Theo')
+        agents = [{'name': n} for n in ['Kim Min-jun', 'Ji-woo', 'Grandpa Park']]
+        messages = [{'id': str(i), 'name': 'Grandpa Park' if i % 2 else 'Kim Min-jun', 'text': '@Kim Min-jun hi' if i % 2 else '@Grandpa Park hi', 'channel': 'group'} for i in range(1, 4)]
+        self.assertEqual(server.choose_next(messages, agents), 'Kim Min-jun')
+        messages.append({'id': '4', 'name': 'Mystery', 'text': '@Kim Min-jun urgent question', 'channel': 'group'})
+        self.assertEqual(server.choose_next(messages, agents), 'Kim Min-jun')
 
     def test_character_reset_excludes_old_history_and_reply_requests(self):
         agents = server.load_config()['agents']
-        iris = next(a for a in agents if a['name'] == 'Iris')
-        server.RESETS.write_text(json.dumps({'Iris': 100}))
-        messages = [{'id': '99', 'name': 'Mystery', 'text': '@Iris OLD_PRIVATE_STORY', 'channel': 'dm', 'to': 'Iris'},
-                    {'id': '101', 'name': 'Theo', 'text': 'NEW_SHARED_HELLO', 'channel': 'group'}]
-        prompt = server.make_prompt(iris, messages, agents)
+        jiwoo = next(a for a in agents if a['name'] == 'Ji-woo')
+        server.RESETS.write_text(json.dumps({'Ji-woo': 100}))
+        messages = [{'id': '99', 'name': 'Mystery', 'text': '@Ji-woo OLD_PRIVATE_STORY', 'channel': 'dm', 'to': 'Ji-woo'},
+                    {'id': '101', 'name': 'Kim Min-jun', 'text': 'NEW_SHARED_HELLO', 'channel': 'group'}]
+        prompt = server.make_prompt(jiwoo, messages, agents)
         self.assertNotIn('OLD_PRIVATE_STORY', prompt)
         self.assertIn('NEW_SHARED_HELLO', prompt)
         self.assertIsNone(server.priority_turn(messages, agents))
 
     def test_new_question_is_not_answered_by_an_older_inflight_reply(self):
-        agents = [{'name': n} for n in ['Kai', 'Nora', 'Theo']]
-        messages = [{'id': '1', 'name': 'Mystery', 'text': 'kai what game are you making?'},
-                    {'id': '2', 'name': 'Kai', 'text': 'Old topic', 'reply_to': 'older'},
-                    {'id': '3', 'name': 'Nora', 'text': '@Theo hello'}]
+        agents = [{'name': n} for n in ['The Corner Shop Clerk', 'The Landlady', 'Kim Min-jun']]
+        messages = [{'id': '1', 'name': 'Mystery', 'text': 'the corner shop clerk what game are you making?'},
+                    {'id': '2', 'name': 'The Corner Shop Clerk', 'text': 'Old topic', 'reply_to': 'older'},
+                    {'id': '3', 'name': 'The Landlady', 'text': '@Kim Min-jun hello'}]
         name, focus = server.priority_turn(messages, agents)
-        self.assertEqual((name, focus['id']), ('Kai', '1'))
+        self.assertEqual((name, focus['id']), ('The Corner Shop Clerk', '1'))
 
     def test_answering_latest_dm_does_not_resurrect_older_messages(self):
-        agents = [{'name': 'Iris'}]
-        messages = [{'id': '1', 'name': 'Mystery', 'text': 'Fine', 'channel': 'dm', 'to': 'Iris'},
-                    {'id': '2', 'name': 'Mystery', 'text': 'Here are the logs', 'channel': 'dm', 'to': 'Iris'},
-                    {'id': '3', 'name': 'Mystery', 'text': 'Why do you want the logs?', 'channel': 'dm', 'to': 'Iris'},
-                    {'id': '4', 'name': 'Iris', 'text': 'I wanted to understand them.', 'channel': 'dm', 'to': 'Mystery', 'reply_to': '3'}]
+        agents = [{'name': 'Ji-woo'}]
+        messages = [{'id': '1', 'name': 'Mystery', 'text': 'Fine', 'channel': 'dm', 'to': 'Ji-woo'},
+                    {'id': '2', 'name': 'Mystery', 'text': 'Here are the logs', 'channel': 'dm', 'to': 'Ji-woo'},
+                    {'id': '3', 'name': 'Mystery', 'text': 'Why do you want the logs?', 'channel': 'dm', 'to': 'Ji-woo'},
+                    {'id': '4', 'name': 'Ji-woo', 'text': 'I wanted to understand them.', 'channel': 'dm', 'to': 'Mystery', 'reply_to': '3'}]
         self.assertIsNone(server.priority_turn(messages, agents))
 
     def test_mention_interrupts_normal_delay(self):
@@ -426,13 +426,13 @@ class RoomTests(HermeticTestCase):
 
     def test_private_exchange_returns_turn_to_other_group_members(self):
         agents = server.load_config()['agents']
-        messages = [{'id': '1', 'name': 'Iris', 'text': 'hello', 'channel': 'dm', 'to': 'Mina', 'targets': ['Mina']},
-                    {'id': '2', 'name': 'Mina', 'text': 'hey', 'channel': 'dm', 'to': 'Iris', 'reply_to': '1', 'targets': ['Iris']}]
-        self.assertEqual(server.priority_turn(messages, agents)[0], 'Iris')
+        messages = [{'id': '1', 'name': 'Ji-woo', 'text': 'hello', 'channel': 'dm', 'to': 'The Man in a Suit', 'targets': ['The Man in a Suit']},
+                    {'id': '2', 'name': 'The Man in a Suit', 'text': 'hey', 'channel': 'dm', 'to': 'Ji-woo', 'reply_to': '1', 'targets': ['Ji-woo']}]
+        self.assertEqual(server.priority_turn(messages, agents)[0], 'Ji-woo')
         for _ in range(20):  # Every random fairness branch must exclude disabled cast.
-            self.assertNotIn(server.choose_next(messages, agents), ('Iris', 'Mina', 'Finn', 'Luna'))
-        messages.append({'id': '3', 'name': 'Mystery', 'text': '@Iris quick question', 'channel': 'group'})
-        self.assertEqual(server.priority_turn(messages, agents)[0], 'Iris')
+            self.assertNotIn(server.choose_next(messages, agents), ('Ji-woo', 'The Man in a Suit', 'The Copy Shop Man', 'Su-jin'))
+        messages.append({'id': '3', 'name': 'Mystery', 'text': '@Ji-woo quick question', 'channel': 'group'})
+        self.assertEqual(server.priority_turn(messages, agents)[0], 'Ji-woo')
 
     def test_group_slot_generates_a_public_message(self):
         agents = server.load_config()['agents']
@@ -440,80 +440,99 @@ class RoomTests(HermeticTestCase):
              patch.object(server, 'LOG', Path(tmp)/'messages.jsonl'), \
              patch.object(server, 'MEMORY', Path(tmp)/'memories.json'), \
              patch.object(server, 'invoke', return_value=json.dumps({'message': 'Anyone else hungry?', 'memory': 'I asked the group about food.', 'to': None})) as invoke:
-            server.append('Iris', 'hello', recipient='Mina')
-            server.append('Mina', 'hey', recipient='Iris', reply_to=server.history()[0]['id'])
+            server.append('Ji-woo', 'hello', recipient='The Man in a Suit')
+            server.append('The Man in a Suit', 'hey', recipient='Ji-woo', reply_to=server.history()[0]['id'])
             server.ACTIVE.set()
             server.run_turn({'agents': agents})
             self.assertEqual(server.history()[-1]['channel'], 'group')
             self.assertIn('GROUP TURN', invoke.call_args.args[1])
 
     def test_romantic_ranking_excludes_siblings_and_same_gender(self):
-        agents = server.load_config()['agents']
-        theo = next(a for a in agents if a['name'] == 'Theo')
-        scores = server.relationships.propose(theo, {'Iris': {'like': 100, 'dislike': 0}, 'Kai': {'like': 80, 'dislike': 5}, 'Nora': {'like': 90, 'dislike': 30}}, agents)
-        self.assertEqual(server.relationships.favorites(theo, scores, agents), ['Nora'])
-        server.relationships.save('Theo', scores)
-        self.assertEqual(server.relationships.load()['Theo'], scores)
-        self.assertNotIn('Invented', server.relationships.propose(theo, {'Invented': {'like': 100, 'dislike': 0}}, agents))
+        agents = romance_cast()
+        avery = agents[0]
+        scores = server.relationships.propose(avery, {'Blair': {'like': 100, 'dislike': 0}, 'Drew': {'like': 80, 'dislike': 5}, 'Casey': {'like': 90, 'dislike': 30}}, agents)
+        self.assertEqual(server.relationships.favorites(avery, scores, agents), ['Casey'])
+        server.relationships.save('Avery', scores)
+        self.assertEqual(server.relationships.load()['Avery'], scores)
+        self.assertNotIn('Invented', server.relationships.propose(avery, {'Invented': {'like': 100, 'dislike': 0}}, agents))
+
+    def test_story_cast_never_opts_into_romance(self):
+        config = server.load_config()
+        root = Path(server.__file__).resolve().parent
+        story = [json.loads(path.read_text()) for path in sorted((root / 'characters').glob('*.json'))]
+        for agent in config['agents'] + story:
+            with self.subTest(agent=agent['name']):
+                self.assertEqual(server.relationships.preference(agent), [])
+                self.assertEqual(server.relationships.romantic_targets(agent, config['agents'], config), set())
+        for agent in config['agents']:
+            prompt = server.make_prompt(agent, [], config['agents'], config=config)
+            self.assertNotIn('Your ONLY possible romantic interests', prompt)
+            self.assertIn('All your relationships are platonic', prompt)
+            self.assertNotIn('marriage-ready', prompt)
+        # A character without the field stays platonic too: romance is opt-in.
+        self.assertEqual(server.relationships.preference(dict(name='New', gender='male')), [])
 
     def test_scoring_sibling_does_not_stop_the_room(self):
         agents = server.load_config()['agents']
-        reply = json.dumps({'message': 'Iris, did you grade the furniture too?', 'memory': 'I teased my sister Iris.', 'to': None,
-                            'scores': {'Iris': {'like': 75, 'dislike': 20}}})
+        reply = json.dumps({'message': 'Ji-woo, did you grade the furniture too?', 'memory': 'I teased my sister Ji-woo.', 'to': None,
+                            'scores': {'Ji-woo': {'like': 75, 'dislike': 20}}})
         with tempfile.TemporaryDirectory() as tmp, \
              patch.object(server, 'LOG', Path(tmp)/'messages.jsonl'), \
              patch.object(server, 'MEMORY', Path(tmp)/'memories.json'), \
-             patch.object(server, 'choose_next', return_value='Theo'), \
+             patch.object(server, 'choose_next', return_value='Kim Min-jun'), \
              patch.object(server, 'invoke', return_value=reply):
             server.ACTIVE.set()
             server.run_turn({'agents': agents})
             self.assertTrue(server.ACTIVE.is_set())
             self.assertEqual(server.history()[-1]['kind'], 'chat')
-            self.assertEqual(server.relationships.load()['Theo']['Iris'], {'like': 75, 'dislike': 20})
+            self.assertEqual(server.relationships.load()['Kim Min-jun']['Ji-woo'], {'like': 75, 'dislike': 20})
 
     def test_mystery_can_be_scored_and_saved(self):
         agents = server.load_config()['agents']
-        mina = next(a for a in agents if a['name'] == 'Mina')
-        scores = server.relationships.propose(mina, {'Mystery': {'like': 72, 'dislike': 9}}, agents)
-        server.relationships.save('Mina', scores)
-        self.assertEqual(server.relationships.load()['Mina']['Mystery'], {'like': 72, 'dislike': 9})
+        suit = next(a for a in agents if a['name'] == 'The Man in a Suit')
+        scores = server.relationships.propose(suit, {'Mystery': {'like': 72, 'dislike': 9}}, agents)
+        server.relationships.save('The Man in a Suit', scores)
+        self.assertEqual(server.relationships.load()['The Man in a Suit']['Mystery'], {'like': 72, 'dislike': 9})
 
     def test_scores_change_tone_without_turning_family_or_friends_into_crushes(self):
         agents = server.load_config()['agents']
-        iris = next(a for a in agents if a['name'] == 'Iris')
-        low = server.relationships.tone_guidance(iris, {'Mystery': {'like': 20, 'dislike': 2}}, agents)
-        high = server.relationships.tone_guidance(iris, {'Mystery': {'like': 93, 'dislike': 2}, 'Theo': {'like': 95, 'dislike': 0}}, agents)
+        jiwoo = next(a for a in agents if a['name'] == 'Ji-woo')
+        low = server.relationships.tone_guidance(jiwoo, {'Mystery': {'like': 20, 'dislike': 2}}, agents)
+        high = server.relationships.tone_guidance(jiwoo, {'Mystery': {'like': 93, 'dislike': 2}, 'Kim Min-jun': {'like': 95, 'dislike': 0}}, agents)
         self.assertIn('Mystery: neutral', low)
         self.assertIn('Mystery: close', high)
-        self.assertIn('Theo: family', high)
-        self.assertNotIn('Theo: close', high)
-        mina = next(a for a in agents if a['name'] == 'Mina')
-        self.assertIn('Iris: close friendship', server.relationships.tone_guidance(mina, {'Iris': {'like': 95, 'dislike': 0}}, agents))
-        self.assertIn('reserved', server.relationships.tone_guidance(iris, {'Mystery': {'like': 93, 'dislike': 80}}, agents))
+        self.assertIn('Kim Min-jun: family', high)
+        self.assertNotIn('Kim Min-jun: close', high)
+        suit = next(a for a in agents if a['name'] == 'The Man in a Suit')
+        self.assertIn('Ji-woo: close friendship', server.relationships.tone_guidance(suit, {'Ji-woo': {'like': 95, 'dislike': 0}}, agents))
+        self.assertIn('reserved', server.relationships.tone_guidance(jiwoo, {'Mystery': {'like': 93, 'dislike': 80}}, agents))
 
     def test_interest_over_one_hundred_can_express_marriage_readiness(self):
-        config = server.load_config()
-        agents = config['agents']
-        iris = next(a for a in agents if a['name'] == 'Iris')
-        scores = server.relationships.propose(iris, {'Mystery': {'like': 125, 'dislike': 5}, 'Theo': {'like': 140, 'dislike': 0}}, agents)
-        guidance = server.relationships.tone_guidance(iris, scores, agents, config)
+        agents = romance_cast()
+        config = dict(server.load_config(), agents=agents)
+        blair = agents[1]
+        scores = server.relationships.propose(blair, {'Mystery': {'like': 125, 'dislike': 5}, 'Avery': {'like': 140, 'dislike': 0}}, agents)
+        guidance = server.relationships.tone_guidance(blair, scores, agents, config)
         self.assertIn('Mystery: marriage-ready', guidance)
-        self.assertIn('Theo: family', guidance)
-        self.assertNotIn('Theo: marriage-ready', guidance)
-        self.assertEqual(server.relationships.propose(iris, {'Mystery': {'like': 1501, 'dislike': 0}}, agents)['Mystery']['like'], 1500)
+        self.assertIn('Avery: family', guidance)
+        self.assertNotIn('Avery: marriage-ready', guidance)
+        self.assertEqual(server.relationships.propose(blair, {'Mystery': {'like': 1501, 'dislike': 0}}, agents)['Mystery']['like'], 1500)
+        # The story cast at the same score stays a close, platonic bond.
+        story = server.load_config()
+        jiwoo = next(a for a in story['agents'] if a['name'] == 'Ji-woo')
+        self.assertNotIn('marriage-ready', server.relationships.tone_guidance(jiwoo, scores, story['agents'], story))
 
     def test_net_above_120_means_loving_the_conversation(self):
         agents = server.load_config()['agents']
-        iris = next(a for a in agents if a['name'] == 'Iris')
-        self.assertIn('love talking', server.relationships.tone_guidance(iris, {'Mystery': {'like': 130, 'dislike': 2}}, agents))
-        self.assertNotIn('love talking', server.relationships.tone_guidance(iris, {'Mystery': {'like': 130, 'dislike': 10}}, agents))
+        jiwoo = next(a for a in agents if a['name'] == 'Ji-woo')
+        self.assertIn('love talking', server.relationships.tone_guidance(jiwoo, {'Mystery': {'like': 130, 'dislike': 2}}, agents))
+        self.assertNotIn('love talking', server.relationships.tone_guidance(jiwoo, {'Mystery': {'like': 130, 'dislike': 10}}, agents))
 
-    def test_mina_is_straight_and_iris_can_like_women(self):
-        agents = server.load_config()['agents']
-        mina = next(a for a in agents if a['name'] == 'Mina')
-        iris = next(a for a in agents if a['name'] == 'Iris')
-        self.assertEqual(server.relationships.favorites(mina, {'Iris': {'like': 95, 'dislike': 0}, 'Theo': {'like': 60, 'dislike': 0}}, agents), ['Theo'])
-        self.assertEqual(server.relationships.favorites(iris, {'Mina': {'like': 95, 'dislike': 0}, 'Milo': {'like': 60, 'dislike': 0}}, agents), ['Mina'])
+    def test_preferences_decide_favorites(self):
+        agents = romance_cast()
+        casey, blair = agents[2], agents[1]
+        self.assertEqual(server.relationships.favorites(casey, {'Blair': {'like': 95, 'dislike': 0}, 'Avery': {'like': 60, 'dislike': 0}}, agents), ['Avery'])
+        self.assertEqual(server.relationships.favorites(blair, {'Casey': {'like': 95, 'dislike': 0}, 'Drew': {'like': 60, 'dislike': 0}}, agents), ['Casey'])
 
 
     def test_mystery_dm_reply_stays_private_and_can_see_its_image(self):
@@ -546,9 +565,9 @@ class RoomTests(HermeticTestCase):
 
     def test_codex_only_exposes_final_answer(self):
         events = [{"type": "item.completed", "item": {"type": "reasoning", "text": "hidden"}},
-                  {"type": "item.completed", "item": {"type": "agent_message", "text": "Hi Iris"}},
+                  {"type": "item.completed", "item": {"type": "agent_message", "text": "Hi Ji-woo"}},
                   {"type": "turn.completed"}]
-        self.assertEqual(server.parse_reply("codex", "\n".join(map(json.dumps, events))), "Hi Iris")
+        self.assertEqual(server.parse_reply("codex", "\n".join(map(json.dumps, events))), "Hi Ji-woo")
 
     def test_opencode_does_not_accept_partial_failure(self):
         events = [{"type": "text", "part": {"text": "partial"}},
@@ -561,7 +580,7 @@ class RoomTests(HermeticTestCase):
             server.parse_reply("claude", '{"is_error":false,"result":""}')
 
     def test_opencode_chat_runs_in_explicit_isolated_directory(self):
-        agent = next(a for a in server.load_config()['agents'] if a['name'] == 'Mina')
+        agent = next(a for a in server.load_config()['agents'] if a['name'] == 'The Man in a Suit')
         output = json.dumps({'type': 'text', 'part': {'text': '{"message":"hello"}'}})
         with patch.object(server.subprocess, 'Popen') as launch:
             proc = launch.return_value.__enter__.return_value
@@ -584,16 +603,16 @@ class RoomTests(HermeticTestCase):
                 server.invoke(agent, 'One chat reply.', 45)
 
     def test_empty_provider_reply_is_retried_once(self):
-        agent = next(a for a in server.load_config()['agents'] if a['name'] == 'Kai')
+        agent = next(a for a in server.load_config()['agents'] if a['name'] == 'The Corner Shop Clerk')
         reply = json.dumps({'message': 'Hey there.', 'memory': 'I said hello.', 'to': None})
         with patch.object(server, 'invoke', side_effect=[server.EmptyReply('Provider returned no usable reply'), reply]) as invoke:
-            self.assertEqual(server.actor_result(agent, 'Reply as Kai.', 45, [])['message'], 'Hey there.')
+            self.assertEqual(server.actor_result(agent, 'Reply as The Corner Shop Clerk.', 45, [])['message'], 'Hey there.')
             self.assertEqual(invoke.call_count, 2)
             self.assertIn('Do not use native tools', invoke.call_args.args[1])
 
     def test_session_budget_stops_real_calls(self):
         with tempfile.TemporaryDirectory() as tmp, patch.object(server, "LOG", Path(tmp)/"messages.jsonl"), \
-             patch.object(server, "remember"), patch.object(server, "invoke", return_value=json.dumps({"message":"@Iris coffee?", "memory":"I invited Iris for coffee.","thread_done":True})) as invoke:
+             patch.object(server, "remember"), patch.object(server, "invoke", return_value=json.dumps({"message":"@Ji-woo coffee?", "memory":"I invited Ji-woo for coffee.","thread_done":True})) as invoke:
             config = {"agents": [server.load_config()["agents"][0]], "timeout_seconds": 5}
             server.STATE.update(turns=0, limit=2, speaker=None)
             server.ACTIVE.set()
@@ -609,7 +628,7 @@ class RoomTests(HermeticTestCase):
             server.ACTIVE.set()
             server.run_turn({"agents": [server.load_config()["agents"][0]]})
             self.assertTrue(server.ACTIVE.is_set())
-            self.assertIn("Theo", server.CHARACTER_BREAKS)
+            self.assertIn("Kim Min-jun", server.CHARACTER_BREAKS)
             self.assertEqual(server.history()[0]["kind"], "error")
             self.assertIn("quota", server.STATE["reason"])
 
@@ -620,25 +639,25 @@ class RoomTests(HermeticTestCase):
              patch.object(server, 'LOG', Path(tmp)/'messages.jsonl'), \
              patch.object(server, 'MEMORY', Path(tmp)/'memories.json'), \
              patch.object(server, 'invoke', side_effect=[server.ProviderTimeout('opencode timed out after45s'), reply]) as invoke:
-            server.append('Mystery', '@Mina hello')
+            server.append('Mystery', '@The Man in a Suit hello')
             server.ACTIVE.set()
             server.run_turn({'agents': agents})
             self.assertTrue(server.ACTIVE.is_set())
             self.assertIn(server.route_key('opencode', 'opencode/mimo-v2.6-flash-free'), server.PROVIDER_BREAKS)
-            self.assertNotIn('Mina', [a['name'] for a in server.available_agents(agents)])
-            self.assertNotIn('Kai', [a['name'] for a in server.available_agents(agents)])
-            mina = server.character_status(next(a for a in agents if a['name'] == 'Mina'))
-            self.assertFalse(mina['enabled'])
-            self.assertGreater(mina['retry_in_seconds'], 0)
-            self.assertIn('Temporary break', mina['away_reason'])
+            self.assertNotIn('The Man in a Suit', [a['name'] for a in server.available_agents(agents)])
+            self.assertNotIn('The Corner Shop Clerk', [a['name'] for a in server.available_agents(agents)])
+            suit = server.character_status(next(a for a in agents if a['name'] == 'The Man in a Suit'))
+            self.assertFalse(suit['enabled'])
+            self.assertGreater(suit['retry_in_seconds'], 0)
+            self.assertIn('Temporary break', suit['away_reason'])
             server.run_turn({'agents': agents})
             self.assertTrue(server.ACTIVE.is_set())
             self.assertNotEqual(invoke.call_args.args[0]['provider'], 'opencode')
             self.assertEqual(server.STATE['turns'], 1)
             self.assertEqual(server.history()[-1]['kind'], 'chat')
             server.PROVIDER_BREAKS[server.route_key('opencode', 'opencode/mimo-v2.6-flash-free')] = 0
-            server.CHARACTER_BREAKS['Mina'] = 0
-            self.assertIn('Mina', [a['name'] for a in server.available_agents(agents)])
+            server.CHARACTER_BREAKS['The Man in a Suit'] = 0
+            self.assertIn('The Man in a Suit', [a['name'] for a in server.available_agents(agents)])
 
     def test_malformed_actor_json_is_repaired_before_saving_one_message(self):
         agents = server.load_config()['agents']
@@ -646,7 +665,7 @@ class RoomTests(HermeticTestCase):
         with tempfile.TemporaryDirectory() as tmp, \
              patch.object(server, 'LOG', Path(tmp)/'messages.jsonl'), \
              patch.object(server, 'MEMORY', Path(tmp)/'memories.json'), \
-             patch.object(server, 'choose_next', return_value='Mina'), \
+             patch.object(server, 'choose_next', return_value='The Man in a Suit'), \
              patch.object(server, 'invoke', side_effect=['{"message":"hi" "memory":"oops"}', reply]) as invoke:
             server.ACTIVE.set()
             server.run_turn({'agents': agents})
@@ -661,13 +680,13 @@ class RoomTests(HermeticTestCase):
         with tempfile.TemporaryDirectory() as tmp, \
              patch.object(server, 'LOG', Path(tmp)/'messages.jsonl'), \
              patch.object(server, 'MEMORY', Path(tmp)/'memories.json'), \
-             patch.object(server, 'choose_next', return_value='Mina'), \
+             patch.object(server, 'choose_next', return_value='The Man in a Suit'), \
              patch.object(server, 'invoke', return_value='{"message":') as invoke:
             server.ACTIVE.set()
             server.run_turn({'agents': agents})
             self.assertEqual(invoke.call_count, 2)
             self.assertTrue(server.ACTIVE.is_set())
-            self.assertIn('Mina', server.CHARACTER_BREAKS)
+            self.assertIn('The Man in a Suit', server.CHARACTER_BREAKS)
             self.assertEqual([m['kind'] for m in server.history()], ['error'])
             self.assertFalse(server.MEMORY.exists())
 
@@ -680,31 +699,31 @@ class RoomTests(HermeticTestCase):
     def test_dm_is_visible_only_to_its_participants(self):
         agents = server.load_config()['agents'][:4]
         messages = [
-            {'name': 'Theo', 'text': 'PUBLIC_HELLO', 'channel': 'group'},
-            {'name': 'Theo', 'text': 'PRIVATE_INVITE', 'channel': 'dm', 'to': 'Nora'},
+            {'name': 'Kim Min-jun', 'text': 'PUBLIC_HELLO', 'channel': 'group'},
+            {'name': 'Kim Min-jun', 'text': 'PRIVATE_INVITE', 'channel': 'dm', 'to': 'The Landlady'},
         ]
         with patch.object(server, 'memories', return_value={}):
             for a in agents:
                 prompt = server.make_prompt(a, messages, agents)
                 self.assertIn('PUBLIC_HELLO', prompt)
-                if a['name'] in ('Theo', 'Nora'):
+                if a['name'] in ('Kim Min-jun', 'The Landlady'):
                     self.assertIn('PRIVATE_INVITE', prompt)
                 else:
                     self.assertNotIn('PRIVATE_INVITE', prompt)
 
     def test_dm_route_and_memory_are_saved_together(self):
         agents = server.load_config()['agents'][:4]
-        reply = json.dumps({'message': 'Fancy a walk?', 'memory': 'I invited Nora for a walk.', 'to': 'Nora', 'scores': {'Nora': {'like': 60, 'dislike': 0}}})
+        reply = json.dumps({'message': 'Fancy a walk?', 'memory': 'I invited The Landlady for a walk.', 'to': 'The Landlady', 'scores': {'The Landlady': {'like': 120, 'dislike': 0}}})
         with tempfile.TemporaryDirectory() as tmp, \
              patch.object(server, 'LOG', Path(tmp)/'messages.jsonl'), \
              patch.object(server, 'MEMORY', Path(tmp)/'memories.json'), \
-             patch.object(server, 'choose_next', return_value='Theo'), \
+             patch.object(server, 'choose_next', return_value='Kim Min-jun'), \
              patch.object(server, 'invoke', return_value=reply):
             server.ACTIVE.set()
             server.run_turn({'agents': agents})
             saved = server.history()[0]
-            self.assertEqual((saved['channel'], saved['to']), ('dm', 'Nora'))
-            self.assertEqual(server.memories()['Theo'], 'I invited Nora for a walk.')
+            self.assertEqual((saved['channel'], saved['to']), ('dm', 'The Landlady'))
+            self.assertEqual(server.memories()['Kim Min-jun'], 'I invited The Landlady for a walk.')
 
 
 if __name__ == "__main__":

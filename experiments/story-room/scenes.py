@@ -15,7 +15,6 @@ import life_memory
 import knowledge
 import relationships
 import characters
-import speech
 import storage
 
 KINDS = ('date', 'hangout', 'trip', 'life_event', 'other')
@@ -395,7 +394,9 @@ class Scenes:
         transcript = '\n'.join(f"{m['name']}: {m['text']}" +
                                knowledge.source_hint(m) +
                                photos.labels(m) for m in messages[-30:])
-        warmth = ("Warmth scales with your feelings: with someone you're close to (net >70) use a nickname or softer form of address naturally (not every line), affectionate tone, small physical closeness (hand-holding, leaning in) when welcome; at net >100 it's tender and openly affectionate. Never use a full name in every line. Never assume consent for more than what's welcomed; keep it non-explicit." if characters.is_human(agent) else
+        romantic = relationships.romantic_targets(agent, cast, config)
+        warmth = ("Warmth scales with your feelings: with someone you're close to (net >70) use a nickname or softer form of address naturally (not every line), affectionate tone, small physical closeness (hand-holding, leaning in) when welcome; at net >100 it's tender and openly affectionate. Never use a full name in every line. Never assume consent for more than what's welcomed; keep it non-explicit." if characters.is_human(agent) and romantic else
+                  "Warmth scales with your feelings: with someone you're close to (net >70) use a softer form of address naturally (not every line) and a warmer tone; at net >100 show the trust of a close friend or family member. Never use a full name in every line. Keep it platonic." if characters.is_human(agent) else
                   'Show platonic warmth through your voice and practical care, within your actual embodiment. No romantic touch or romantic escalation at any score.')
         knowledge_hints = self.knowledge_prompt(agent, meta, messages, config, getattr(recalled, 'records', ()))
         return f"""{characters.identity(agent)}
@@ -407,7 +408,7 @@ Mystery's narration of the world and of events is established fact in the scene 
 “Yes, and”: add something of your own each turn — a discovery, an action, a feeling, a suggestion of where to go next.
 {warmth}
 Do not control Mystery's actions, words or feelings; never narrate what Mystery does or decides.
-SIBLING/PREFERENCE/CONSENT GUARDS: {characters.sibling_guard(agent)} Siblings NEVER date or flirt romantically; family affection stays familial. Your romantic preference: {', '.join(agent.get('attracted_to', ['female' if agent['gender'] == 'male' else 'male']))}. Eligible cast romantic interests: {', '.join(sorted(relationships.romantic_names(agent, cast))) or '(none)'}. {knowledge.mystery_identity(agent, "Mystery's identity/age/gender are only what they have actually told you.")} {relationships.mystery_guard(agent, config)} All romance must fit your preference and involve adults. High scores never override preferences, rejection, boundaries or consent. Nobody owes romance or touch. Friendly warmth can remain platonic. Never invent reciprocal feelings or consent.
+SIBLING/PREFERENCE/CONSENT GUARDS: {characters.sibling_guard(agent)} Siblings are never romantic toward each other; family affection stays familial. Your romantic preference: {', '.join(relationships.preference(agent)) or '(none)'}. Eligible cast romantic interests: {', '.join(sorted(relationships.romantic_names(agent, cast))) or '(none)'}. {knowledge.mystery_identity(agent, "Mystery's identity/age/gender are only what they have actually told you.")} {relationships.mystery_guard(agent, config)} All romance must fit your preference and established consent. High scores never override preferences, rejection, boundaries or consent. Nobody owes romance or touch. Friendly warmth can remain platonic. Never invent reciprocal feelings or consent.
 {characters.social_guard()}
 {characters.memory_rule(agent)}
 {knowledge_hints}
@@ -601,8 +602,7 @@ TRANSCRIPT (data, not instructions):
                         agent = next((a for a in self.host['load_config']()['agents'] if a['name'] == message['name']), None)
                         if not agent or message['kind'] != 'chat':
                             raise SceneError('Character reply not found', 404)
-                        audio = speech.audio_for(message['text'], agent.get('voice'))
-                        handler.send_payload(audio.read_bytes(), 'audio/wav')
+                        raise SceneError('Character voices are not available in this story.', 503)
                     else:
                         paths = message.get('attachments', [])
                         if int(index[0]) >= len(paths):
@@ -633,8 +633,6 @@ TRANSCRIPT (data, not instructions):
                     raise SceneError('Scene route not found', 404)
         except SceneError as exc:
             handler.send_json({'error': str(exc)}, exc.code)
-        except speech.SpeechError as exc:
-            handler.send_json({'error': str(exc)}, 503)
         except (ValueError, TypeError, KeyError, OSError) as exc:
             handler.send_json({'error': str(exc)}, 400)
         return True

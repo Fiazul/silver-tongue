@@ -24,7 +24,7 @@ Use **Private room**, **Bible**, or **Scenes** in the game’s header. The game 
 
 The room retains group chat, direct messages, personal memory, relationships, and separate scenes. Characters receive their own witnessed game dialogue as continuity. They do not receive another character’s exchanges or the full author bible. Chat can develop the story or practice a conversation; use the game’s offer, agreement, and delivery controls to change its money, resources, and contracts.
 
-The cast is **The Landlady, Kim Min-jun, Grandpa Park, Ji-woo, The Corner Shop Clerk, Su-jin, The Copy Shop Man, The Man in a Suit, and The Merchant**. Each has its own sourced file in `characters/`, with a backstory, personality, goals, voice, instructions, and dialogue examples. Icons remain faceless.
+The cast is **The Landlady, Kim Min-jun, Grandpa Park, Ji-woo, The Corner Shop Clerk, Su-jin, The Copy Shop Man, The Man in a Suit, and The Merchant**. Each has its own sourced file in `characters/`, with a backstory, personality, goals, dialogue style, instructions, and dialogue examples. Characters have no recorded or synthesized voices; the chat is text only. Icons remain faceless.
 
 ## Edit the bible
 

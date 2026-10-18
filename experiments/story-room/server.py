@@ -18,7 +18,6 @@ import tempfile
 import threading
 import time
 from urllib.parse import urlparse
-import speech
 import project_tools
 import relationships
 import characters
@@ -59,6 +58,10 @@ WAKE = threading.Event()
 STATE = dict(speaker=None, turns=0, limit=24, evening_complete=False, reason='The evening is yours to start.')
 MAX_MESSAGE = 1600
 MAX_HISTORY = 20
+VOICES_UNAVAILABLE = 'Character voices are not available in this story.'
+# Every provider gets the same frame: the Seoul story, never a generic chat room.
+STORY_SYSTEM_PROMPT = ('You are a character in a Korean language-learning story set in Seoul, 2000. '
+                       'Reply only in character.')
 PROVIDER_BREAKS = {}
 PROVIDER_BREAK_SECONDS = 60
 PROVIDER_EXHAUSTED = {}
@@ -950,28 +953,29 @@ def make_prompt(agent, recent, agents, focus=None, already_asked=None, recalled=
     heart = engagement.heart(agent, scores, agents, life_store(agent['name'], config), config) if allow_heart else ''
     own_messages = [m for m in recent if m['name'] == agent['name']]
     needs_private = len(own_messages) >= 2 and not any(m.get('channel') == 'dm' for m in own_messages[-4:])
-    private_direction = ('You have stayed in public for a while. On this turn, start or move a personal conversation into a real DM with an unrelated person you want to know better. Choose the recipient yourself from your allowed romantic interests. If answering a direct question from Mystery, answer that publicly first.'
-                         if needs_private else 'Choose group or DM deliberately. Use a DM when your reply is personal, flirtatious, or meant for just one person.')
+    private_direction = ('You have stayed in public for a while. On this turn, start or move a personal conversation into a real DM with someone you want to know better. Choose the recipient yourself. If answering a direct question from Mystery, answer that publicly first.'
+                         if needs_private else 'Choose group or DM deliberately. Use a DM when your reply is personal or meant for just one person.')
     if not characters.is_human(agent):
         private_direction = 'Choose group or a friendly DM naturally; all your bonds remain platonic.'
+    # Romance is opt-in per character (attracted_to); without it every bond stays platonic.
+    romantic = relationships.romantic_targets(agent, agents, config)
     courtship = (f"""Your ONLY possible romantic interests in this room are: {dateable or '(none currently present)'}.
-For flirting, romantic gestures, or date invitations choose ONLY from that list. Never choose your sibling.
-Sibling teasing and friendly support are fine. Romantic interests must be unrelated adults from your eligible list.
-Your romantic preference is toward: {', '.join(agent.get('attracted_to', ['female' if agent['gender'] == 'male' else 'male']))}.
-People outside that preference can be friends, never your romantic partners. Do not reciprocate flirting that conflicts with your preference.
-Someone else's attraction does not determine your attraction. Existing flirting or earlier impressions never override your own preference.
-Decide for yourself who appeals to you, if anyone. No predetermined couples. You can flirt, get curious,
-accept a date, say no, feel jealous in character, change your mind, or move on after rejection.
+Romantic gestures or date invitations go ONLY to someone from that list. Never choose your sibling.
+Sibling teasing and friendly support are fine. Romantic interests must be unrelated people from your eligible list.
+Your romantic preference is toward: {', '.join(relationships.preference(agent))}.
+People outside that preference can be friends, never your romantic partners. Do not reciprocate romantic advances that conflict with your preference.
+Someone else's attraction does not determine your attraction. Earlier impressions never override your own preference.
+Decide for yourself who appeals to you, if anyone. No predetermined couples. You can get curious,
+accept a date, say no, change your mind, or move on after rejection.
 Your personality should show through your choices, humor, and flaws; don't announce personality labels or give bland coaching.
-When there is mutual chemistry, bold flirting, cheeky double meanings, light profanity, and playful roasts are welcome.
-Invent your own lines in your own voice. No stock pickup scripts or repetitive compliments. Keep it suggestive, not graphically explicit.
+Invent your own lines in your own voice. No stock scripts or repetitive compliments. Nothing sexual.
 Tease the individual in a way they enjoy; don't demean women or men as a group. Dial it back if someone is uncomfortable.
 Respect boundaries: don't keep pursuing someone who said no. Nobody owes anybody romance.
-{relationships.mystery_guard(agent, config)}""" if characters.is_human(agent) else
-                 "All your relationships are platonic. Share curiosity, dry humor, trust and practical care without flirting or romantic invitations.")
-    dm_ranking = (f"""When starting a DM, choose the available unrelated adult with your highest positive net interest. Break ties yourself.
+{relationships.mystery_guard(agent, config)}""" if characters.is_human(agent) and romantic else
+                 "All your relationships are platonic. Share curiosity, dry humor, trust and practical care without romantic invitations.")
+    dm_ranking = (f"""When starting a DM, choose the available unrelated person with your highest positive net interest. Break ties yourself.
 You may reply to or reject an existing DM even if its sender isn't your favorite. Affectionate check-ins and morning greetings may go to ANY person with net interest at least 100, including friends and family; keep those platonic unless romantic eligibility permits otherwise. For other new romantic DMs, choose your favorite.
-If nobody interests you, stay public rather than inventing affection. Siblings are not romantic score targets. {("Prior acquaintance establishes identity, not an unstated age or romantic availability; respect established boundaries." if agent.get('knows_mystery') else "Until Mystery establishes their age or identity, do not assume adult status or romantic availability; once established, use what they actually said and the boundaries they've expressed.")}""" if characters.is_human(agent) else
+If nobody interests you, stay public rather than inventing affection. Siblings are not romantic score targets. {("Prior acquaintance establishes identity, not an unstated age or romantic availability; respect established boundaries." if agent.get('knows_mystery') else "Until Mystery establishes their age or identity, do not assume their age or romantic availability; once established, use what they actually said and the boundaries they've expressed.")}""" if characters.is_human(agent) else
                   "You can initiate friendly DMs with any active cast member or Mystery independently of romantic rankings. Respect their boundaries and unanswered messages.")
     if agent.get('host_level'):
         dm_ranking += (' As a host, you may also start a friendly private conversation with any cast member, '
@@ -981,8 +985,8 @@ If nobody interests you, stay public rather than inventing affection. Siblings a
 {situation(agent, config, recent)}
 {busy_context(agent['name'], recent, config['agents'])}
 Personality: {agent['personality']}
-SETTING: {"You are a human in the fiction who unexpectedly ended up in an unfamiliar, comfortable common room with these other adults. You know yourself" + (" and your sibling" if agent.get('sibling') else "") if characters.is_human(agent) else agent.get('presence', 'You communicate with the common room using your established non-human embodiment.')}
-Nobody has explained why this room exists. Nobody told you this is a dating event.
+SETTING: {"You are a human in the fiction who unexpectedly ended up in an unfamiliar, comfortable common room with these other people. You know yourself" + (" and your sibling" if agent.get('sibling') else "") if characters.is_human(agent) else agent.get('presence', 'You communicate with the common room using your established non-human embodiment.')}
+Nobody has explained why this room exists.
 Figure things out through conversation: ask, observe, make your own guesses. There is no secret answer or assigned couple in your instructions.
 Discover who the others are from what they actually say and do; their chat labels are not a dossier of their personalities or motives.
 Humans may discover compatible attraction naturally. Non-human relationships remain platonic; keep established relationships from memory.
@@ -995,7 +999,7 @@ When someone supplies information you asked for, acknowledge it and use it. Do n
 An unanswered question is not a precondition for the relationship; don't hold plans hostage to it.
 Admit a misreading plainly and move the conversation forward. Intelligence is not refusing every answer or endlessly interrogating someone.
 For fictional technical details, use the speaker's stated conventions. A percentage above 100 is not inherently impossible, rounded, or dangerous; the reference scale and limits must actually be established. Do not invent a limit, then argue as if the speaker established it.
-Don't invent a host's explanation, a shared past, a threat, or facts nobody has established. Earlier dating-event labels were guesses, not proof of why you are here.
+Don't invent a host's explanation, a shared past, a threat, or facts nobody has established. Earlier guesses about the room's purpose are not proof of why you are here.
 There is no operator character in the story. It is just this group interacting.
 {identity_rule}
 Their technical message recipient stays Mystery even after they introduce themselves by a personal name. You may use their learned name naturally in your message text.
@@ -1006,7 +1010,7 @@ CAST (everyone can see this same group chat):
 {characters.sibling_guard(agent)}
 {characters.social_guard()}
 {courtship}
-Notice others' conversations and romances; join the group naturally. Talk about interests too.
+Notice others' conversations; join the group naturally. Talk about interests too.
 You may send a private DM to one named active character or Mystery instead of posting to the group. Mystery can reply privately too. A new friendly DM to Mystery is allowed independently of your romantic rankings.
 Choose freely: public chat for the whole room, DMs for personal conversations. Use both naturally.
 A public @mention does not force a public reply: a personal response can become a DM to that person.
@@ -1026,7 +1030,7 @@ DISAGREEMENTS: Do not end an argument with an empty 'fair', 'agreed', 'noted', o
 With someone you strongly like, you want to repair the disagreement and keep the connection, not win a pointless argument or casually brush them away. Say what you want and offer a concrete next step rather than vague reassurance. High interest does not make you automatically agree; you can disagree honestly while caring about the person. If they request space or end the relationship, respect that choice.
 {relationships.score_guidance(config)}
 Assess like and dislike independently from actual interactions. Net interest is like minus dislike.
-Net interest above100 means marriage-ready toward a compatible romantic interest: you personally want a committed future and may bring it up naturally. Reach that stage through established shared experiences, not one pleasant line. Never invent a proposal, engagement, marriage, or the other person's consent. Family and platonic friendships do not become romantic at any score.
+{"Net interest above100 means marriage-ready toward a compatible romantic interest: you personally want a committed future and may bring it up naturally. Reach that stage through established shared experiences, not one pleasant line. Never invent a proposal, engagement, marriage, or the other person's consent. Family and platonic friendships do not become romantic at any score." if romantic else 'Net interest above100 means deep trust: a close friend or family bond you want in your daily life. Platonic and family bonds never become romantic at any score.'}
 Net interest above120 means you love talking to that person. Show it through eager, substantive conversation, asking about their life, volunteering your own thoughts and initiating contact when welcome. Give them something new to respond to; do not just agree, repeat an old joke, or wait for them to carry every exchange. Respect pauses, rejection and their time.
 Mystery can receive like and dislike scores too. {('Use the exact score key Mystery; judge their messages using your established acquaintance.' if agent.get('knows_mystery') else 'Use the exact name Mystery; judge their messages without inventing their identity.')}
 You may score your sibling too: those scores describe family affection or irritation, never romantic attraction. Your sibling is always excluded from romantic rankings, regardless of score.
@@ -1148,7 +1152,7 @@ def _invoke(agent, prompt, timeout, images=None):
                 '--tools', '', '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}',
                 '--no-session-persistence', '--disable-slash-commands', '--setting-sources', '',
                 '--settings', '{"disableAllHooks":true}', '--system-prompt',
-                'You are an actor in a fictional adult group chat. Reply only in character. Do not use tools.']
+                STORY_SYSTEM_PROMPT + ' Do not use tools.']
     elif provider == 'codex':
         argv = ['codex', 'exec', '--model', model, '--json', '--ephemeral', '--ignore-user-config',
                 '--skip-git-repo-check', '--sandbox', 'read-only', '--color', 'never',
@@ -1192,7 +1196,7 @@ def _invoke(agent, prompt, timeout, images=None):
                                                         'description': 'One fictional chat reply, no coding tasks.',
                                                         'mode': 'primary',
                                                         'thinking': {'type': 'disabled'},
-                                                        'prompt': 'You are an actor in a fictional adult chat. Return exactly the requested JSON. Be brief. Follow the character and conversation supplied by the user. Do not plan code, use native tools, or call agents. For work inspection return the requested inspect JSON instead.'}}})
+                                                        'prompt': STORY_SYSTEM_PROMPT + ' Return exactly the requested JSON. Be brief. Follow the character and conversation supplied by the user. Do not plan code, use native tools, or call agents. For work inspection return the requested inspect JSON instead.'}}})
     # Isolate chat from this repository's coding rules and files.
     with tempfile.TemporaryDirectory(prefix='private-room-') as directory:
         env['PWD'] = directory
@@ -1585,7 +1589,7 @@ def run_turn(config):
             name = human[0]
         elif story:
             if not story['ready']:
-                STATE['reason'] = 'Iris and Vella are continuing their private discussion.'
+                STATE['reason'] = f"{story['name']} and {story['target']} are continuing their private discussion."
                 return
             focus = next((m for m in reversed(messages) if m.get('story_arc') == story['arc']['id'] and m['name'] == story['target']
                           and m.get('channel') == 'dm' and m.get('to') == story['name']), None)
@@ -1900,7 +1904,7 @@ def route_status(provider, model, config=None):
     trial = next((PROVIDER_TRIALS[k] for k in keys if k in PROVIDER_TRIALS), None)
     seconds = max((PROVIDER_BREAKS.get(k, 0) - time.monotonic() for k in keys), default=0)
     label = PROVIDER_NAMES[provider]
-    zone = (config or {}).get('timezone', 'Asia/Dhaka')
+    zone = (config or {}).get('timezone', timekeeper.DEFAULT_TIMEZONE)
     clock = lambda at: datetime.fromtimestamp(at, ZoneInfo(zone)).strftime('%H:%M')
     if state == 'break':
         reason = f'{label} break; retry in {max(1, int(seconds) + 1)}s'
@@ -1936,7 +1940,7 @@ def character_status(a, config=None):
     return dict(busy='Awake (talking with Mystery)' if rhythm['state'] == 'woken by Mystery' else attention.busy(box), routine_state=rhythm['state'], pending_threads=len(box['pending']), enabled=bool(available_agents([a], config)), configured_enabled=a.get('enabled', True),
                 away_reason=reason,
                 retry_in_seconds=retry, preferences=relationship_state().get(a['name'], {}),
-                avatar=a.get('avatar'), voice=a.get('voice'), voice_ready=speech.ready(a.get('voice')),
+                avatar=a.get('avatar'), voice_ready=False,
                 kind=a.get('kind', 'human'), host_level=a.get('host_level', False),
                 group_initiative=a.get('group_initiative', True),
                 **{k: a.get(k) for k in ('name', 'gender', 'age', 'sibling', 'provider', 'model', 'face', 'color', 'tagline')})
@@ -1948,7 +1952,7 @@ def status():
         routes = {(r['provider'], r['model']) for a in config['agents'] for r in [a, *fallbacks_for(a, config)]}
         providers = [route_status(p, m, config) for p, m in sorted(routes) if provider_state(p, m) != 'ready']
         return dict(running=ACTIVE.is_set(), **STATE, quiet_room=quiet_room(), providers=providers,
-                    speech_available=bool(shutil.which('piper')),
+                    speech_available=False,
                     agents=[character_status(a, config) for a in config['agents']])
 
 
@@ -2004,31 +2008,15 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send_json({'error': 'attachment not found'}, 404)
                 image = attachment_path(paths[index])
                 return self.send_payload(image.read_bytes(), project_tools.image_mime(image))
-            match = re.fullmatch(r'/api/audio/(\d{1,24})\.wav', path)
-            preview = re.fullmatch(r'/api/voice/([A-Za-z]+)\.wav', path)
-            if match or preview:
-                config = load_config()
-                if match:
-                    message = next((m for m in history() if str(m['id']) == match[1] and m['kind'] == 'chat'), None)
-                    if message is None:
-                        return self.send_json({'error': 'message not found'}, 404)
-                    name, text = message['name'], message['text']
-                else:
-                    name = preview[1]
-                    text = f"Hi, I'm {name}. Nice to meet you. Shall we stay a little longer?"
-                agent = next((a for a in config['agents'] if a['name'] == name), None)
-                if agent is None:
-                    return self.send_json({'error': 'character not found'}, 404)
-                audio = speech.audio_for(text, agent.get('voice'))
-                return self.send_payload(audio.read_bytes(), 'audio/wav')
+            if re.fullmatch(r'/api/(?:audio/\d{1,24}|voice/[A-Za-z]+)\.wav', path):
+                # The story cast has no recorded or synthesized character voices.
+                return self.send_json({'error': VOICES_UNAVAILABLE}, 503)
             if path == '/api/messages':
                 return self.send_json(history()[-250:])
             if path == '/api/health':
                 return self.send_json(health.snapshot())
             if path == '/api/status':
                 return self.send_json(status())
-        except speech.SpeechError as exc:
-            return self.send_json({'error': str(exc)}, 503)
         except (OSError, ValueError, KeyError, TypeError) as exc:
             return self.send_json({'error': str(exc)}, 500)
         self.send_json({'error': 'not found'}, 404)

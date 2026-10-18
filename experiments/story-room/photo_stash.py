@@ -7,6 +7,7 @@ from pathlib import Path
 import random
 import re
 import uuid
+from urllib.parse import unquote
 
 import health
 import storage
@@ -75,8 +76,11 @@ def photo_request(agent, messages, items):
         return None, False
     text = messages[index].get('text', '').lower().replace('’', "'")
     people = {m['name'].lower() for m in messages} | {agent['name'].lower()}
-    addressed = re.match(r'^\s*(?:hey\s+)?([a-z]+)(?:\s*[,.:!]\s*|\s+(?:can|could|would|please|show|send|share|drop|post)\b)', text)
-    if addressed and addressed[1] in people and addressed[1] != agent['name'].lower():
+    # Names can span words ("the merchant", "ji-woo"); the longest addressed name wins.
+    addressed = next((name for name in sorted(people, key=len, reverse=True) if re.match(
+        r'^\s*(?:hey\s+)?' + re.escape(name) +
+        r'(?:\s*[,.:!]\s*|\s+(?:can|could|would|please|show|send|share|drop|post)\b)', text)), None)
+    if addressed and addressed != agent['name'].lower():
         return None, False
     photo = re.search(r'\b(photo|photos|picture|pictures|image|images|shot|shots)\b', text)
     stopped = bool(photo and re.search(r"\b(don't|do not|never|stop|no longer|not)\s+(want|need|wish|care|like|interested|ask|asking|looking|taking|sharing|sending|showing|posting|dropping|take|share|send|show|post|drop|see|seeing)\b|\bno (?:more )?(photo|photos|picture|pictures|image|images|shot|shots)\b|\bno more\b", text))
@@ -88,8 +92,8 @@ def photo_request(agent, messages, items):
     aliases = {'walking':'walk', 'walked':'walk', 'outside':'exterior'}
     def words(value):
         return {aliases.get(w, w) for w in re.findall(r'[a-z]+', value.lower())}
-    ignore = words('vella iris mystery captain us me you i my our your we the a an from of at on in to for and can could would please do does did it show send share drop post see want like photo photos picture pictures image images shot shots one some that those earlier taken saved')
-    query = words(text) - ignore
+    ignore = words('mystery us me you i my our your we the a an from of at on in to for and can could would please do does did it show send share drop post see want like photo photos picture pictures image images shot shots one some that those earlier taken saved')
+    query = words(text) - ignore - words(' '.join(people))
     if not items:
         return None, False
     if not query:
@@ -264,14 +268,16 @@ def checked(root, value):
 
 
 def handle(host, handler, path, method):
-    match = re.fullmatch(r'/api/stash/([A-Za-z]+)(?:/([0-9a-f]{32})(?:/(reset|image))?)?', path)
+    # Cast names may hold spaces and hyphens ("The Merchant", "Ji-woo"); browsers percent-encode them.
+    match = re.fullmatch(r'/api/stash/([^/]{1,240})(?:/([0-9a-f]{32})(?:/(reset|image))?)?', path)
     if not match:
         return False
     try:
         names = [a['name'] for a in host['load_config']()['agents']]
-        if match[1] not in names:
+        owner = unquote(match[1])
+        if owner not in names:
             raise KeyError('Character not found')
-        stash = Stash(host['DATA'], match[1])
+        stash = Stash(host['DATA'], owner)
         if method == 'GET' and not match[2]:
             handler.send_json(stash.items())
         elif method == 'GET' and match[3] == 'image':

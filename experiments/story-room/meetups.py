@@ -88,7 +88,7 @@ class Meetups:
             return False
         if target == 'Mystery':
             # Only if Mystery's configured gender fits this character's preference; identity,
-            # adult status and consent still have to be established in conversation.
+            # age and consent still have to be established in conversation.
             return relationships.mystery_romantic(source, config)
         other = cast[target]
         return (target in relationships.romantic_names(source, list(cast.values())) and
@@ -317,7 +317,7 @@ Shared improv: narrate only YOUR OWN actions, words and feelings and small envir
 Aim for a natural shared moment over 6–12 turns, then goodbye. You may add end_scene:true for a natural goodbye after at least {settings(config)['min_exchanges']} completed turns; hard cap {settings(config)['max_exchanges']}.
 Warmth follows your own scores: net >70 allows softer address and welcome closeness; >100 tender affection only with compatible humans and actual consent. High scores never override boundaries, rejection, preference or consent. Never invent reciprocal feelings. Family affection stays familial. Non-human warmth is platonic and uses their actual embodiment.
 {characters.sibling_guard(agent)}
-Eligible romantic cast: {', '.join(sorted(relationships.romantic_names(agent, config['agents']))) or '(none)'}. Your preference: {json.dumps(agent.get('attracted_to', []))}. {knowledge.mystery_identity(agent, "Mystery's identity, age and consent are only what they actually established.")} {relationships.mystery_guard(agent, config)}
+Eligible romantic cast: {', '.join(sorted(relationships.romantic_names(agent, config['agents']))) or '(none)'}. Your preference: {json.dumps(relationships.preference(agent))}. {knowledge.mystery_identity(agent, "Mystery's identity, age and consent are only what they actually established.")} {relationships.mystery_guard(agent, config)}
 {characters.social_guard()}
 {characters.memory_rule(agent)}
 {self.scene.knowledge_prompt(agent, meta, messages, config, getattr(recalled, 'records', ()))}

@@ -13,9 +13,19 @@ from unittest.mock import patch
 
 import server
 import health
-import speech
 
 FIXTURE_CONFIG = Path(__file__).resolve().parent / 'tests' / 'fixtures' / 'agents.json'
+
+
+def romance_cast():
+    """Synthetic characters for the opt-in romance mechanics. The story cast never opts in
+    (attracted_to is empty for all of them), so these tests never use story names."""
+    base = dict(enabled=True, provider='codex', model='gpt-6-luna', face='◯', color='#888888',
+                tagline='Test character.', personality='Test personality.')
+    return [dict(base, name='Avery', gender='male', sibling='Blair', attracted_to=['female']),
+            dict(base, name='Blair', gender='female', sibling='Avery', attracted_to=['male', 'female']),
+            dict(base, name='Casey', gender='female', sibling=None, attracted_to=['male']),
+            dict(base, name='Drew', gender='male', sibling=None, attracted_to=['female'])]
 
 
 class HermeticTestCase(unittest.TestCase):
@@ -44,9 +54,6 @@ class HermeticTestCase(unittest.TestCase):
                 (server, 'PIDFILE', data / 'server.pid'),
                 (server.relationships, 'FILE', data / 'relationships.json'),
                 (server.chat_images, 'DIRECTORY', data / 'uploads'),
-                (speech, 'VOICE_DIR', data / 'voices'),
-                (speech, 'AUDIO_DIR', data / 'audio'),
-                (speech, 'SHARED', data / 'shared-voices'),
                 (health, 'EVENTS', health.deque(maxlen=50)),
                 (health, 'FAILURE_TIMES', health.deque()),
                 (health, 'MEMORY_SWEEPS', {}),

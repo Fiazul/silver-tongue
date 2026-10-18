@@ -17,9 +17,8 @@ from zoneinfo import ZoneInfo
 
 import relationships
 import scenes
-import speech
 
-DEFAULT_TIMEZONE = 'Asia/Dhaka'
+DEFAULT_TIMEZONE = 'Asia/Seoul'
 MIN_AHEAD = timedelta(minutes=10)
 MAX_AHEAD = timedelta(days=7)
 MAX_PENDING = 3
@@ -55,18 +54,15 @@ class CallError(ValueError):
 
 
 def settings(config):
-    """Validate the optional config keys: timezone (IANA name) and alarm_audio (bool)."""
+    """Validate the optional config key timezone (an IANA name)."""
     name = config.get('timezone', DEFAULT_TIMEZONE)
     try:
         if not isinstance(name, str) or not name:
             raise ValueError
         ZoneInfo(name)
     except (KeyError, ValueError, OSError) as exc:
-        raise ValueError('timezone must be an IANA name such as Asia/Dhaka') from exc
-    audio = config.get('alarm_audio', False)
-    if type(audio) is not bool:
-        raise ValueError('alarm_audio must be true or false')
-    return dict(timezone=name, alarm_audio=audio)
+        raise ValueError('timezone must be an IANA name such as Asia/Seoul') from exc
+    return dict(timezone=name)
 
 
 def parse_time(value):
@@ -523,20 +519,13 @@ class Timekeeper:
         return posted
 
     def notify(self, agent, body, config):
-        """Wake-up on this machine: notify-send, plus the character's Piper voice through paplay when enabled."""
+        """Wake-up on this machine: a desktop notification through notify-send."""
         quiet = dict(stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         try:
             subprocess.run(['notify-send', '--app-name=Private Room', '--', agent['name'], body[:500]],
                            timeout=10, check=False, **quiet)
         except (OSError, subprocess.SubprocessError) as exc:
             LOG.info('notify-send unavailable: %s', exc)
-        if not settings(config)['alarm_audio']:
-            return
-        try:
-            audio = speech.audio_for(body, agent.get('voice'))
-            subprocess.Popen(['paplay', str(audio)], start_new_session=True, **quiet)
-        except (speech.SpeechError, OSError, subprocess.SubprocessError) as exc:
-            LOG.info('Alarm audio unavailable: %s', exc)
 
     # ---- operator API ------------------------------------------------------------------------------
     def public(self, config):

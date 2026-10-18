@@ -17,7 +17,7 @@ import disclosure
 
 SEGMENTS = ('people', 'gifts', 'events', 'worries', 'promises', 'boundaries', 'feelings', 'milestones', 'important', 'world',
             'reference')
-# Raw computed readouts live apart from authored answers; only seeded lore may use it.
+# Authored reference records live apart from chat memories; chat extraction never writes them.
 LORE_ONLY_SEGMENTS = ('reference',)
 LOCK = threading.RLock()
 LOG = logging.getLogger(__name__)
@@ -36,9 +36,6 @@ SYNONYMS = (
     'share shared sharing send sends sent show showed shown',
     'sleep slept sleeping sleeps',
     'log logs',
-    # Morphological variants only. Concept-level mapping (drive -> Asterion,
-    # dust -> shield, ...) lives in CONCEPTS so distinct questions stay distinct.
-    'shield shielding', 'cryo cryosleep cryogenic', 'tide tidal', 'relativity relativistic',
 )
 CANON = {word: group.split()[0] for group in SYNONYMS for word in group.split()}
 STOP = set('a an the i you your my me we our they their it is was are do does did remember to of and in on for that this when have has be with about'.split())
@@ -47,7 +44,7 @@ ROUTES = {
     'gifts': 'gift', 'events': 'date experience place visit together',
     'worries': 'worry still question problem safe air', 'promises': 'promise tomorrow weekend meet',
     'boundaries': 'boundary consent no limit', 'feelings': 'love feel miss',
-    'milestones': 'first confession anniversary', 'important': 'important never forget science physics',
+    'milestones': 'first confession anniversary', 'important': 'important never forget',
     'world': 'place room world time situation arrived outside calendar era',
 }
 # An explicit, visible withdrawal of a space/no-contact/stop request by the person who made it.
@@ -57,10 +54,6 @@ LIFTING = re.compile(
     r"\b(?:i'?m|i\s+am)\s+ready\s+to\s+talk\b|\bno\s+longer\s+need\s+(?:space|distance)\b|"
     r"\b(?:i\s+)?(?:lift|drop|withdraw|take\s+back|end)\s+(?:my|the|that)\s+(?:boundary|request|no[- ]contact)|"
     r"\b(?:we\s+can|let'?s)\s+talk\s+again\b|\bplease\s+(?:talk|message|write)\s+(?:to\s+)?me\s+again\b", re.I)
-PHYSICS_READOUT_TAG = 'physics-readout'
-MAX_READOUTS = 3
-SCIENCE_EVIDENCE_MIN = 2.0
-SCIENCE_BUDGET = 2400
 
 
 def tokens(text):
@@ -77,81 +70,11 @@ def tokens(text):
     return result
 
 
-# Curated concept map: colloquial phrasing -> the lore concepts that answer it.
-# Applied to queries (expansion) and to seeded lore tags, never to CANON, so
-# e.g. dust and radiation questions remain distinguishable.
-CONCEPTS = (
-    (r'\brocket equation|\bmass ratio|tsiolkovsky|(?<![\d.])0?\.9\d*\s*c\b|\bnear(?:ly)?[- ]?light|'
-     r'\blight[- ]?speed|\bspeed of light|\bso fast\b|\bhow fast\b|\bfaster\b|\bpropuls|\bpropel|'
-     r'\bdrives?\b|\bengines?\b|\bthrust|\bfuel|\brockets?\b|\btorch|\basterion|\binertia',
-     'asterion fusion drive propulsion'),
-    (r'\bradiation|\bprotons?\b|\bcosmic ray|\binterstellar gas|\bdose\b|\bfry\b', 'radiation proton shield'),
-    (r'\bdust\b|\bgrains?\b|\bspeck|\bpebble|\bmicrogram|\bdebris', 'dust grain shield'),
-    (r'\bsirius|\bparallax|\bproper motion|\btracker|\bsky\b|\bconstellation', 'sirius tracker sky'),
-    (r'\bwormhole|\bportal|\bunexplained transit', 'wormhole transit'),
-    (r'\bcryo|\bhibernat|\bfrozen\b', 'cryo'),
-    (r'\btwin paradox|\btime dilation|\bdilation|\bproper time|\btwins?\b', 'twin relativity clock'),
-    (r'\bag(?:e|es|ed|ing|eing)\b|\byounger\b|\bolder\b', 'relativity clock'),
-    (r'\bneutron|\btidal|\btides?\b|\bspaghetti', 'neutron tidal'),
-    (r'\batmosphere|\bleave (?:the )?(?:planet|earth|ground)|\btake off\b|\bfly away|\bto orbit\b',
-     'atmosphere leave'),
-    (r'\benergy\b|\bpower source|\bpowered\b', 'energy fusion'),
-)
-CONCEPT_PATTERNS = tuple((re.compile(pattern, re.I), terms) for pattern, terms in CONCEPTS)
-
-
-def concept_terms(text):
-    """Concept keywords implied by colloquial phrasing (e.g. '0.998c' -> asterion drive)."""
-    found = []
-    for pattern, terms in CONCEPT_PATTERNS:
-        if pattern.search(text):
-            found += [t for t in terms.split() if t not in found]
-    return found
-
-
-def expand_query(text):
-    extra = concept_terms(text)
-    return text + (' ' + ' '.join(extra) if extra else '')
-
-
-SCIENCE_TERMS = set(tokens(
-    'physics rocket equation mass ratio fusion asterion inertia drive engine thrust fuel propulsion '
-    'exhaust gamma relativity radiation proton dust grain shield sirius parallax wormhole cryo '
-    'twin paradox tidal neutron tracker sky atmosphere lightspeed torch energy field '
-    'relativistic dilation orbit transit'
-))
-QUANTITY_PATTERN = re.compile(
-    r'\bhow\s+(?:much|many|far|long|fast|hot|big|strong|heavy|close|massive)\b|'
-    r"\bwhat(?:'s|\s+is|\s+was|\s+were|\s+are)?\s+(?:the\s+|your\s+|its\s+)?(?:exact\s+|actual\s+|peak\s+)?"
-    r'(?:number|value|figure|reading|readout|rating|load|ratio|percent|percentage|power|energy|dose|flux|'
-    r'distance|mass|temperature|gamma|beta|speed|velocity|angle|delay|duration)s?\b|'
-    r'\b(?:quote|readouts?|exact\s+(?:figure|number|value)s?|in\s+numbers|numbers?\s+(?:on|for)|'
-    r'calculate|compute|mass\s+ratio|kilograms?|megawatts?|joules?|watts?|gev)\b', re.I)
-
-
-def is_science_query(text):
-    return bool(set(tokens(expand_query(text))) & SCIENCE_TERMS)
-
-
-def asks_for_quantity(text):
-    """True when the asker wants a specific number/quantity, not a mechanism explanation.
-
-    A number merely mentioned ("0.998c", "117%") is context, not a request for a readout."""
-    return bool(QUANTITY_PATTERN.search(text))
-
-
-def is_physics_readout(record):
-    tags = {t.lower() for t in record.get('tags', [])}
-    return PHYSICS_READOUT_TAG in tags or record.get('text', '').startswith('Computed reference ')
-
-
 def lore_matches(record, query):
     """Authored lore is retrieved by topic, never merely by a present person."""
     if not record.get('retrieval_only'):
         return True
-    if is_physics_readout(record) and not asks_for_quantity(query):
-        return False
-    terms = set(tokens(expand_query(query))) - TOPIC_STOP - set(tokens('Mystery Ryoma Tachibana Vella Iris remember tell know'))
+    terms = set(tokens(query)) - TOPIC_STOP - set(tokens('Mystery remember tell know'))
     tags = record['tags']
     if record.get('private'):
         terms -= set(tokens('log logs readout readouts history personal'))
@@ -455,7 +378,7 @@ class Store:
         if speaker == 'Mystery':
             instructions = disclosure.controls(message, owner, labels)
             records = [dict(segment='boundaries', about=[owner, c['listener'], 'Mystery'],
-                            text=f"Captain disclosure instruction: {c['action']} {c['topic']} to {c['listener']}.",
+                            text=f"Mystery’s disclosure instruction: {c['action']} {c['topic']} to {c['listener']}.",
                             tags=['disclosure'], importance=5, stated_by='Mystery',
                             disclosure_control=c) for c in instructions]
             if records:
@@ -594,7 +517,6 @@ class Store:
         with self.lock:
             if recall is None:
                 recall = is_recall_query(query)
-            query = expand_query(query)
             if recall:
                 return self._retrieve_recall(query, people)
             index = self.index()
@@ -699,8 +621,8 @@ class Store:
 
 
 def query_context(visible, focus=None):
-    # Science and recall asks must not inherit banter tokens from neighbouring turns.
-    if focus and (is_recall_query(focus['text']) or is_science_query(focus['text'])):
+    # Recall asks must not inherit banter tokens from neighbouring turns.
+    if focus and is_recall_query(focus['text']):
         return focus['text'], {n for n in (focus['name'], focus.get('to')) if n}
     messages = visible[-3:]
     if focus and focus in visible:
@@ -712,7 +634,7 @@ def query_context(visible, focus=None):
 
 def evidence_matches(messages, query, limit=3, speaker=None, min_score=1, require=None):
     """Visible-transcript lines sharing the query's terms. `require` (a term set)
-    additionally demands topical overlap with it, e.g. science terms."""
+    additionally demands topical overlap with it."""
     names = {n for m in messages for n in (m['name'], m.get('to')) if n}
     terms = recall_terms(query, names)
     found = []
@@ -768,22 +690,13 @@ def retrieval_context(store, messages, focus=None, budget=1600, already_asked=No
     policy_controls = disclosure.overrides(store, messages, names, agent) if disclosure.protected(agent) else []
     if listeners is None:
         listeners = knowledge.audience(store.directory.name, focus, names)
-    if kind == 'ship_ai' and focus is not None and is_science_query(focus.get('text', '')):
-        # Authored science answers are paragraph-sized; leave room for several.
-        budget = max(budget, SCIENCE_BUDGET)
     # A hidden or pre-reset focus must not influence retrieval or image selection.
     if focus is not None and focus not in messages:
         focus = None
     query, people = query_context(messages, focus)
     focus_text = focus['text'] if focus else query
-    science = is_science_query(focus_text)
     recall = bool(focus and is_recall_query(focus['text']))
     rows, pinned = store.retrieve(query, people, recall=recall)
-    # Raw computed readouts never fill the budget unless a specific quantity was
-    # asked for, and even then only a few accompany the authored explanations.
-    quantity = asks_for_quantity(focus_text)
-    readouts = [(s, r) for s, r in rows if is_physics_readout(r)][:MAX_READOUTS if quantity else 0]
-    rows = [(s, r) for s, r in rows if not is_physics_readout(r)] + readouts
     counterpart = (focus['name'] if focus and focus['name'] != store.directory.name else
                    focus.get('to') if focus else None)
     if not counterpart and messages:
@@ -796,12 +709,7 @@ def retrieval_context(store, messages, focus=None, budget=1600, already_asked=No
     present_ids = {r['id'] for _, r in rows}
     rows += [(s, r) for s, r in anchors if r['id'] not in present_ids]
     evidence_messages = [m for m in messages if m is not focus and not (focus and focus.get('id') and m.get('id') == focus['id'])]
-    # Ship-AI science asks reject chat banter: evidence must share science terms
-    # with the question and clear a higher relevance threshold.
-    ship_science = kind == 'ship_ai' and science
-    matches = evidence_matches(evidence_messages, focus_text, speaker=focus['name'] if focus else None,
-                               min_score=SCIENCE_EVIDENCE_MIN if ship_science else 1,
-                               require=SCIENCE_TERMS if ship_science else None)
+    matches = evidence_matches(evidence_messages, focus_text, speaker=focus['name'] if focus else None)
     selected = []
     # During recall, facts get the budget first; unrelated pins only fill leftovers.
     reserve = 450 if matches and not recall else 0

@@ -20,7 +20,7 @@ class IdleSceneTests(HermeticTestCase):
     request = test_scenes.SceneTests.request
 
     def active_scene(self):
-        scene = self.create(participants=['Iris', 'Vella'], opening='We watch the lake together.')
+        scene = self.create(participants=['Ji-woo', 'The Merchant'], opening='We watch the stream together.')
         self.drain(scene['id'])
         return scene['id']
 
@@ -29,30 +29,30 @@ class IdleSceneTests(HermeticTestCase):
         stamp = max(datetime.fromisoformat(latest).timestamp(), self.manager.meta(sid).get('conversation_next_at', 0))
         return patch.object(scenes.time, 'time', return_value=stamp + 21)
 
-    def test_silence_gives_iris_a_turn_after_vella_without_a_user_move(self):
+    def test_silence_gives_jiwoo_a_turn_after_merchant_without_a_user_move(self):
         sid = self.active_scene()
         with self.due(sid):
             self.manager.tick()
             self.manager.tick()
             self.assertEqual(self.manager.jobs[sid]['operation'], 'idle')
             self.drain(sid)
-        self.assertEqual([m['name'] for m in self.manager.messages(sid)], ['Mystery', 'Iris', 'Vella', 'Iris'])
+        self.assertEqual([m['name'] for m in self.manager.messages(sid)], ['Mystery', 'Ji-woo', 'The Merchant', 'Ji-woo'])
         with self.due(sid):
             self.manager.tick()
             self.drain(sid)
-        self.assertEqual([m['name'] for m in self.manager.messages(sid)][-2:], ['Iris', 'Vella'])
+        self.assertEqual([m['name'] for m in self.manager.messages(sid)][-2:], ['Ji-woo', 'The Merchant'])
         self.assertEqual(sum(m['name'] == 'Mystery' for m in self.manager.messages(sid)), 1)
 
-    def test_idle_reply_receives_vellas_latest_photo_and_words(self):
+    def test_idle_reply_receives_merchants_latest_photo_and_words(self):
         sid = self.active_scene()
         path = chat_images.store('data:image/png;base64,iVBORw0KGgp0ZXN0aW1hZ2U=')
-        self.manager.append(sid, 'Vella', 'Iris, look at this lake photo.', attachments=[path])
+        self.manager.append(sid, 'The Merchant', 'Ji-woo, look at this stream photo.', attachments=[path])
         with self.due(sid):
             self.manager.tick()
             self.drain(sid)
-        self.assertIn('Vella: Iris, look at this lake photo.', self.invoke.call_args.args[1])
+        self.assertIn('The Merchant: Ji-woo, look at this stream photo.', self.invoke.call_args.args[1])
         self.assertEqual(self.invoke.call_args.kwargs['images'], [Path(path)])
-        self.assertEqual(self.manager.messages(sid)[-1]['name'], 'Iris')
+        self.assertEqual(self.manager.messages(sid)[-1]['name'], 'Ji-woo')
 
     def test_background_loop_schedules_operator_scenes_while_room_is_paused(self):
         sid = self.active_scene()
@@ -61,7 +61,7 @@ class IdleSceneTests(HermeticTestCase):
             server.MEETUPS.loop()
         self.assertEqual(self.manager.jobs[sid]['operation'], 'idle')
         self.drain(sid)
-        self.assertEqual(self.manager.messages(sid)[-1]['name'], 'Iris')
+        self.assertEqual(self.manager.messages(sid)[-1]['name'], 'Ji-woo')
 
     def test_no_idle_turn_for_empty_single_paused_ended_or_autonomous_scene(self):
         for mode in ('empty', 'single', 'paused', 'ended', 'autonomous'):
@@ -69,10 +69,10 @@ class IdleSceneTests(HermeticTestCase):
                 # Release the participants between cases without a provider call.
                 for old in self.manager.list():
                     old['status'] = 'ended'; self.manager.save(old)
-                scene = self.create(participants=['Iris'] if mode == 'single' else ['Iris', 'Vella'])
+                scene = self.create(participants=['Ji-woo'] if mode == 'single' else ['Ji-woo', 'The Merchant'])
                 sid = scene['id']
                 if mode != 'empty':
-                    self.manager.append(sid, 'Vella' if mode != 'single' else 'Iris', 'Quiet.')
+                    self.manager.append(sid, 'The Merchant' if mode != 'single' else 'Ji-woo', 'Quiet.')
                 meta = self.manager.meta(sid)
                 if mode == 'paused': meta['conversation_paused'] = True
                 if mode == 'ended': meta['status'] = 'ended'
@@ -90,7 +90,7 @@ class IdleSceneTests(HermeticTestCase):
         with self.due(sid):
             self.manager.tick()
             self.drain(sid)
-        self.assertEqual(self.manager.messages(sid)[-1]['name'], 'Iris')
+        self.assertEqual(self.manager.messages(sid)[-1]['name'], 'Ji-woo')
 
     def test_new_user_move_discards_inflight_idle_draft_and_queues_real_reply(self):
         sid = self.active_scene()
@@ -106,7 +106,7 @@ class IdleSceneTests(HermeticTestCase):
         self.assertEqual(self.manager.get(sid)['operation'], 'reply')
         self.invoke.side_effect = self.provider
         self.drain(sid)
-        self.assertEqual([m['name'] for m in self.manager.messages(sid)][-3:], ['Mystery', 'Iris', 'Vella'])
+        self.assertEqual([m['name'] for m in self.manager.messages(sid)][-3:], ['Mystery', 'Ji-woo', 'The Merchant'])
 
     def test_pause_during_idle_discards_draft_and_resume_waits_again(self):
         sid = self.active_scene()
@@ -139,11 +139,11 @@ class IdleSceneTests(HermeticTestCase):
 
     def test_unavailable_or_resting_next_actor_does_not_monologue(self):
         sid = self.active_scene()
-        iris = next(a for a in self.config['agents'] if a['name'] == 'Iris')
+        jiwoo = next(a for a in self.config['agents'] if a['name'] == 'Ji-woo')
         for kind in ('disabled', 'unreachable', 'resting'):
             with self.subTest(kind=kind):
-                iris['enabled'] = kind != 'disabled'
-                with self.due(sid), patch.object(server, 'reachable', side_effect=lambda a,c: kind != 'unreachable' or a['name'] != 'Iris'), patch.object(server, 'resting_reason', side_effect=lambda a,c: 'Asleep' if kind == 'resting' and a['name'] == 'Iris' else ''):
+                jiwoo['enabled'] = kind != 'disabled'
+                with self.due(sid), patch.object(server, 'reachable', side_effect=lambda a,c: kind != 'unreachable' or a['name'] != 'Ji-woo'), patch.object(server, 'resting_reason', side_effect=lambda a,c: 'Asleep' if kind == 'resting' and a['name'] == 'Ji-woo' else ''):
                     self.manager.tick()
                 self.assertFalse(self.manager.jobs)
 

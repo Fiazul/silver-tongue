@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Run discovery in a disposable source copy with live state inaccessible.
 
-Copies only source, authored lore, web assets and test fixtures. Never reads,
+Copies only source, web assets and test fixtures. Never reads,
 chmods or writes the real data/, logs/ or agents.json. An audit hook also denies
 opening those paths in both the original tree and the copy (even as root).
 """
@@ -24,8 +24,6 @@ def main():
         for name in ('web', 'tools', 'tests'):
             shutil.copytree(source / name, copy / name,
                             ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
-        lore = source / 'lore' if (source / 'lore').exists() else source / 'tests/fixtures/legacy-lore'
-        shutil.copytree(lore, copy / 'lore', ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
         # These are deliberately invalid and unreadable, not snapshots of live state.
         (copy / 'agents.json').write_text('LIVE CONFIG MUST NOT BE READ')
         (copy / 'agents.json').chmod(0)

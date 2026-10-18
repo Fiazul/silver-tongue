@@ -159,7 +159,7 @@ ACTIVE CAST: {', '.join(present)}
 The player uses the technical recipient label Mystery for software routing only. Do not address them as Mystery unless they explicitly introduce that name. Learn their personal name from what they actually say; never invent prior acquaintance or an identity they have not introduced.
 {privacy}
 {characters.sibling_guard(agent)}
-Treat relationship scores as trust, fondness or irritation, not a dating objective. Ordinary conversation, work, family, tension and mysteries drive this story. Do not force flirting, romance or sexual topics.
+Treat relationship scores as trust, fondness or irritation, not a dating objective. Ordinary conversation, work, family, tension and mysteries drive this story. Do not force romance or sexual topics.
 {journey.context(host['ROOT'], agent)}
 OWN CURRENT RECOLLECTION: {host['memories']().get(agent['name'], '(No personal conversation history yet.)')}
 OWN RETRIEVED MEMORIES: {recalled.block}

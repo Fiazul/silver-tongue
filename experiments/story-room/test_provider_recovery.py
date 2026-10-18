@@ -17,7 +17,7 @@ class RecoveryTests(HermeticTestCase):
         self.config['fallback'] = [dict(provider='cursor', model='auto'),
                                    dict(provider='cursor', model='composer-2.5'),
                                    dict(provider='opencode', model='opencode/mimo-v2.6-flash-free')]
-        self.agent = next(a for a in self.config['agents'] if a['name'] == 'Milo')
+        self.agent = next(a for a in self.config['agents'] if a['name'] == 'Grandpa Park')
         self.calls = []
         self.failures = {}
         self.now = time.time()
@@ -126,12 +126,12 @@ class RecoveryTests(HermeticTestCase):
 
     def test_retry_now_clears_shared_character_breaks_and_respects_inflight(self):
         key = self.exhaust()
-        for name in ('Milo', 'Nora'):
+        for name in ('Grandpa Park', 'The Landlady'):
             server.CHARACTER_BREAKS[name] = time.monotonic() + 60
-        server.retry_provider(self.agent['provider'], self.agent['model'], self.config, 'Nora')
+        server.retry_provider(self.agent['provider'], self.agent['model'], self.config, 'The Landlady')
         self.assertTrue(server.provider_ready(self.agent['provider'], self.agent['model']))
-        self.assertNotIn('Milo', server.CHARACTER_BREAKS)
-        self.assertNotIn('Nora', server.CHARACTER_BREAKS)
+        self.assertNotIn('Grandpa Park', server.CHARACTER_BREAKS)
+        self.assertNotIn('The Landlady', server.CHARACTER_BREAKS)
         server.claim_route(self.agent['provider'], self.agent['model'])
         server.retry_provider(self.agent['provider'], self.agent['model'], self.config)
         self.assertTrue(server.PROVIDER_TRIALS[key]['inflight'])

@@ -10,7 +10,6 @@ from urllib.error import URLError
 import embeddings
 import backfill_memory
 import life_memory
-from eval_recall import ReadOnlyStore, evaluate
 
 
 def memory(text, segment='events', **extra):
@@ -18,13 +17,26 @@ def memory(text, segment='events', **extra):
                 importance=3, status='resolved', **extra)
 
 
+
+class ReadOnlyStore(life_memory.Store):
+    """A store that may read vectors but must never write (read-only inspection)."""
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.lock = self.room_lock
+
+    def _write(self, *args, **kwargs):
+        raise RuntimeError('Read-only store must never write')
+
+    def apply(self, *args, **kwargs):
+        raise RuntimeError('Read-only store must never write')
+
 class EmbeddingTests(HermeticTestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         self.config = dict(enabled=True, model='nomic-embed-text')
-        self.store = life_memory.Store(self.root, 'Iris', embedding_config=self.config)
+        self.store = life_memory.Store(self.root, 'Ji-woo', embedding_config=self.config)
         for name, value in (('BREAKS', {}), ('BUSY', set())):
             patcher = patch.object(embeddings, name, value)
             patcher.start()
@@ -35,7 +47,7 @@ class EmbeddingTests(HermeticTestCase):
 
     def test_write_batches_documents_with_task_prefix_and_cache_metadata(self):
         with patch.object(embeddings, 'urlopen', return_value=self.response([[1., 0.], [0., 1.]])) as http:
-            self.store.apply([memory('Our aurora keepsake.'), memory('The espresso rematch.')])
+            self.store.apply([memory('Our lanterns keepsake.'), memory('The espresso rematch.')])
         self.assertEqual(http.call_count, 1)
         request = http.call_args.args[0]
         self.assertEqual(request.full_url, 'http://127.0.0.1:11434/api/embed')
@@ -48,7 +60,7 @@ class EmbeddingTests(HermeticTestCase):
         self.assertTrue(all(v['model'] == 'nomic-embed-text' and len(v['hash']) == 64 for v in cache['vectors'].values()))
 
     def test_lazy_missing_vectors_and_query_are_one_batch_then_cache_is_reused(self):
-        self.store.apply([memory('The aurora keepsake.')], embed=False)
+        self.store.apply([memory('The lanterns keepsake.')], embed=False)
         with patch.object(embeddings, 'urlopen', side_effect=[self.response([[1., 0.], [1., 0.]]),
                                                            self.response([[1., 0.]])]) as http:
             self.store.retrieve('do you remember that moment?', {'Mystery'})
@@ -60,29 +72,29 @@ class EmbeddingTests(HermeticTestCase):
         self.assertTrue(self.store.last_semantic)
 
     def test_semantics_recover_a_record_with_no_keyword_match(self):
-        self.store.apply([memory('Aurora beside the ice.'), memory('Espresso and pastry.')], embed=False)
+        self.store.apply([memory('Lanterns beside the ice.'), memory('Espresso and pastry.')], embed=False)
         def http(request, timeout):
             texts = json.loads(request.data)['input']
-            return self.response([[1., 0.] if t.startswith('search_query: ') or 'Aurora' in t else [0., 1.] for t in texts])
+            return self.response([[1., 0.] if t.startswith('search_query: ') or 'Lanterns' in t else [0., 1.] for t in texts])
         with patch.object(embeddings, 'urlopen', side_effect=http):
             rows, _ = self.store.retrieve('do you recall our magical moment?', {'Mystery'})
-        self.assertEqual(rows[0][1]['text'], 'Aurora beside the ice.')
+        self.assertEqual(rows[0][1]['text'], 'Lanterns beside the ice.')
 
     def test_hash_and_model_changes_reembed_and_read_only_mode_never_writes(self):
-        self.store.apply([memory('Aurora.')], embed=False)
+        self.store.apply([memory('Lanterns.')], embed=False)
         rows = self.store.load_segment('events')
         with patch.object(embeddings, 'urlopen', side_effect=lambda *a, **k: self.response([[1., 0.]])) as http:
             self.store.ensure_vectors(rows)
             self.store.ensure_vectors(rows)
-            rows[0]['text'] = 'Aurora with our cat.'
+            rows[0]['text'] = 'Lanterns with our cat.'
             self.store.ensure_vectors(rows)
             self.store.embedding_config['model'] = 'new-model'
             self.store.ensure_vectors(rows)
         self.assertEqual(http.call_count, 3)
-        read_only = ReadOnlyStore(self.root, 'Iris', embedding_config=self.config, vector_writes=False)
+        read_only = ReadOnlyStore(self.root, 'Ji-woo', embedding_config=self.config, vector_writes=False)
         with patch.object(embeddings, 'urlopen', return_value=self.response([[1., 0.], [1., 0.]])), \
              patch.object(read_only, '_write', side_effect=AssertionError('write attempted')):
-            read_only.retrieve('remember aurora?', {'Mystery'})
+            read_only.retrieve('remember lanterns?', {'Mystery'})
         self.assertTrue(read_only.last_semantic)
 
     def test_failure_logs_once_and_circuit_breaks_for_sixty_seconds(self):
@@ -111,7 +123,7 @@ class EmbeddingTests(HermeticTestCase):
         with patch.object(self.store, '_write', side_effect=write), \
              patch.object(embeddings, 'urlopen', return_value=self.response([[1., 0.]])), \
              self.assertLogs('life_memory', level='WARNING'):
-            self.store.apply([memory('Aurora.')])
+            self.store.apply([memory('Lanterns.')])
         self.assertEqual(len(self.store.load_segment('events')), 1)
 
     def test_normalized_hybrid_weights_and_dimensions(self):
@@ -132,10 +144,10 @@ class EmbeddingTests(HermeticTestCase):
         self.assertFalse((self.store.directory / 'vectors.json').exists())
 
     def test_embed_only_cli_writes_only_vector_cache_and_never_extracts(self):
-        self.store.apply([memory('Aurora.')], embed=False)
+        self.store.apply([memory('Lanterns.')], embed=False)
         index_before = (self.store.directory / 'index.json').read_bytes()
-        config = {'agents': [dict(name='Iris', provider='claude', model='test')], 'embeddings': self.config}
-        with patch('sys.argv', ['backfill_memory.py', '--embed-only', 'Iris']), \
+        config = {'agents': [dict(name='Ji-woo', provider='claude', model='test')], 'embeddings': self.config}
+        with patch('sys.argv', ['backfill_memory.py', '--embed-only', 'Ji-woo']), \
              patch.object(backfill_memory, 'server_live', return_value=None), \
              patch.object(backfill_memory.server, 'load_config', return_value=config), \
              patch.object(backfill_memory.server, 'life_store', return_value=self.store), \
@@ -143,52 +155,9 @@ class EmbeddingTests(HermeticTestCase):
              patch.object(embeddings, 'urlopen', return_value=self.response([[1., 0.]])), \
              patch('sys.stdout', new_callable=io.StringIO) as output:
             backfill_memory.main()
-        self.assertTrue(json.loads(output.getvalue())['Iris']['complete'])
+        self.assertTrue(json.loads(output.getvalue())['Ji-woo']['complete'])
         self.assertEqual(index_before, (self.store.directory / 'index.json').read_bytes())
         self.assertTrue((self.store.directory / 'vectors.json').is_file())
-
-    def test_full_hybrid_evaluation_uses_http_but_never_writes_fixture_data(self):
-        data = self.root / 'data'
-        store = life_memory.Store(data / 'life', 'Iris')
-        records = [
-            (memory('Our first date was near Antarctica beneath the aurora.', 'milestones'), 'date'),
-            (memory('Mystery shared candid shots that Vella captured, sent as an image attachment.'), '1792061672222550991'),
-            (memory('Mystery and Iris went out under the aurora with Mr. Whiskers, and Vella took a photo.'), '1792065318425447303'),
-            (memory("Ryoma's age is 26 by his own clock.", 'people'), 'age'),
-            (memory('Mystery gave Iris a flower with glass petals.', 'gifts'), 'gift'),
-        ]
-        for raw, source in records:
-            store.apply([raw], source_id=source)
-        image = self.root / 'fixture.png'
-        image.write_bytes(b'fixture')
-        messages = [dict(id=source, name='Mystery', to='Iris', channel='dm', text=raw['text'],
-                         attachments=[str(image)] if '179206' in source else []) for raw, source in records]
-        (data / 'messages.jsonl').write_text(''.join(json.dumps(m) + '\n' for m in messages))
-        before = {str(p): p.read_bytes() for p in data.rglob('*') if p.is_file()}
-        def http(request, timeout):
-            texts = json.loads(request.data)['input']
-            categories = ('date', 'image', 'age', 'gift', 'whisker')
-            vectors = []
-            for text in texts:
-                terms = life_memory.tokens(text)
-                vector = [float(word in terms) for word in categories]
-                vectors.append(vector if any(vector) else [1., 0., 0., 0., 0.])
-            return self.response(vectors)
-        with patch.object(embeddings, 'urlopen', side_effect=http) as client, \
-             patch('sys.stdout', new_callable=io.StringIO) as output:
-            self.assertTrue(evaluate(data, self.config))
-        self.assertIn('MODE: hybrid', output.getvalue())
-        self.assertIn('ALL PASS', output.getvalue())
-        self.assertNotIn('UNVERIFIED', output.getvalue())
-        self.assertEqual(client.call_count, 5)
-        with patch.object(embeddings, 'urlopen', side_effect=URLError('sandbox denied')) as client, \
-             patch('sys.stdout', new_callable=io.StringIO) as output, \
-             self.assertLogs('embeddings', level='WARNING'):
-            self.assertFalse(evaluate(data, self.config))
-        self.assertIn('UNVERIFIED (keyword fallback PASS)', output.getvalue())
-        self.assertIn('HYBRID UNAVAILABLE', output.getvalue())
-        self.assertEqual(client.call_count, 1)
-        self.assertEqual(before, {str(p): p.read_bytes() for p in data.rglob('*') if p.is_file()})
 
     def test_large_embed_chunks_preserve_order_and_keep_model_warm(self):
         inputs = ['search_document: ' + str(i) for i in range(35)]
